@@ -39,16 +39,26 @@ function validateHotspot(value: unknown, sceneIndex: number, hotspotIndex: numbe
   }
 
   const type = value.type === undefined ? 'info' : value.type;
-  if (type !== 'info' && type !== 'sceneLink' && type !== 'externalLink' && type !== 'image') {
+  if (
+    type !== 'info' &&
+    type !== 'sceneLink' &&
+    type !== 'externalLink' &&
+    type !== 'image' &&
+    type !== 'multipleChoice'
+  ) {
     return {
       ok: false,
-      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: type must be info, sceneLink, externalLink, or image.`
+      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: type must be info, sceneLink, externalLink, image, or multipleChoice.`
     };
   }
 
   const targetSceneId = value.targetSceneId;
   const url = value.url;
   const imageUrl = value.imageUrl;
+  const questionPrompt = value.questionPrompt;
+  const answerOptions = value.answerOptions;
+  const correctAnswerIndex = value.correctAnswerIndex;
+  const feedbackText = value.feedbackText;
 
   if (targetSceneId !== undefined && !isNonEmptyString(targetSceneId)) {
     return {
@@ -68,6 +78,50 @@ function validateHotspot(value: unknown, sceneIndex: number, hotspotIndex: numbe
     return {
       ok: false,
       error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: imageUrl must be a non-empty string if provided.`
+    };
+  }
+
+  if (questionPrompt !== undefined && !isNonEmptyString(questionPrompt)) {
+    return {
+      ok: false,
+      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: questionPrompt must be a non-empty string if provided.`
+    };
+  }
+
+  if (feedbackText !== undefined && typeof feedbackText !== 'string') {
+    return {
+      ok: false,
+      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: feedbackText must be a string if provided.`
+    };
+  }
+
+  if (answerOptions !== undefined) {
+    if (!Array.isArray(answerOptions)) {
+      return {
+        ok: false,
+        error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: answerOptions must be an array if provided.`
+      };
+    }
+
+    if (
+      answerOptions.length < 2 ||
+      answerOptions.length > 4 ||
+      answerOptions.some((option) => !isNonEmptyString(option))
+    ) {
+      return {
+        ok: false,
+        error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: answerOptions must contain 2 to 4 non-empty strings.`
+      };
+    }
+  }
+
+  if (
+    correctAnswerIndex !== undefined &&
+    (!Number.isInteger(correctAnswerIndex) || Number(correctAnswerIndex) < 0)
+  ) {
+    return {
+      ok: false,
+      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: correctAnswerIndex must be a non-negative integer if provided.`
     };
   }
 
@@ -92,6 +146,42 @@ function validateHotspot(value: unknown, sceneIndex: number, hotspotIndex: numbe
     };
   }
 
+  if (type === 'multipleChoice') {
+    if (!isNonEmptyString(questionPrompt)) {
+      return {
+        ok: false,
+        error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: multipleChoice hotspots require questionPrompt.`
+      };
+    }
+
+    if (
+      !Array.isArray(answerOptions) ||
+      answerOptions.length < 2 ||
+      answerOptions.length > 4 ||
+      answerOptions.some((option) => !isNonEmptyString(option))
+    ) {
+      return {
+        ok: false,
+        error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: multipleChoice hotspots require 2 to 4 non-empty answerOptions.`
+      };
+    }
+
+    if (
+      !Number.isInteger(correctAnswerIndex) ||
+      Number(correctAnswerIndex) < 0 ||
+      Number(correctAnswerIndex) >= answerOptions.length
+    ) {
+      return {
+        ok: false,
+        error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: multipleChoice hotspots require a valid correctAnswerIndex.`
+      };
+    }
+  }
+
+  const validatedAnswerOptions = Array.isArray(answerOptions) ? [...answerOptions] : undefined;
+  const validatedCorrectAnswerIndex =
+    typeof correctAnswerIndex === 'number' ? correctAnswerIndex : undefined;
+
   return {
     ok: true,
     value: {
@@ -103,7 +193,11 @@ function validateHotspot(value: unknown, sceneIndex: number, hotspotIndex: numbe
       pitch: value.pitch,
       targetSceneId: type === 'sceneLink' ? targetSceneId : undefined,
       url: type === 'externalLink' ? url : undefined,
-      imageUrl: type === 'image' ? imageUrl : undefined
+      imageUrl: type === 'image' ? imageUrl : undefined,
+      questionPrompt: type === 'multipleChoice' ? questionPrompt : undefined,
+      answerOptions: type === 'multipleChoice' ? validatedAnswerOptions : undefined,
+      correctAnswerIndex: type === 'multipleChoice' ? validatedCorrectAnswerIndex : undefined,
+      feedbackText: type === 'multipleChoice' ? feedbackText : undefined
     }
   };
 }

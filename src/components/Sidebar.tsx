@@ -384,6 +384,8 @@ function Sidebar({
                         ? 'External Link'
                         : hotspot.type === 'image'
                           ? 'Image'
+                          : hotspot.type === 'multipleChoice'
+                            ? 'Multiple Choice'
                           : 'Info';
                   const hotspotTypeChipClass =
                     hotspot.type === 'sceneLink'
@@ -392,6 +394,8 @@ function Sidebar({
                         ? 'hotspot-link-chip-externallink'
                         : hotspot.type === 'image'
                           ? 'hotspot-link-chip-image'
+                          : hotspot.type === 'multipleChoice'
+                            ? 'hotspot-link-chip-multiplechoice'
                           : 'hotspot-link-chip-info';
 
                   return (

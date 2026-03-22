@@ -1,4 +1,4 @@
-export type HotspotType = 'info' | 'sceneLink' | 'externalLink' | 'image';
+export type HotspotType = 'info' | 'sceneLink' | 'externalLink' | 'image' | 'multipleChoice';
 
 export type Hotspot = {
   id: string;
@@ -10,6 +10,10 @@ export type Hotspot = {
   targetSceneId?: string;
   url?: string;
   imageUrl?: string;
+  questionPrompt?: string;
+  answerOptions?: string[];
+  correctAnswerIndex?: number;
+  feedbackText?: string;
 };
 
 export type Scene = {

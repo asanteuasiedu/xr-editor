@@ -25,7 +25,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 - 360 panorama rendering via `pannellum` for the active scene
 - Hotspot CRUD scoped to the active scene only
 - Optional hotspot destination links (`targetSceneId`) for scene-to-scene navigation
-- Hotspot types: `info`, `sceneLink`, `externalLink`, `image`
+- Hotspot types: `info`, `sceneLink`, `externalLink`, `image`, `multipleChoice`
 - Clicking a linked hotspot switches to destination scene
 - External-link hotspots open URLs in a new tab
 - Image hotspots open a lightweight image preview modal
@@ -54,7 +54,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 - Overlay cards appear in this pilot-focused order: `Project Controls`, `Project Inspector`, `Scenes`, `Active Scene Details`, and `Insight Zones (Active Scene)`.
 - All overlay panels start closed by default for a cleaner first impression.
 - A first-time guided walkthrough now starts automatically in a deterministic sequence, highlights each overlay section step-by-step, and then opens the Scene Library as the next guided step.
-- The selected hotspot editor appears as a floating inspector overlay instead of a persistent bottom panel.
+- The selected hotspot editor appears as an anchored frosted popover near the selected insight zone, with an in-view fallback placement on tighter layouts.
 - `Project Controls` is intentionally lightweight: local save state, `Present Project`, `Export Project`, `Start Guided Tour`, and `Select a Scene`.
 - On a fresh editor start, the walkthrough always appears first and the Scene Library opens only after that walkthrough completes.
 - During that first-run onboarding sequence, the starter panorama viewer stays visually behind the flow so the immersive loading overlay does not appear before the walkthrough and Scene Library.
@@ -69,7 +69,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 3. Fill in project metadata in **Project Inspector**.
 4. Set or upload the scene panorama in **Active Scene Details**.
 5. Click **Add Insight Zone**, then click in the panorama to place it visually.
-6. Select an insight zone to edit title, body, destination, yaw, and pitch.
+6. Select an insight zone to edit its title, body, type, and destination behavior.
 7. Optionally set a **Destination Scene** to create navigation hotspots.
 8. Use **Move Selected Hotspot**, then click in the panorama to reposition it.
 9. Use **Cancel Placement** any time while placement/move mode is active.
@@ -91,6 +91,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 - Switching modes does not lose project data; current scene stays active.
 - A subtle "Tap hotspots to explore" hint appears for new viewers and can be dismissed.
 - Presentation Mode also shows a session-based `Activity Progress` overlay that tracks unique insight zones found in the current session.
+- If a scene includes multiple-choice questions, Presentation Mode shows a per-scene score beneath the progress bar.
 
 ### Presentation Hotspot Behavior
 - `info`: opens a cleaner reading-focused modal with title and body.
@@ -103,12 +104,15 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 - Re-clicking the same zone does not add more points.
 - Total available points equal the total number of insight zones in the current project.
 - Progress is session-based only for now, so it resets on refresh or a new browser session.
+- Multiple-choice questions also record one answer per question per session and update the active scene score.
+- The completion overlay appears after all insight zones have been discovered and all multiple-choice questions have been answered in the current session.
 
 ### Marker Visual Legend
-- `info`: blue marker with `i` symbol.
-- `sceneLink`: purple marker with link/transfer symbol.
-- `externalLink`: amber marker with outbound arrow symbol.
-- `image`: violet marker with image symbol.
+- `info`: white marker with `i`.
+- `sceneLink`: purple orb with a subtle world/grid feel.
+- `externalLink`: purple glowing dot.
+- `image`: white glowing dot.
+- `multipleChoice`: uses the baseline marker style in the viewer and opens a frosted question modal in Presentation Mode.
 - Selected hotspots show a stronger ring/glow state for easier tracking.
 
 Placement tip: click and release without dragging to place/move at the intended point.
@@ -189,6 +193,7 @@ If a scene is deleted, any hotspot links pointing to that scene are cleared auto
 - `sceneLink`: navigates to another scene on click (`targetSceneId`).
 - `externalLink`: opens an external URL in a new browser tab (`url`).
 - `image`: opens a lightweight image preview (`imageUrl`).
+- `multipleChoice`: opens a question modal in Presentation Mode and tracks one scored answer per session (`questionPrompt`, `answerOptions`, `correctAnswerIndex`, optional `feedbackText`).
 
 ### Example JSON (linked hotspots)
 ```json

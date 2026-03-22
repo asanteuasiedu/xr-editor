@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import 'pannellum/build/pannellum.js';
 import 'pannellum/build/pannellum.css';
@@ -11,6 +11,7 @@ type PanoramaViewerProps = {
   isPreviewMode?: boolean;
   previewEntryId?: number;
   overlayContent?: ReactNode;
+  editorPopoverContent?: ReactNode;
   interactionMode: 'idle' | 'placingNewHotspot' | 'movingExistingHotspot';
   onActivateHotspot: (hotspotId: string) => void;
   onPanoramaClick: (position: { yaw: number; pitch: number }) => void;
@@ -27,12 +28,15 @@ function PanoramaViewer({
   isPreviewMode = false,
   previewEntryId = 0,
   overlayContent,
+  editorPopoverContent,
   interactionMode,
   onActivateHotspot,
   onPanoramaClick,
   onViewChange
 }: PanoramaViewerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const shellRef = useRef<HTMLDivElement | null>(null);
+  const editorPopoverRef = useRef<HTMLDivElement | null>(null);
   const viewerRef = useRef<ReturnType<typeof window.pannellum.viewer> | null>(null);
   const renderedHotspotIdsRef = useRef<Set<string>>(new Set());
   const pointerDownRef = useRef<{ x: number; y: number; yaw: number; pitch: number } | null>(null);
@@ -46,6 +50,8 @@ function PanoramaViewer({
   const interactionModeRef = useRef(interactionMode);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPanoramaLoading, setIsPanoramaLoading] = useState(false);
+  const [editorPopoverStyle, setEditorPopoverStyle] = useState<CSSProperties | null>(null);
+  const [useEditorPopoverFallback, setUseEditorPopoverFallback] = useState(false);
 
   useEffect(() => {
     onActivateHotspotRef.current = onActivateHotspot;
@@ -249,16 +255,9 @@ function PanoramaViewer({
     renderedHotspotIdsRef.current.clear();
 
     hotspots.forEach((hotspot) => {
-      // Keep pannellum native hotspot anchoring. Visual identity is CSS-only on this
-      // marker class, and root marker geometry must stay minimal to preserve alignment.
-      const markerClassName = [
-        'xr-hotspot-marker-native',
-        `xr-hotspot-type-${hotspot.type}`,
-        selectedHotspotId === hotspot.id ? 'xr-hotspot-selected' : '',
-        hotspot.type === 'sceneLink' && hotspot.targetSceneId ? 'xr-hotspot-linked' : ''
-      ]
-        .filter(Boolean)
-        .join(' ');
+      // Keep one native-compatible baseline marker class, then add a single
+      // type class for themed meaning without changing the anchor geometry.
+      const markerClassName = `xr-hotspot-marker-native xr-hotspot-type-${hotspot.type}`;
 
       viewer.addHotSpot({
         id: hotspot.id,
@@ -267,6 +266,9 @@ function PanoramaViewer({
         yaw: hotspot.yaw,
         pitch: hotspot.pitch,
         text: '',
+        createTooltipFunc: (hotspotElement: HTMLElement) => {
+          hotspotElement.dataset.hotspotId = hotspot.id;
+        },
         clickHandlerFunc:
           interactionModeRef.current === 'idle'
             ? () => onActivateHotspotRef.current(hotspot.id)
@@ -289,10 +291,85 @@ function PanoramaViewer({
     viewerRef.current.lookAt(selectedHotspot.pitch, selectedHotspot.yaw, undefined, 300);
   }, [hotspots, selectedHotspotId]);
 
+  useEffect(() => {
+    if (isPreviewMode || !selectedHotspotId || !editorPopoverContent) {
+      setEditorPopoverStyle(null);
+      setUseEditorPopoverFallback(false);
+      return;
+    }
+
+    const updatePopoverPosition = () => {
+      const shell = shellRef.current;
+      const popover = editorPopoverRef.current;
+      if (!shell || !popover) {
+        return;
+      }
+
+      if (window.innerWidth < 960) {
+        setUseEditorPopoverFallback(true);
+        setEditorPopoverStyle(null);
+        return;
+      }
+
+      const hotspotElement = Array.from(shell.querySelectorAll<HTMLElement>('.pnlm-hotspot-base')).find(
+        (element) => element.dataset.hotspotId === selectedHotspotId
+      );
+      if (!hotspotElement) {
+        setUseEditorPopoverFallback(true);
+        setEditorPopoverStyle(null);
+        return;
+      }
+
+      const shellRect = shell.getBoundingClientRect();
+      const hotspotRect = hotspotElement.getBoundingClientRect();
+      const popoverWidth = popover.offsetWidth;
+      const popoverHeight = popover.offsetHeight;
+      const anchorX = hotspotRect.left - shellRect.left + hotspotRect.width / 2;
+      const anchorY = hotspotRect.top - shellRect.top + hotspotRect.height / 2;
+      const padding = 16;
+      const gap = 20;
+      const hasRoomRight = anchorX + gap + popoverWidth <= shellRect.width - padding;
+      const hasRoomLeft = anchorX - gap - popoverWidth >= padding;
+
+      let left = hasRoomRight
+        ? anchorX + gap
+        : hasRoomLeft
+          ? anchorX - popoverWidth - gap
+          : Math.min(Math.max(anchorX - popoverWidth / 2, padding), shellRect.width - popoverWidth - padding);
+
+      let top = Math.min(Math.max(anchorY - popoverHeight / 2, padding), shellRect.height - popoverHeight - padding);
+
+      if (popoverWidth > shellRect.width - padding * 2 || popoverHeight > shellRect.height - padding * 2) {
+        setUseEditorPopoverFallback(true);
+        setEditorPopoverStyle(null);
+        return;
+      }
+
+      left = Math.max(padding, left);
+      top = Math.max(padding, top);
+
+      setUseEditorPopoverFallback(false);
+      setEditorPopoverStyle({
+        left,
+        top
+      });
+    };
+
+    const frameId = window.requestAnimationFrame(updatePopoverPosition);
+    const intervalId = window.setInterval(updatePopoverPosition, 220);
+    window.addEventListener('resize', updatePopoverPosition);
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.clearInterval(intervalId);
+      window.removeEventListener('resize', updatePopoverPosition);
+    };
+  }, [editorPopoverContent, isPreviewMode, selectedHotspotId, hotspots, panoramaUrl]);
+
   return (
     <section className={`panel panorama-panel viewer-card ${isPreviewMode ? 'panorama-panel-preview' : ''}`}>
       {!isPreviewMode ? <h2 className="panel-title">Your XR Media</h2> : null}
-      <div className="pannellum-shell viewer-clip-boundary">
+      <div className="pannellum-shell viewer-clip-boundary" ref={shellRef}>
         <div
           className={`pannellum-container ${interactionMode !== 'idle' ? 'pannellum-container-placement' : ''}`}
           ref={containerRef}
@@ -320,6 +397,17 @@ function PanoramaViewer({
             <p className="placeholder-note">
               Set a valid panorama URL/path in the active scene to continue editing in the viewer.
             </p>
+          </div>
+        ) : null}
+        {!isPreviewMode && editorPopoverContent ? (
+          <div
+            ref={editorPopoverRef}
+            className={`pannellum-editor-popover ${
+              useEditorPopoverFallback ? 'pannellum-editor-popover-fallback' : 'pannellum-editor-popover-anchored'
+            }`}
+            style={useEditorPopoverFallback ? undefined : editorPopoverStyle ?? undefined}
+          >
+            {editorPopoverContent}
           </div>
         ) : null}
       </div>

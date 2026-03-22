@@ -13,11 +13,6 @@ type HotspotEditorProps = {
   onCloseEditor?: () => void;
 };
 
-function parseNumberField(value: string, fallback: number) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
 function HotspotEditor({
   hotspot,
   destinationScenes,
@@ -40,24 +35,26 @@ function HotspotEditor({
   }
 
   const handleTextChange =
-    (field: 'title' | 'body' | 'url' | 'imageUrl') =>
+    (field: 'title' | 'body' | 'url' | 'imageUrl' | 'questionPrompt' | 'feedbackText') =>
     (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       onUpdateHotspot(hotspot.id, { [field]: event.target.value });
     };
 
-  const handleNumberChange =
-    (field: 'yaw' | 'pitch') => (event: ChangeEvent<HTMLInputElement>) => {
-      const nextValue = parseNumberField(event.target.value, hotspot[field]);
-      onUpdateHotspot(hotspot.id, { [field]: nextValue });
-    };
-
   const handleTypeChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const nextType = event.target.value as HotspotType;
+    const existingOptions =
+      hotspot.answerOptions && hotspot.answerOptions.length >= 2
+        ? hotspot.answerOptions
+        : ['Option 1', 'Option 2'];
     onUpdateHotspot(hotspot.id, {
       type: nextType,
       targetSceneId: nextType === 'sceneLink' ? hotspot.targetSceneId : undefined,
       url: nextType === 'externalLink' ? hotspot.url : undefined,
-      imageUrl: nextType === 'image' ? hotspot.imageUrl : undefined
+      imageUrl: nextType === 'image' ? hotspot.imageUrl : undefined,
+      questionPrompt: nextType === 'multipleChoice' ? hotspot.questionPrompt ?? 'New question prompt' : undefined,
+      answerOptions: nextType === 'multipleChoice' ? existingOptions.slice(0, 4) : undefined,
+      correctAnswerIndex: nextType === 'multipleChoice' ? hotspot.correctAnswerIndex ?? 0 : undefined,
+      feedbackText: nextType === 'multipleChoice' ? hotspot.feedbackText ?? '' : undefined
     });
   };
 
@@ -78,6 +75,47 @@ function HotspotEditor({
     }
 
     void onUploadHotspotImage(hotspot.id, file);
+  };
+
+  const answerOptions =
+    hotspot.type === 'multipleChoice'
+      ? hotspot.answerOptions && hotspot.answerOptions.length >= 2
+        ? hotspot.answerOptions
+        : ['Option 1', 'Option 2']
+      : [];
+
+  const handleAnswerOptionChange = (index: number) => (event: ChangeEvent<HTMLInputElement>) => {
+    const nextOptions = [...answerOptions];
+    nextOptions[index] = event.target.value;
+    onUpdateHotspot(hotspot.id, { answerOptions: nextOptions });
+  };
+
+  const handleAddAnswerOption = () => {
+    if (answerOptions.length >= 4) {
+      return;
+    }
+
+    onUpdateHotspot(hotspot.id, {
+      answerOptions: [...answerOptions, `Option ${answerOptions.length + 1}`]
+    });
+  };
+
+  const handleRemoveAnswerOption = (index: number) => {
+    if (answerOptions.length <= 2) {
+      return;
+    }
+
+    const nextOptions = answerOptions.filter((_, optionIndex) => optionIndex !== index);
+    const nextCorrectIndex = Math.min(hotspot.correctAnswerIndex ?? 0, nextOptions.length - 1);
+
+    onUpdateHotspot(hotspot.id, {
+      answerOptions: nextOptions,
+      correctAnswerIndex: nextCorrectIndex
+    });
+  };
+
+  const handleCorrectAnswerChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    onUpdateHotspot(hotspot.id, { correctAnswerIndex: Number(event.target.value) });
   };
 
   return (
@@ -101,6 +139,7 @@ function HotspotEditor({
             <option value="sceneLink">Scene Link</option>
             <option value="externalLink">External Link</option>
             <option value="image">Image</option>
+            <option value="multipleChoice">Multiple Choice</option>
           </select>
         </label>
 
@@ -109,10 +148,12 @@ function HotspotEditor({
           <input value={hotspot.title} onChange={handleTextChange('title')} />
         </label>
 
-        <label className="editor-field">
-          <span>Body</span>
-          <textarea value={hotspot.body} onChange={handleTextChange('body')} rows={4} />
-        </label>
+        {hotspot.type !== 'multipleChoice' ? (
+          <label className="editor-field">
+            <span>Body</span>
+            <textarea value={hotspot.body} onChange={handleTextChange('body')} rows={4} />
+          </label>
+        ) : null}
 
         {hotspot.type === 'sceneLink' ? (
           <label className="editor-field">
@@ -170,34 +211,74 @@ function HotspotEditor({
           </>
         ) : null}
 
-        <div className="editor-row">
-          <label className="editor-field">
-            <span>Yaw</span>
-            <input
-              type="number"
-              step="0.5"
-              min={-180}
-              max={180}
-              value={hotspot.yaw}
-              onChange={handleNumberChange('yaw')}
-            />
-            <small className="field-help">Left / right (-180 to 180)</small>
-          </label>
+        {hotspot.type === 'multipleChoice' ? (
+          <>
+            <label className="editor-field">
+              <span>Question Prompt</span>
+              <textarea
+                value={hotspot.questionPrompt ?? ''}
+                onChange={handleTextChange('questionPrompt')}
+                rows={3}
+                placeholder="What should the learner answer here?"
+              />
+            </label>
 
-          <label className="editor-field">
-            <span>Pitch</span>
-            <input
-              type="number"
-              step="0.5"
-              min={-90}
-              max={90}
-              value={hotspot.pitch}
-              onChange={handleNumberChange('pitch')}
-            />
-            <small className="field-help">Up / down (-90 to 90)</small>
-          </label>
-        </div>
+            <div className="editor-field">
+              <span>Answer Options</span>
+              <div className="quiz-option-list">
+                {answerOptions.map((option, index) => (
+                  <div key={`option-${index}`} className="quiz-option-row">
+                    <input
+                      value={option}
+                      onChange={handleAnswerOptionChange(index)}
+                      placeholder={`Option ${index + 1}`}
+                    />
+                    <button
+                      type="button"
+                      className="ui-button ui-button-secondary mini-button"
+                      onClick={() => handleRemoveAnswerOption(index)}
+                      disabled={answerOptions.length <= 2}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="quiz-option-actions">
+                <button
+                  type="button"
+                  className="ui-button ui-button-secondary mini-button"
+                  onClick={handleAddAnswerOption}
+                  disabled={answerOptions.length >= 4}
+                >
+                  Add Option
+                </button>
+                <p className="helper-note">Use 2 to 4 answer choices for this question.</p>
+              </div>
+            </div>
 
+            <label className="editor-field">
+              <span>Correct Answer</span>
+              <select value={hotspot.correctAnswerIndex ?? 0} onChange={handleCorrectAnswerChange}>
+                {answerOptions.map((option, index) => (
+                  <option key={`correct-${index}`} value={index}>
+                    {option || `Option ${index + 1}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="editor-field">
+              <span>Feedback / Explanation (Optional)</span>
+              <textarea
+                value={hotspot.feedbackText ?? ''}
+                onChange={handleTextChange('feedbackText')}
+                rows={3}
+                placeholder="Explain the answer or give the learner a short takeaway."
+              />
+            </label>
+          </>
+        ) : null}
         <div className="editor-actions">
           <button
             type="button"

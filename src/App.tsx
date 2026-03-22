@@ -25,6 +25,11 @@ type PlacementMode =
 
 type SaveState = 'saved' | 'unsaved' | 'restored';
 type AppMode = 'edit' | 'preview';
+type QuestionResponse = {
+  selectedIndex: number;
+  isCorrect: boolean;
+  sceneId: string;
+};
 const PREVIEW_HINT_DISMISSED_KEY = 'xr-editor.preview-hint-dismissed.v1';
 const EDIT_WALKTHROUGH_DISMISSED_KEY = 'xr-editor.edit-walkthrough-dismissed.v1';
 
@@ -94,6 +99,36 @@ function loadEditWalkthroughDismissed() {
   return window.localStorage.getItem(EDIT_WALKTHROUGH_DISMISSED_KEY) === '1';
 }
 
+function getMultipleChoiceConfig(hotspot: Hotspot) {
+  if (hotspot.type !== 'multipleChoice') {
+    return null;
+  }
+
+  const prompt = hotspot.questionPrompt?.trim() ?? '';
+  const options = (hotspot.answerOptions ?? []).map((option) => option.trim()).filter(Boolean);
+  const correctAnswerIndex = hotspot.correctAnswerIndex;
+
+  if (!prompt || options.length < 2 || options.length > 4) {
+    return null;
+  }
+
+  if (
+    typeof correctAnswerIndex !== 'number' ||
+    !Number.isInteger(correctAnswerIndex) ||
+    correctAnswerIndex < 0 ||
+    correctAnswerIndex >= options.length
+  ) {
+    return null;
+  }
+
+  return {
+    prompt,
+    options,
+    correctAnswerIndex,
+    feedbackText: hotspot.feedbackText?.trim() ?? ''
+  };
+}
+
 function App() {
   const initialLoad = useMemo(() => loadLocalDraft(), []);
   const initialWalkthroughDismissed = useMemo(() => loadEditWalkthroughDismissed(), []);
@@ -110,8 +145,10 @@ function App() {
   const [saveState, setSaveState] = useState<SaveState>(initialLoad.restored ? 'restored' : 'saved');
   const [imagePreview, setImagePreview] = useState<{ src: string; title: string; caption?: string } | null>(null);
   const [infoPreview, setInfoPreview] = useState<{ title: string; body: string } | null>(null);
+  const [questionPreviewHotspotId, setQuestionPreviewHotspotId] = useState<string | null>(null);
   const [imagePreviewBroken, setImagePreviewBroken] = useState(false);
   const [discoveredHotspotIds, setDiscoveredHotspotIds] = useState<string[]>([]);
+  const [questionResponses, setQuestionResponses] = useState<Record<string, QuestionResponse>>({});
   const [previewHintDismissed, setPreviewHintDismissed] = useState(loadPreviewHintDismissed);
   const [, setEditWalkthroughDismissed] = useState(initialWalkthroughDismissed);
   // First-run startup is deterministic: walkthrough first, Scene Library second.
@@ -121,8 +158,24 @@ function App() {
   const [isScenePickerOpen, setIsScenePickerOpen] = useState(false);
   const [openScenePickerAfterWalkthrough, setOpenScenePickerAfterWalkthrough] = useState(shouldRunFirstStartFlow);
   const [previewEntryId, setPreviewEntryId] = useState(0);
+  const [completionDismissed, setCompletionDismissed] = useState(false);
+  const [showCompletionMessage, setShowCompletionMessage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const hasMountedRef = useRef(false);
+  const noticeTimeoutRef = useRef<number | null>(null);
+
+  const showTemporaryNotice = useCallback((message: string, durationMs = 2200) => {
+    setNoticeMessage(message);
+
+    if (noticeTimeoutRef.current !== null) {
+      window.clearTimeout(noticeTimeoutRef.current);
+    }
+
+    noticeTimeoutRef.current = window.setTimeout(() => {
+      setNoticeMessage((current) => (current === message ? null : current));
+      noticeTimeoutRef.current = null;
+    }, durationMs);
+  }, []);
 
   useEffect(() => {
     if (!hasMountedRef.current) {
@@ -139,6 +192,14 @@ function App() {
     return () => window.clearTimeout(timeoutId);
   }, [project]);
 
+  useEffect(() => {
+    return () => {
+      if (noticeTimeoutRef.current !== null) {
+        window.clearTimeout(noticeTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const activeScene = useMemo(
     () => project.scenes.find((scene) => scene.id === project.activeSceneId) ?? project.scenes[0],
     [project]
@@ -154,11 +215,62 @@ function App() {
     () => activeScene.hotspots.find((hotspot) => hotspot.id === selectedHotspotId),
     [activeScene.hotspots, selectedHotspotId]
   );
+  const questionEntries = useMemo(
+    () =>
+      project.scenes.flatMap((scene) =>
+        scene.hotspots
+          .filter((hotspot) => hotspot.type === 'multipleChoice')
+          .map((hotspot) => ({ hotspot, sceneId: scene.id }))
+      ),
+    [project.scenes]
+  );
+  const questionEntryById = useMemo(
+    () => new Map(questionEntries.map((entry) => [entry.hotspot.id, entry])),
+    [questionEntries]
+  );
+  const activeQuestionEntry = questionPreviewHotspotId ? questionEntryById.get(questionPreviewHotspotId) ?? null : null;
+  const activeQuestionConfig = activeQuestionEntry ? getMultipleChoiceConfig(activeQuestionEntry.hotspot) : null;
+  const activeQuestionResponse = activeQuestionEntry ? questionResponses[activeQuestionEntry.hotspot.id] : undefined;
   const totalProgressPoints = useMemo(
     () => project.scenes.reduce((count, scene) => count + scene.hotspots.length, 0),
     [project.scenes]
   );
   const progressPercent = totalProgressPoints === 0 ? 0 : (discoveredHotspotIds.length / totalProgressPoints) * 100;
+  const totalQuestionCount = questionEntries.length;
+  const answeredQuestionIds = useMemo(
+    () => Object.keys(questionResponses).filter((hotspotId) => questionEntryById.has(hotspotId)),
+    [questionEntryById, questionResponses]
+  );
+  const answeredQuestionCount = answeredQuestionIds.length;
+  const totalCorrectAnswers = useMemo(
+    () => answeredQuestionIds.filter((hotspotId) => questionResponses[hotspotId]?.isCorrect).length,
+    [answeredQuestionIds, questionResponses]
+  );
+  const activeSceneQuestionHotspots = useMemo(
+    () => activeScene.hotspots.filter((hotspot) => hotspot.type === 'multipleChoice'),
+    [activeScene.hotspots]
+  );
+  const activeSceneCorrectCount = useMemo(
+    () =>
+      activeSceneQuestionHotspots.filter((hotspot) => questionResponses[hotspot.id]?.isCorrect).length,
+    [activeSceneQuestionHotspots, questionResponses]
+  );
+  const isExperienceComplete =
+    totalProgressPoints > 0 &&
+    discoveredHotspotIds.length === totalProgressPoints &&
+    answeredQuestionCount === totalQuestionCount;
+
+  useEffect(() => {
+    if (isExperienceComplete) {
+      if (!completionDismissed) {
+        setShowCompletionMessage(true);
+      }
+      return;
+    }
+
+    setShowCompletionMessage(false);
+    setCompletionDismissed(false);
+  }, [completionDismissed, isExperienceComplete]);
 
   const projectStats = useMemo(() => {
     const totalScenes = project.scenes.length;
@@ -206,6 +318,7 @@ function App() {
     setNoticeMessage(null);
     setImagePreview(null);
     setInfoPreview(null);
+    setQuestionPreviewHotspotId(null);
     setIsScenePickerOpen(false);
     setSelectedHotspotId(null);
     setPlacementMode({ type: 'idle' });
@@ -226,6 +339,7 @@ function App() {
     setNoticeMessage(null);
     setImagePreview(null);
     setInfoPreview(null);
+    setQuestionPreviewHotspotId(null);
     setIsScenePickerOpen(false);
     setPlacementMode({ type: 'idle' });
 
@@ -326,6 +440,7 @@ function App() {
       setSelectedHotspotId(null);
     }
     setImagePreview(null);
+    setQuestionPreviewHotspotId(null);
     setPlacementMode({ type: 'idle' });
     setIsScenePickerOpen(false);
   };
@@ -335,6 +450,7 @@ function App() {
     setNoticeMessage(null);
     setImagePreview(null);
     setInfoPreview(null);
+    setQuestionPreviewHotspotId(null);
     setPlacementMode({ type: 'placingNewHotspot' });
   };
 
@@ -403,6 +519,29 @@ function App() {
         setDiscoveredHotspotIds((current) => (current.includes(hotspotId) ? current : [...current, hotspotId]));
       }
 
+      if (clickedHotspot.type === 'multipleChoice') {
+        if (appMode === 'preview') {
+          const questionConfig = getMultipleChoiceConfig(clickedHotspot);
+          if (!questionConfig) {
+            setImportError('Multiple Choice hotspot is missing a valid prompt, answers, or correct answer.');
+            setSelectedHotspotId(hotspotId);
+            return;
+          }
+
+          setImagePreview(null);
+          setInfoPreview(null);
+          setQuestionPreviewHotspotId(hotspotId);
+          setSelectedHotspotId(null);
+          return;
+        }
+
+        setImagePreview(null);
+        setInfoPreview(null);
+        setQuestionPreviewHotspotId(null);
+        setSelectedHotspotId(hotspotId);
+        return;
+      }
+
       if (clickedHotspot.type === 'sceneLink') {
         if (!clickedHotspot.targetSceneId) {
           setImportError('Scene Link hotspot is missing a destination scene.');
@@ -423,6 +562,7 @@ function App() {
         }));
         setImagePreview(null);
         setInfoPreview(null);
+        setQuestionPreviewHotspotId(null);
         setSelectedHotspotId(null);
         setPlacementMode({ type: 'idle' });
         return;
@@ -439,6 +579,7 @@ function App() {
         window.open(normalized, '_blank', 'noopener,noreferrer');
         setImagePreview(null);
         setInfoPreview(null);
+        setQuestionPreviewHotspotId(null);
         setSelectedHotspotId(hotspotId);
         return;
       }
@@ -458,6 +599,7 @@ function App() {
         });
         setImagePreviewBroken(false);
         setInfoPreview(null);
+        setQuestionPreviewHotspotId(null);
         setSelectedHotspotId(hotspotId);
         return;
       }
@@ -469,10 +611,12 @@ function App() {
           title: clickedHotspot.title || 'Info',
           body: clickedHotspot.body || 'No details provided.'
         });
+        setQuestionPreviewHotspotId(null);
         return;
       }
 
       setInfoPreview(null);
+      setQuestionPreviewHotspotId(null);
       setSelectedHotspotId(hotspotId);
     },
     [activeScene.hotspots, activeScene.id, appMode, placementMode.type, project.scenes]
@@ -498,6 +642,7 @@ function App() {
         updateHotspots((current) => [...current, nextHotspot]);
         setSelectedHotspotId(hotspotId);
         setPlacementMode({ type: 'idle' });
+        showTemporaryNotice('Insight Zone placed');
         return;
       }
 
@@ -514,13 +659,45 @@ function App() {
       });
       setSelectedHotspotId(movingHotspotId);
       setPlacementMode({ type: 'idle' });
+      showTemporaryNotice('Insight Zone moved');
     },
-    [activeScene.hotspots, handleUpdateHotspot, placementMode, updateHotspots]
+    [activeScene.hotspots, handleUpdateHotspot, placementMode, showTemporaryNotice, updateHotspots]
   );
 
   const handleCancelPlacement = () => {
     setPlacementMode({ type: 'idle' });
   };
+
+  const handleAnswerMultipleChoice = useCallback(
+    (hotspotId: string, selectedIndex: number) => {
+      const entry = questionEntryById.get(hotspotId);
+      if (!entry) {
+        return;
+      }
+
+      const questionConfig = getMultipleChoiceConfig(entry.hotspot);
+      if (!questionConfig) {
+        setImportError('This question is missing required quiz fields.');
+        return;
+      }
+
+      setQuestionResponses((current) => {
+        if (current[hotspotId]) {
+          return current;
+        }
+
+        return {
+          ...current,
+          [hotspotId]: {
+            selectedIndex,
+            isCorrect: selectedIndex === questionConfig.correctAnswerIndex,
+            sceneId: entry.sceneId
+          }
+        };
+      });
+    },
+    [questionEntryById]
+  );
 
   const handleExportProject = () => {
     setImportError(null);
@@ -554,8 +731,10 @@ function App() {
       const importedProject = await importProjectFromFile(file);
       setProject(importedProject);
       setDiscoveredHotspotIds([]);
+      setQuestionResponses({});
       setImagePreview(null);
       setInfoPreview(null);
+      setQuestionPreviewHotspotId(null);
       setIsScenePickerOpen(false);
       setSelectedHotspotId(null);
       setPlacementMode({ type: 'idle' });
@@ -578,8 +757,10 @@ function App() {
     clearLocalDraft();
     setProject(createDefaultProject());
     setDiscoveredHotspotIds([]);
+    setQuestionResponses({});
     setImagePreview(null);
     setInfoPreview(null);
+    setQuestionPreviewHotspotId(null);
     setImagePreviewBroken(false);
     setSelectedHotspotId(null);
     setPlacementMode({ type: 'idle' });
@@ -603,6 +784,7 @@ function App() {
     setNoticeMessage(null);
     setImagePreview(null);
     setInfoPreview(null);
+    setQuestionPreviewHotspotId(null);
     setIsScenePickerOpen(false);
     setPlacementMode({ type: 'idle' });
 
@@ -619,6 +801,7 @@ function App() {
     setNoticeMessage(null);
     setImagePreview(null);
     setInfoPreview(null);
+    setQuestionPreviewHotspotId(null);
     setIsScenePickerOpen(false);
     setPlacementMode({ type: 'idle' });
     setSelectedHotspotId(null);
@@ -708,9 +891,11 @@ function App() {
     const nextProject = createProjectFromTemplate(templateId);
     setProject(nextProject);
     setDiscoveredHotspotIds([]);
+    setQuestionResponses({});
     setAppMode('edit');
     setImagePreview(null);
     setInfoPreview(null);
+    setQuestionPreviewHotspotId(null);
     setImagePreviewBroken(false);
     setImportError(null);
     setNoticeMessage(null);
@@ -833,6 +1018,20 @@ function App() {
                   isPreviewMode={false}
                   previewEntryId={0}
                   overlayContent={null}
+                  editorPopoverContent={
+                    selectedHotspot ? (
+                      <HotspotEditor
+                        hotspot={selectedHotspot}
+                        destinationScenes={project.scenes.filter((scene) => scene.id !== activeScene.id)}
+                        isPlacementModeActive={placementMode.type !== 'idle'}
+                        onStartMovingHotspot={handleStartMovingSelectedHotspot}
+                        onUploadHotspotImage={handleUploadHotspotImage}
+                        onUpdateHotspot={handleUpdateHotspot}
+                        onDeleteHotspot={handleDeleteHotspot}
+                        onCloseEditor={handleClearSelectedHotspot}
+                      />
+                    ) : null
+                  }
                   interactionMode={viewerInteractionMode}
                   onActivateHotspot={handleActivateHotspot}
                   onPanoramaClick={handlePanoramaClick}
@@ -876,20 +1075,6 @@ function App() {
                   onDeleteHotspot={handleDeleteHotspot}
                 />
               </div>
-              {selectedHotspot ? (
-                <div className="edit-overlay edit-overlay-right">
-                  <HotspotEditor
-                    hotspot={selectedHotspot}
-                    destinationScenes={project.scenes.filter((scene) => scene.id !== activeScene.id)}
-                    isPlacementModeActive={placementMode.type !== 'idle'}
-                    onStartMovingHotspot={handleStartMovingSelectedHotspot}
-                    onUploadHotspotImage={handleUploadHotspotImage}
-                    onUpdateHotspot={handleUpdateHotspot}
-                    onDeleteHotspot={handleDeleteHotspot}
-                    onCloseEditor={handleClearSelectedHotspot}
-                  />
-                </div>
-              ) : null}
               {importError ? <p className="panel error-banner edit-toast">{importError}</p> : null}
               {noticeMessage ? <p className="panel info-banner edit-toast">{noticeMessage}</p> : null}
               {activeWalkthroughStep ? (
@@ -1022,6 +1207,16 @@ function App() {
                     <p className="presentation-progress-label">
                       Insight Zones Found: {discoveredHotspotIds.length} of {totalProgressPoints}
                     </p>
+                    {activeSceneQuestionHotspots.length > 0 ? (
+                      <div className="presentation-score-block">
+                        <p className="presentation-score-label">Scene Score</p>
+                        <strong>
+                          {activeSceneCorrectCount} / {activeSceneQuestionHotspots.length} correct
+                        </strong>
+                      </div>
+                    ) : (
+                      <p className="presentation-score-empty">No questions in this scene.</p>
+                    )}
                   </div>
                 </div>
               }
@@ -1092,6 +1287,112 @@ function App() {
                     {imagePreview.caption ? <p className="image-preview-caption">{imagePreview.caption}</p> : null}
                   </>
                 )}
+              </div>
+            </div>
+          ) : null}
+          {activeQuestionEntry && activeQuestionConfig ? (
+            <div
+              className="presentation-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Multiple choice question"
+              onClick={() => setQuestionPreviewHotspotId(null)}
+            >
+              <div className="presentation-modal quiz-preview-modal" onClick={(event) => event.stopPropagation()}>
+                <div className="presentation-modal-header">
+                  <div className="presentation-modal-heading">
+                    <p className="presentation-modal-kicker">Multiple Choice</p>
+                    <h3>{activeQuestionEntry.hotspot.title || 'Question'}</h3>
+                  </div>
+                  <button
+                    type="button"
+                    className="ui-button ui-button-secondary mini-button"
+                    onClick={() => setQuestionPreviewHotspotId(null)}
+                  >
+                    Close
+                  </button>
+                </div>
+                <p className="quiz-question-prompt">{activeQuestionConfig.prompt}</p>
+                <div className="quiz-choice-list">
+                  {activeQuestionConfig.options.map((option, index) => {
+                    const isAnswered = Boolean(activeQuestionResponse);
+                    const isSelected = activeQuestionResponse?.selectedIndex === index;
+                    const isCorrect = activeQuestionConfig.correctAnswerIndex === index;
+
+                    return (
+                      <button
+                        key={`${activeQuestionEntry.hotspot.id}-option-${index}`}
+                        type="button"
+                        className={`quiz-choice-button ${
+                          isAnswered
+                            ? isCorrect
+                              ? 'quiz-choice-correct'
+                              : isSelected
+                                ? 'quiz-choice-incorrect'
+                                : ''
+                            : ''
+                        }`}
+                        onClick={() => handleAnswerMultipleChoice(activeQuestionEntry.hotspot.id, index)}
+                        disabled={isAnswered}
+                      >
+                        <span className="quiz-choice-index">{String.fromCharCode(65 + index)}</span>
+                        <span>{option}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {activeQuestionResponse ? (
+                  <div
+                    className={`quiz-result-banner ${
+                      activeQuestionResponse.isCorrect ? 'quiz-result-correct' : 'quiz-result-incorrect'
+                    }`}
+                  >
+                    <strong>{activeQuestionResponse.isCorrect ? 'Correct' : 'Not quite'}</strong>
+                    <span>
+                      {activeQuestionConfig.feedbackText ||
+                        (activeQuestionResponse.isCorrect
+                          ? 'Nice work. You found the correct answer.'
+                          : `Correct answer: ${
+                              activeQuestionConfig.options[activeQuestionConfig.correctAnswerIndex]
+                            }`)}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="quiz-helper-note">Choose one answer. Each question scores once per session.</p>
+                )}
+              </div>
+            </div>
+          ) : null}
+          {appMode === 'preview' && showCompletionMessage ? (
+            <div className="presentation-overlay" role="dialog" aria-modal="true" aria-label="Experience complete">
+              <div className="presentation-modal completion-modal">
+                <div className="presentation-modal-heading">
+                  <p className="presentation-modal-kicker">Experience Complete</p>
+                  <h3>{project.name || 'XR Experience'}</h3>
+                </div>
+                <p className="completion-copy">
+                  Every insight zone has been explored and every question has been answered for this session.
+                </p>
+                <div className="completion-stats">
+                  <p>
+                    Insight Zones Found <strong>{discoveredHotspotIds.length} / {totalProgressPoints}</strong>
+                  </p>
+                  <p>
+                    Correct Answers <strong>{totalCorrectAnswers} / {totalQuestionCount}</strong>
+                  </p>
+                </div>
+                <div className="editor-actions">
+                  <button
+                    type="button"
+                    className="ui-button ui-button-secondary mini-button"
+                    onClick={() => {
+                      setShowCompletionMessage(false);
+                      setCompletionDismissed(true);
+                    }}
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
             </div>
           ) : null}
