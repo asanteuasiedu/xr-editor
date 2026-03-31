@@ -1985,15 +1985,21 @@ select {
     grid-auto-columns: minmax(96px, 1fr);
     overflow-x: auto;
     padding: 10px;
+    gap: 8px;
   }
 
   .edit-rail-button {
     justify-items: start;
     padding: 10px 12px;
+    min-height: 74px;
   }
 
   .context-panel {
     order: 3;
+  }
+
+  .context-panel-stack {
+    padding-right: 0;
   }
 
   .edit-workspace {
@@ -2052,8 +2058,14 @@ select {
 
   .presentation-progress-overlay {
     top: 12px;
+    left: 12px;
     right: 12px;
-    width: min(300px, calc(100% - 24px));
+    width: auto;
+    justify-content: stretch;
+  }
+
+  .presentation-progress-card {
+    width: 100%;
   }
 
   .panorama-panel-preview {
@@ -2072,5 +2084,163 @@ select {
 
   .editor-row {
     grid-template-columns: 1fr;
+  }
+
+  .scene-select,
+  .hotspot-select {
+    padding: 12px 14px;
+  }
+
+  .scene-delete,
+  .hotspot-delete,
+  .ui-button,
+  .mini-button {
+    min-height: 42px;
+  }
+
+  .quiz-choice-button {
+    min-height: 56px;
+    padding: 14px;
+  }
+
+  .presentation-modal {
+    max-height: calc(100vh - 28px);
+  }
+}
+
+@media (max-width: 640px) {
+  .app-shell {
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .app-header {
+    padding: 12px 14px;
+  }
+
+  .app-logo {
+    width: 36px;
+    height: 36px;
+  }
+
+  .app-title {
+    font-size: 1.08rem;
+  }
+
+  .app-subtitle {
+    margin-top: 4px;
+    font-size: 0.8rem;
+  }
+
+  .header-mode-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .mode-indicator-pill,
+  .mode-toggle-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .main-stack-preview {
+    gap: 10px;
+    min-height: calc(100vh - 126px);
+  }
+
+  .presentation-meta {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .presentation-title {
+    font-size: 1.05rem;
+  }
+
+  .presentation-description,
+  .presentation-score-label,
+  .presentation-score-empty,
+  .presentation-progress-label {
+    font-size: 0.78rem;
+  }
+
+  .presentation-progress-overlay {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+  }
+
+  .presentation-progress-card {
+    padding: 12px 14px;
+    border-radius: 16px;
+  }
+
+  .presentation-progress-bar {
+    margin-top: 10px;
+  }
+
+  .panorama-panel-preview {
+    min-height: 78vh;
+  }
+
+  .panorama-panel-preview .pannellum-shell,
+  .panorama-panel-preview .pannellum-container {
+    min-height: 70vh;
+  }
+
+  .edit-workspace .panorama-panel {
+    min-height: 64vh;
+  }
+
+  .edit-workspace .pannellum-shell,
+  .edit-workspace .pannellum-container {
+    min-height: 56vh;
+  }
+
+  .context-card,
+  .context-panel-primary,
+  .walkthrough-card,
+  .scene-picker-card,
+  .presentation-modal {
+    border-radius: 16px;
+  }
+
+  .presentation-overlay {
+    padding: 10px;
+    align-items: flex-end;
+  }
+
+  .presentation-modal {
+    width: 100%;
+    padding: 16px;
+  }
+
+  .quiz-choice-button {
+    gap: 10px;
+  }
+
+  .quiz-choice-index {
+    width: 32px;
+    height: 32px;
+  }
+
+  .quiz-option-row {
+    grid-template-columns: 1fr;
+  }
+
+  .quiz-option-actions,
+  .editor-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .scene-select {
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .scene-thumb {
+    width: 64px;
+    height: 48px;
   }
 }

@@ -40,6 +40,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 ## UI Layout + Design System
 - Product-style layout with clear zones: header, left sidebar, viewer area, and bottom hotspot editor panel.
 - Edit Mode now uses a more stable product frame: a slim left navigation rail, a dominant center panorama workspace, and a right contextual panel for details and editing.
+- The layout is now responsive across desktop, tablet, and phone sizes. On smaller screens, the rail collapses into a horizontal touch-friendly navigator and the contextual panel stacks below the viewer for easier mobile editing.
 - Card-based sections with rounded corners, soft shadows, and consistent spacing.
 - Theme tokens applied in CSS (`#F6F7FB` background, `#FFFFFF` cards, `#E6E8EF` borders, `#7C6CFF` accent).
 - Reusable button hierarchy:
@@ -90,6 +91,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 ## Edit Mode vs Presentation Mode
 - **Edit Mode** shows the full authoring interface: project inspector, scenes/hotspots controls, and hotspot editor.
 - **Presentation Mode** acts like a lightweight immersive viewer with reduced editor chrome, a more compact metadata band, a taller panorama surface for pilot demos, and a stronger cinematic first-entry reveal into the opening scene.
+- Presentation Mode is optimized for phone/tablet viewing with touch-friendly progress cards, readable learning-goal content, and mobile-sized overlays for info, image, and question interactions.
 - Use **Present Project** to enter presentation mode quickly, then **Return to Edit Mode** when done.
 - Switching modes does not lose project data; current scene stays active.
 - A subtle "Tap hotspots to explore" hint appears for new viewers and can be dismissed.
