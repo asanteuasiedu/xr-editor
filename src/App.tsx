@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import Layout from './components/Layout';
-import Sidebar from './components/Sidebar';
+import Sidebar, { type EditSection } from './components/Sidebar';
 import HotspotEditor from './components/HotspotEditor';
 import PanoramaViewer from './components/PanoramaViewer';
 import type { Hotspot, Project } from './types/project';
@@ -99,6 +99,68 @@ function loadEditWalkthroughDismissed() {
   return window.localStorage.getItem(EDIT_WALKTHROUGH_DISMISSED_KEY) === '1';
 }
 
+function RailIcon({ section }: { section: EditSection }) {
+  const commonProps = {
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.8,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    className: 'edit-rail-svg'
+  };
+
+  if (section === 'controls') {
+    return (
+      <svg {...commonProps}>
+        <line x1="5" y1="6" x2="19" y2="6" />
+        <line x1="5" y1="12" x2="19" y2="12" />
+        <line x1="5" y1="18" x2="19" y2="18" />
+        <circle cx="9" cy="6" r="2" />
+        <circle cx="15" cy="12" r="2" />
+        <circle cx="11" cy="18" r="2" />
+      </svg>
+    );
+  }
+
+  if (section === 'inspector') {
+    return (
+      <svg {...commonProps}>
+        <path d="M4.5 7.5a2 2 0 0 1 2-2h4.7l2 2H17.5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2z" />
+        <path d="M8 12h8" />
+      </svg>
+    );
+  }
+
+  if (section === 'scenes') {
+    return (
+      <svg {...commonProps}>
+        <rect x="4.5" y="5" width="12" height="10" rx="2" />
+        <path d="M7.5 12l2.5-2.5 2 2 2.5-3 2 2.5" />
+        <circle cx="9" cy="8.5" r="1" />
+        <path d="M17 9h2.5a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H10" />
+      </svg>
+    );
+  }
+
+  if (section === 'sceneDetails') {
+    return (
+      <svg {...commonProps}>
+        <path d="M7 4.5h7l4 4v11a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19.5v-13A2 2 0 0 1 7 4.5z" />
+        <path d="M14 4.5v4h4" />
+        <path d="M9 13h6" />
+        <path d="M9 16h4" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...commonProps}>
+      <path d="M12 4.5l1.8 3.9 4.2.6-3 2.9.7 4.1-3.7-2-3.7 2 .7-4.1-3-2.9 4.2-.6z" />
+    </svg>
+  );
+}
+
 function getMultipleChoiceConfig(hotspot: Hotspot) {
   if (hotspot.type !== 'multipleChoice') {
     return null;
@@ -160,6 +222,7 @@ function App() {
   const [previewEntryId, setPreviewEntryId] = useState(0);
   const [completionDismissed, setCompletionDismissed] = useState(false);
   const [showCompletionMessage, setShowCompletionMessage] = useState(false);
+  const [activeEditSection, setActiveEditSection] = useState<EditSection>('controls');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const hasMountedRef = useRef(false);
   const noticeTimeoutRef = useRef<number | null>(null);
@@ -320,6 +383,7 @@ function App() {
     setInfoPreview(null);
     setQuestionPreviewHotspotId(null);
     setIsScenePickerOpen(false);
+    setActiveEditSection('sceneDetails');
     setSelectedHotspotId(null);
     setPlacementMode({ type: 'idle' });
     setProject((currentProject) => {
@@ -341,6 +405,7 @@ function App() {
     setInfoPreview(null);
     setQuestionPreviewHotspotId(null);
     setIsScenePickerOpen(false);
+    setActiveEditSection('sceneDetails');
     setPlacementMode({ type: 'idle' });
 
     const newSceneId = `scene-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -451,6 +516,7 @@ function App() {
     setImagePreview(null);
     setInfoPreview(null);
     setQuestionPreviewHotspotId(null);
+    setActiveEditSection('hotspots');
     setPlacementMode({ type: 'placingNewHotspot' });
   };
 
@@ -459,6 +525,7 @@ function App() {
       return;
     }
 
+    setActiveEditSection('hotspots');
     setPlacementMode({ type: 'movingExistingHotspot', hotspotId: selectedHotspotId });
   };
 
@@ -914,9 +981,15 @@ function App() {
 
   const handleClearSelectedHotspot = () => {
     setSelectedHotspotId(null);
+    setActiveEditSection('hotspots');
     if (placementMode.type === 'movingExistingHotspot') {
       setPlacementMode({ type: 'idle' });
     }
+  };
+
+  const handleSelectHotspot = (hotspotId: string) => {
+    setSelectedHotspotId(hotspotId);
+    setActiveEditSection('hotspots');
   };
 
   const handleOpenScenePicker = () => {
@@ -986,7 +1059,101 @@ function App() {
         </div>
       }
       sidebar={
-        null
+        appMode === 'edit' ? (
+          <nav className="edit-nav-rail" aria-label="Editor sections">
+            {[
+              ['controls', 'Controls'],
+              ['inspector', 'Project'],
+              ['scenes', 'Scenes'],
+              ['sceneDetails', 'Details'],
+              ['hotspots', 'Insight Zones']
+            ].map(([sectionId, label]) => {
+              const isActive = activeEditSection === sectionId;
+              return (
+                <button
+                  key={sectionId}
+                  type="button"
+                  className={`edit-rail-button ${isActive ? 'edit-rail-button-active' : ''}`}
+                  onClick={() => setActiveEditSection(sectionId as EditSection)}
+                >
+                  <span className="edit-rail-icon">
+                    <RailIcon section={sectionId as EditSection} />
+                  </span>
+                  <span className="edit-rail-label">{label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        ) : null
+      }
+      contextPanel={
+        appMode === 'edit' ? (
+          <div className="context-panel-stack">
+            {selectedHotspot ? (
+              <section className="panel context-panel-primary">
+                <div className="context-panel-heading">
+                  <p className="sidebar-section-title">Selected Insight Zone</p>
+                  <h2>Zone Editor</h2>
+                  <p>Edit the selected insight zone with a clearer classroom-facing detail view.</p>
+                </div>
+                <HotspotEditor
+                  hotspot={selectedHotspot}
+                  destinationScenes={project.scenes.filter((scene) => scene.id !== activeScene.id)}
+                  isPlacementModeActive={placementMode.type !== 'idle'}
+                  onStartMovingHotspot={handleStartMovingSelectedHotspot}
+                  onUploadHotspotImage={handleUploadHotspotImage}
+                  onUpdateHotspot={handleUpdateHotspot}
+                  onDeleteHotspot={handleDeleteHotspot}
+                  onCloseEditor={handleClearSelectedHotspot}
+                />
+              </section>
+            ) : (
+              <section className="panel context-panel-primary context-panel-empty">
+                <div className="context-panel-heading">
+                  <p className="sidebar-section-title">Context</p>
+                  <h2>Contextual Editing</h2>
+                  <p>Select an insight zone to edit it here, or use the sections below to manage the scene.</p>
+                </div>
+              </section>
+            )}
+            <Sidebar
+              activeSection={activeEditSection}
+              project={project}
+              projectStats={projectStats}
+              scenes={project.scenes}
+              activeSceneId={project.activeSceneId}
+              activeScene={activeScene}
+              hotspots={activeScene.hotspots}
+              sceneNameById={sceneNameById}
+              selectedHotspotId={selectedHotspotId}
+              modeMessage={modeMessage}
+              isPlacementModeActive={placementMode.type !== 'idle'}
+              saveStateLabel={saveStateLabel}
+              saveStateTone={saveState}
+              templateOptions={PROJECT_TEMPLATE_OPTIONS}
+              walkthroughSectionId={activeWalkthroughStep?.id ?? null}
+              onAddScene={handleAddScene}
+              onPresentProject={handleEnterPresentationMode}
+              onCreateProjectFromTemplate={handleCreateProjectFromTemplate}
+              onStartWalkthrough={handleStartEditWalkthrough}
+              onOpenScenePicker={handleOpenScenePicker}
+              onUpdateProjectMetadata={handleUpdateProjectMetadata}
+              onSelectScene={handleSelectScene}
+              onRenameActiveScene={handleRenameActiveScene}
+              onUpdateActiveScenePanorama={handleUpdateActiveScenePanorama}
+              onUploadScenePanorama={handleUploadScenePanorama}
+              onDeleteScene={handleDeleteScene}
+              onAddHotspot={handleStartPlacingHotspot}
+              onCancelPlacement={handleCancelPlacement}
+              onExportProject={handleExportProject}
+              onExportPresentationPackage={handleExportPresentationPackage}
+              onImportProject={openImportFilePicker}
+              onResetLocalDraft={handleResetLocalDraft}
+              onSelectHotspot={handleSelectHotspot}
+              onDeleteHotspot={handleDeleteHotspot}
+            />
+          </div>
+        ) : null
       }
       main={
         <div className={`main-stack ${appMode === 'preview' ? 'main-stack-preview' : 'main-stack-edit'}`}>
@@ -1020,16 +1187,11 @@ function App() {
                   overlayContent={null}
                   editorPopoverContent={
                     selectedHotspot ? (
-                      <HotspotEditor
-                        hotspot={selectedHotspot}
-                        destinationScenes={project.scenes.filter((scene) => scene.id !== activeScene.id)}
-                        isPlacementModeActive={placementMode.type !== 'idle'}
-                        onStartMovingHotspot={handleStartMovingSelectedHotspot}
-                        onUploadHotspotImage={handleUploadHotspotImage}
-                        onUpdateHotspot={handleUpdateHotspot}
-                        onDeleteHotspot={handleDeleteHotspot}
-                        onCloseEditor={handleClearSelectedHotspot}
-                      />
+                      <div className="hotspot-popover-note">
+                        <p className="hotspot-popover-kicker">Selected Zone</p>
+                        <strong>{selectedHotspot.title || 'Untitled Insight Zone'}</strong>
+                        <span>Continue editing in the details panel.</span>
+                      </div>
                     ) : null
                   }
                   interactionMode={viewerInteractionMode}
@@ -1038,43 +1200,6 @@ function App() {
                   onViewChange={setCurrentView}
                 />
               )}
-              <div className="edit-overlay edit-overlay-left">
-                <Sidebar
-                  project={project}
-                  projectStats={projectStats}
-                  scenes={project.scenes}
-                  activeSceneId={project.activeSceneId}
-                  activeScene={activeScene}
-                  hotspots={activeScene.hotspots}
-                  sceneNameById={sceneNameById}
-                  selectedHotspotId={selectedHotspotId}
-                  modeMessage={modeMessage}
-                  isPlacementModeActive={placementMode.type !== 'idle'}
-                  saveStateLabel={saveStateLabel}
-                  saveStateTone={saveState}
-                  templateOptions={PROJECT_TEMPLATE_OPTIONS}
-                  walkthroughSectionId={activeWalkthroughStep?.id ?? null}
-                  onAddScene={handleAddScene}
-                  onPresentProject={handleEnterPresentationMode}
-                  onCreateProjectFromTemplate={handleCreateProjectFromTemplate}
-                  onStartWalkthrough={handleStartEditWalkthrough}
-                  onOpenScenePicker={handleOpenScenePicker}
-                  onUpdateProjectMetadata={handleUpdateProjectMetadata}
-                  onSelectScene={handleSelectScene}
-                  onRenameActiveScene={handleRenameActiveScene}
-                  onUpdateActiveScenePanorama={handleUpdateActiveScenePanorama}
-                  onUploadScenePanorama={handleUploadScenePanorama}
-                  onDeleteScene={handleDeleteScene}
-                  onAddHotspot={handleStartPlacingHotspot}
-                  onCancelPlacement={handleCancelPlacement}
-                  onExportProject={handleExportProject}
-                  onExportPresentationPackage={handleExportPresentationPackage}
-                  onImportProject={openImportFilePicker}
-                  onResetLocalDraft={handleResetLocalDraft}
-                  onSelectHotspot={setSelectedHotspotId}
-                  onDeleteHotspot={handleDeleteHotspot}
-                />
-              </div>
               {importError ? <p className="panel error-banner edit-toast">{importError}</p> : null}
               {noticeMessage ? <p className="panel info-banner edit-toast">{noticeMessage}</p> : null}
               {activeWalkthroughStep ? (
@@ -1163,9 +1288,12 @@ function App() {
                     <span>{project.scenes.length} scene(s)</span>
                   </div>
                 </div>
-                {project.description?.trim() ? (
-                  <p className="presentation-description">{project.description}</p>
-                ) : null}
+                <div className="presentation-learning-card">
+                  <p className="presentation-learning-kicker">Learning Goal</p>
+                  <p className="presentation-description">
+                    {project.description?.trim() || 'Use this scene to guide discussion, observation, and reflection.'}
+                  </p>
+                </div>
               </div>
               {!previewHintDismissed ? (
                 <div className="preview-hint-card">

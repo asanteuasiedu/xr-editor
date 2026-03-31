@@ -7,10 +7,11 @@ type LayoutProps = {
   logoSrc?: string;
   headerControls?: ReactNode;
   sidebar: ReactNode;
+  contextPanel?: ReactNode;
   main: ReactNode;
 };
 
-function Layout({ title, subtitle, mode, logoSrc, headerControls, sidebar, main }: LayoutProps) {
+function Layout({ title, subtitle, mode, logoSrc, headerControls, sidebar, contextPanel, main }: LayoutProps) {
   return (
     <div className={`app-shell app-shell-${mode}`}>
       <header className="app-header">
@@ -27,6 +28,7 @@ function Layout({ title, subtitle, mode, logoSrc, headerControls, sidebar, main 
       <div className={`app-body ${mode === 'preview' ? 'app-body-preview' : ''}`}>
         {mode === 'edit' ? <aside className="sidebar">{sidebar}</aside> : null}
         <main className="main-content">{main}</main>
+        {mode === 'edit' ? <aside className="context-panel">{contextPanel}</aside> : null}
       </div>
     </div>
   );

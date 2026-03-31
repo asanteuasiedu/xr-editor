@@ -119,17 +119,14 @@ select {
 
 .app-body {
   display: grid;
-  grid-template-columns: 360px 1fr;
+  grid-template-columns: 92px minmax(0, 1fr) 390px;
   gap: var(--space-3);
   min-height: 0;
+  align-items: stretch;
 }
 
 .app-shell-edit .app-body {
-  grid-template-columns: 1fr;
-}
-
-.app-shell-edit .sidebar {
-  display: none;
+  grid-template-columns: 92px minmax(0, 1fr) 390px;
 }
 
 .app-body-preview {
@@ -139,13 +136,17 @@ select {
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
   min-height: 0;
-  overflow: auto;
-  padding-right: 4px;
+  overflow: hidden;
+}
+
+.context-panel {
+  min-height: 0;
+  overflow: hidden;
 }
 
 .sidebar,
+.context-panel,
 .edit-overlay-left .sidebar-stack,
 .edit-overlay-right .editor-panel {
   scrollbar-width: thin;
@@ -153,12 +154,14 @@ select {
 }
 
 .sidebar::-webkit-scrollbar,
+.context-panel::-webkit-scrollbar,
 .edit-overlay-left .sidebar-stack::-webkit-scrollbar,
 .edit-overlay-right .editor-panel::-webkit-scrollbar {
   width: 10px;
 }
 
 .sidebar::-webkit-scrollbar-track,
+.context-panel::-webkit-scrollbar-track,
 .edit-overlay-left .sidebar-stack::-webkit-scrollbar-track,
 .edit-overlay-right .editor-panel::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.12);
@@ -166,6 +169,7 @@ select {
 }
 
 .sidebar::-webkit-scrollbar-thumb,
+.context-panel::-webkit-scrollbar-thumb,
 .edit-overlay-left .sidebar-stack::-webkit-scrollbar-thumb,
 .edit-overlay-right .editor-panel::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, rgba(124, 108, 255, 0.52), rgba(154, 142, 255, 0.36));
@@ -173,10 +177,75 @@ select {
   border: 2px solid rgba(255, 255, 255, 0.08);
 }
 
-.sidebar-stack {
+.edit-nav-rail {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 10px 8px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.74);
+  backdrop-filter: blur(16px);
+  box-shadow: var(--shadow-card);
+}
+
+.edit-rail-button {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 10px 6px;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.edit-rail-button:hover {
+  background: rgba(124, 108, 255, 0.08);
+  color: #4f3fd5;
+  transform: translateY(-1px);
+}
+
+.edit-rail-button-active {
+  background: linear-gradient(180deg, rgba(124, 108, 255, 0.16), rgba(124, 108, 255, 0.08));
+  color: #4f3fd5;
+  box-shadow: inset 0 0 0 1px rgba(124, 108, 255, 0.14);
+}
+
+.edit-rail-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(124, 108, 255, 0.1);
+  font-weight: 800;
+  font-size: 0.84rem;
+}
+
+.edit-rail-svg {
+  width: 18px;
+  height: 18px;
+}
+
+.edit-rail-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.context-panel-stack {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .sidebar-card {
@@ -192,6 +261,37 @@ select {
   border: 1px solid rgba(255, 255, 255, 0.42);
   backdrop-filter: blur(18px);
   box-shadow: 0 16px 36px rgba(16, 22, 42, 0.12);
+}
+
+.context-card {
+  padding: var(--space-4);
+}
+
+.context-panel-primary {
+  background:
+    radial-gradient(circle at top right, rgba(154, 142, 255, 0.12), transparent 36%),
+    rgba(255, 255, 255, 0.92);
+}
+
+.context-panel-empty {
+  min-height: 150px;
+}
+
+.context-panel-heading {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.context-panel-heading h2 {
+  margin: 0;
+  font-size: 1.06rem;
+}
+
+.context-panel-heading p:not(.sidebar-section-title) {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .overlay-card-header {
@@ -383,6 +483,13 @@ select {
   cursor: pointer;
 }
 
+.scene-select {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
 .scene-name,
 .hotspot-name {
   display: block;
@@ -393,7 +500,43 @@ select {
 .scene-name-wrap {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.scene-copy {
+  min-width: 0;
+}
+
+.scene-thumb-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scene-thumb {
+  width: 72px;
+  height: 52px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid rgba(124, 108, 255, 0.12);
+  background: #eef2fb;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+
+.scene-thumb-fallback {
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at top right, rgba(154, 142, 255, 0.22), transparent 36%),
+    linear-gradient(180deg, #fbfcff, #eef2fb);
+}
+
+.scene-thumb-glyph {
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #5d4be0;
 }
 
 .active-badge {
@@ -515,6 +658,7 @@ select {
 .edit-workspace {
   position: relative;
   min-height: calc(100vh - 125px);
+  height: 100%;
 }
 
 .edit-workspace .panorama-panel {
@@ -533,46 +677,6 @@ select {
 .edit-workspace .pannellum-shell,
 .edit-workspace .pannellum-container {
   min-height: calc(100vh - 165px);
-}
-
-.edit-overlay {
-  position: absolute;
-  z-index: 8;
-  pointer-events: none;
-}
-
-.edit-overlay > * {
-  pointer-events: auto;
-}
-
-.edit-overlay-left {
-  top: 140px;
-  left: 26px;
-  width: min(360px, calc(100vw - 44px));
-  max-height: calc(100vh - 270px);
-}
-
-.edit-overlay-left .sidebar-stack {
-  max-height: inherit;
-  overflow: auto;
-  padding-right: 4px;
-}
-
-.edit-overlay-right {
-  right: 14px;
-  bottom: 14px;
-  width: min(380px, calc(100vw - 44px));
-  max-height: calc(100vh - 185px);
-}
-
-.edit-overlay-right .editor-panel {
-  max-height: inherit;
-  overflow: auto;
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.42);
-  backdrop-filter: blur(18px);
-  box-shadow: 0 18px 38px rgba(15, 21, 40, 0.16);
-  animation: hotspot-editor-enter 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .edit-toast {
@@ -686,6 +790,36 @@ select {
   backdrop-filter: blur(18px);
   box-shadow: 0 18px 38px rgba(15, 21, 40, 0.16);
   animation: hotspot-editor-enter 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.hotspot-popover-note {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 18px 38px rgba(15, 21, 40, 0.16);
+}
+
+.hotspot-popover-kicker,
+.hotspot-popover-note strong,
+.hotspot-popover-note span {
+  margin: 0;
+}
+
+.hotspot-popover-kicker {
+  color: #5a49de;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.hotspot-popover-note span {
+  color: var(--muted);
+  font-size: 0.8rem;
 }
 
 /* Restyle native pannellum viewer controls to match the frosted XR editor UI
@@ -841,6 +975,13 @@ select {
 
 .editor-panel {
   padding-top: var(--space-3);
+}
+
+.context-panel-primary .editor-panel {
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
 }
 
 .editor-panel-header {
@@ -1436,6 +1577,23 @@ select {
   line-height: 1.45;
 }
 
+.presentation-learning-card {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(124, 108, 255, 0.12);
+}
+
+.presentation-learning-kicker {
+  margin: 0;
+  color: #5a49de;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
 .preview-hint-card {
   display: flex;
   align-items: center;
@@ -1778,7 +1936,7 @@ select {
 
 @media (max-width: 1120px) {
   .app-body {
-    grid-template-columns: 320px 1fr;
+    grid-template-columns: 82px minmax(0, 1fr) 340px;
   }
 }
 
@@ -1817,8 +1975,25 @@ select {
     grid-template-columns: 1fr;
   }
 
-  .sidebar {
-    max-height: 48vh;
+  .sidebar,
+  .context-panel {
+    overflow: visible;
+  }
+
+  .edit-nav-rail {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(96px, 1fr);
+    overflow-x: auto;
+    padding: 10px;
+  }
+
+  .edit-rail-button {
+    justify-items: start;
+    padding: 10px 12px;
+  }
+
+  .context-panel {
+    order: 3;
   }
 
   .edit-workspace {
@@ -1832,14 +2007,6 @@ select {
   .edit-workspace .pannellum-shell,
   .edit-workspace .pannellum-container {
     min-height: 62vh;
-  }
-
-  .edit-overlay-left,
-  .edit-overlay-right {
-    position: static;
-    width: 100%;
-    max-height: none;
-    margin-top: 12px;
   }
 
   .walkthrough-card {
@@ -1861,7 +2028,7 @@ select {
 
   .main-stack {
     min-height: auto;
-    grid-template-rows: auto auto;
+    grid-template-rows: auto;
   }
 
   .main-stack-preview {

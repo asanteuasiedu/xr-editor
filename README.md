@@ -39,6 +39,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 
 ## UI Layout + Design System
 - Product-style layout with clear zones: header, left sidebar, viewer area, and bottom hotspot editor panel.
+- Edit Mode now uses a more stable product frame: a slim left navigation rail, a dominant center panorama workspace, and a right contextual panel for details and editing.
 - Card-based sections with rounded corners, soft shadows, and consistent spacing.
 - Theme tokens applied in CSS (`#F6F7FB` background, `#FFFFFF` cards, `#E6E8EF` borders, `#7C6CFF` accent).
 - Reusable button hierarchy:
@@ -50,6 +51,8 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 
 ## Immersive Edit Mode
 - Edit Mode now keeps the panorama viewer dominant and moves authoring controls into frosted overlay panels.
+- The left side now works as a persistent navigation rail for `Controls`, `Project`, `Scenes`, `Details`, and `Insight Zones`, while the right side acts as the main contextual workspace.
+- This refactor is aimed at clearer authoring, stronger information hierarchy, and better classroom facilitation during localized learning activities.
 - The left overlay stack now sits lower so it stays clear of the `Your XR Media` heading and viewer zoom controls.
 - Overlay cards appear in this pilot-focused order: `Project Controls`, `Project Inspector`, `Scenes`, `Active Scene Details`, and `Insight Zones (Active Scene)`.
 - All overlay panels start closed by default for a cleaner first impression.
