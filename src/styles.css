@@ -2143,17 +2143,21 @@ select {
 
   .app-body,
   .app-shell-edit .app-body {
-    display: flex;
-    flex-direction: column;
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: none !important;
     gap: 10px;
+    align-items: stretch;
   }
 
   .sidebar,
   .main-content,
   .context-panel {
-    width: 100%;
-    min-width: 0;
-    max-width: 100%;
+    display: block;
+    flex: 0 0 auto;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
   }
 
   .sidebar {
@@ -2186,6 +2190,7 @@ select {
 
   .main-stack-edit {
     min-height: auto;
+    width: 100%;
   }
 
   .presentation-meta {
@@ -2231,12 +2236,14 @@ select {
   .edit-workspace .panorama-panel {
     min-height: 64vh;
     width: 100%;
+    max-width: 100%;
   }
 
   .edit-workspace .pannellum-shell,
   .edit-workspace .pannellum-container {
     min-height: 56vh;
     width: 100%;
+    max-width: 100%;
   }
 
   .context-card,
@@ -2293,5 +2300,15 @@ select {
 
   .context-panel-stack {
     overflow: visible;
+    height: auto;
+    width: 100%;
+  }
+
+  .edit-workspace,
+  .main-stack,
+  .viewer-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
   }
 }
