@@ -2537,12 +2537,12 @@ select {
   }
 
   .app-logo {
-    width: 36px;
-    height: 36px;
+    width: 34px;
+    height: 34px;
   }
 
   .app-title {
-    font-size: 1.08rem;
+    font-size: 1rem;
   }
 
   .app-subtitle {
@@ -2550,11 +2550,27 @@ select {
     font-size: 0.8rem;
   }
 
+  .app-brand {
+    min-width: 0;
+    flex: 1 1 auto;
+    gap: 12px;
+  }
+
+  .app-header-controls {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
   .app-shell-edit .app-title,
   .app-shell-edit .app-subtitle,
   .app-shell-preview .app-title,
   .app-shell-preview .app-subtitle {
     color: rgba(255, 255, 255, 0.96);
+  }
+
+  .app-shell-edit .app-subtitle,
+  .app-shell-preview .app-subtitle {
+    display: none;
   }
 
   .app-body,
@@ -2604,7 +2620,7 @@ select {
     top: 86px;
     bottom: auto;
     width: auto !important;
-    max-height: min(28vh, 220px);
+    max-height: min(22vh, 172px);
     margin: 0;
     z-index: 7;
     pointer-events: none;
@@ -2624,7 +2640,7 @@ select {
     flex-direction: row;
     align-items: center;
     justify-content: flex-end;
-    gap: 8px;
+    gap: 6px;
     flex-shrink: 0;
   }
 
@@ -2632,6 +2648,16 @@ select {
   .mode-toggle-button {
     width: auto;
     justify-content: center;
+  }
+
+  .mode-indicator-pill {
+    padding: 7px 10px;
+    font-size: 0.74rem;
+  }
+
+  .mode-toggle-button {
+    padding: 7px 11px;
+    font-size: 0.76rem;
   }
 
   .main-stack-preview,
@@ -2789,7 +2815,7 @@ select {
     height: 100%;
     width: 100%;
     padding-right: 0;
-    gap: 8px;
+    gap: 6px;
   }
 
   .app-shell-edit .sidebar-card,
@@ -2803,7 +2829,7 @@ select {
     box-shadow:
       0 16px 28px rgba(6, 8, 16, 0.24),
       inset 0 1px 0 rgba(255, 255, 255, 0.08);
-    padding: 12px;
+    padding: 10px;
   }
 
   .app-shell-edit .sidebar-section-title,
@@ -2821,12 +2847,12 @@ select {
   }
 
   .app-shell-edit .context-panel-heading {
-    gap: 4px;
-    margin-bottom: 8px;
+    gap: 2px;
+    margin-bottom: 6px;
   }
 
   .app-shell-edit .context-panel-heading h2 {
-    font-size: 0.98rem;
+    font-size: 0.92rem;
   }
 
   .app-shell-edit .context-panel-heading p:not(.sidebar-section-title),
@@ -2835,8 +2861,8 @@ select {
   .app-shell-edit .helper-note,
   .app-shell-edit .field-help,
   .app-shell-edit .editor-selection-note {
-    font-size: 0.74rem;
-    line-height: 1.3;
+    font-size: 0.72rem;
+    line-height: 1.22;
   }
 
   .app-shell-edit .sidebar-section-title,
@@ -2847,6 +2873,22 @@ select {
   .pannellum-container .pnlm-controls-container {
     bottom: 84px;
     left: 10px;
+  }
+
+  .pannellum-container .pnlm-orientation-button {
+    position: absolute;
+    left: 0;
+    bottom: 78px;
+    width: 34px;
+    height: 34px;
+    margin-top: 0;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background-color: rgba(10, 12, 20, 0.76);
+    box-shadow:
+      0 12px 22px rgba(8, 10, 18, 0.24),
+      inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(16px);
   }
 
   .pannellum-container .pnlm-compass {
