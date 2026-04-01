@@ -1168,7 +1168,7 @@ function App() {
             <section className="edit-workspace">
               {shouldHoldInitialViewer ? (
                 <section className="panel panorama-panel viewer-card">
-                  <h2 className="panel-title">Your XR Media</h2>
+                  <h2 className="viewer-overlay-title">Your XR Media</h2>
                   <div className="pannellum-shell viewer-clip-boundary">
                     <div className="viewer-fallback-overlay" role="status" aria-live="polite">
                       <p className="placeholder-note">

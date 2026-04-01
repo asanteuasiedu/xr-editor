@@ -39,7 +39,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 
 ## UI Layout + Design System
 - Product-style layout with clear zones: header, left sidebar, viewer area, and bottom hotspot editor panel.
-- Edit Mode now uses a more stable product frame: a slim left navigation rail, a dominant center panorama workspace, and a right contextual panel for details and editing.
+- Edit Mode now uses a more immersive HUD-style product frame on desktop/tablet: the panorama acts as the dominant workspace surface, while the left navigation rail and right contextual panel float over it as frosted foreground controls.
 - The layout is now responsive across desktop, tablet, and phone sizes. On smaller screens, the rail collapses into a horizontal touch-friendly navigator and the contextual panel stacks below the viewer for easier mobile editing.
 - Card-based sections with rounded corners, soft shadows, and consistent spacing.
 - Theme tokens applied in CSS (`#F6F7FB` background, `#FFFFFF` cards, `#E6E8EF` borders, `#7C6CFF` accent).
@@ -53,6 +53,8 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 ## Immersive Edit Mode
 - Edit Mode now keeps the panorama viewer dominant and moves authoring controls into frosted overlay panels.
 - The left side now works as a persistent navigation rail for `Controls`, `Project`, `Scenes`, `Details`, and `Insight Zones`, while the right side acts as the main contextual workspace.
+- On desktop and tablet, both navigation and contextual editing surfaces float over the 360 scene so the panorama remains the visual background canvas of the editor.
+- The header, scene title, viewer controls, and contextual surfaces now share the same blurred translucent HUD treatment so the editor chrome feels unified while staying secondary to the panorama.
 - This refactor is aimed at clearer authoring, stronger information hierarchy, and better classroom facilitation during localized learning activities.
 - The left overlay stack now sits lower so it stays clear of the `Your XR Media` heading and viewer zoom controls.
 - Overlay cards appear in this pilot-focused order: `Project Controls`, `Project Inspector`, `Scenes`, `Active Scene Details`, and `Insight Zones (Active Scene)`.

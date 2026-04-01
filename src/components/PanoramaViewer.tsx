@@ -368,7 +368,7 @@ function PanoramaViewer({
 
   return (
     <section className={`panel panorama-panel viewer-card ${isPreviewMode ? 'panorama-panel-preview' : ''}`}>
-      {!isPreviewMode ? <h2 className="panel-title">Your XR Media</h2> : null}
+      {!isPreviewMode ? <h2 className="viewer-overlay-title">Your XR Media</h2> : null}
       <div className="pannellum-shell viewer-clip-boundary" ref={shellRef}>
         <div
           className={`pannellum-container ${interactionMode !== 'idle' ? 'pannellum-container-placement' : ''}`}
