@@ -40,6 +40,7 @@ type SidebarProps = {
   onRenameActiveScene: (name: string) => void;
   onUpdateActiveScenePanorama: (panoramaUrl: string) => void;
   onUploadScenePanorama: (file: File) => void | Promise<void>;
+  onCreateSceneFromImageFile: (file: File) => void | Promise<void>;
   onDeleteScene: (sceneId: string) => void;
   onAddHotspot: () => void;
   onCancelPlacement: () => void;
@@ -77,6 +78,7 @@ function Sidebar({
   onRenameActiveScene,
   onUpdateActiveScenePanorama,
   onUploadScenePanorama,
+  onCreateSceneFromImageFile,
   onDeleteScene,
   onAddHotspot,
   onCancelPlacement,
@@ -88,6 +90,9 @@ function Sidebar({
   onDeleteHotspot
 }: SidebarProps) {
   const sceneUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const sceneCreateInputRef = useRef<HTMLInputElement | null>(null);
+  const sceneCaptureReplaceInputRef = useRef<HTMLInputElement | null>(null);
+  const sceneCaptureCreateInputRef = useRef<HTMLInputElement | null>(null);
 
   const onProjectNameChange = (event: ChangeEvent<HTMLInputElement>) => {
     onUpdateProjectMetadata({ name: event.target.value });
@@ -113,6 +118,18 @@ function Sidebar({
     sceneUploadInputRef.current?.click();
   };
 
+  const openCreateSceneUpload = () => {
+    sceneCreateInputRef.current?.click();
+  };
+
+  const openCameraReplace = () => {
+    sceneCaptureReplaceInputRef.current?.click();
+  };
+
+  const openCameraCreate = () => {
+    sceneCaptureCreateInputRef.current?.click();
+  };
+
   const onSceneUploadChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -121,6 +138,16 @@ function Sidebar({
     }
 
     void onUploadScenePanorama(file);
+  };
+
+  const onCreateSceneUploadChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) {
+      return;
+    }
+
+    void onCreateSceneFromImageFile(file);
   };
 
   const sectionCardClass = (sectionId: EditSection) =>
@@ -303,6 +330,29 @@ function Sidebar({
         className="hidden-file-input"
         onChange={onSceneUploadChange}
       />
+      <input
+        ref={sceneCreateInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden-file-input"
+        onChange={onCreateSceneUploadChange}
+      />
+      <input
+        ref={sceneCaptureReplaceInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden-file-input"
+        onChange={onSceneUploadChange}
+      />
+      <input
+        ref={sceneCaptureCreateInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden-file-input"
+        onChange={onCreateSceneUploadChange}
+      />
       <label className="editor-field compact-field">
         <span>Scene Name</span>
         <input value={activeScene.name} onChange={onSceneNameChange} placeholder="Scene name" />
@@ -322,7 +372,20 @@ function Sidebar({
       >
         Upload Panorama
       </button>
-      <p className="helper-note">Uploads are embedded in your local project JSON for this MVP.</p>
+      <div className="scene-source-actions">
+        <button type="button" className="ui-button ui-button-secondary mini-button upload-button" onClick={openCameraReplace}>
+          Capture to Active Scene
+        </button>
+        <button type="button" className="ui-button ui-button-secondary mini-button upload-button" onClick={openCameraCreate}>
+          New Scene from Capture
+        </button>
+        <button type="button" className="ui-button ui-button-secondary mini-button upload-button" onClick={openCreateSceneUpload}>
+          New Scene from Image
+        </button>
+      </div>
+      <p className="helper-note">
+        Mobile capture opens the device camera when supported. All selected images stay local in this MVP and feed directly into the current scene workflow.
+      </p>
     </section>
   );
 

@@ -190,11 +190,14 @@ If a scene is deleted, any hotspot links pointing to that scene are cleared auto
 
 ## Local Uploads (Panorama + Image Hotspots)
 - In **Active Scene Details**, use **Upload Panorama** to choose an image from your computer.
+- On mobile, **Capture to Active Scene** can open the device camera when supported and replace the current scene media.
+- **New Scene from Capture** and **New Scene from Image** let you turn a captured or selected photo into a brand-new scene inside the existing authoring flow.
 - For `image` hotspots, use **Upload Image** in the hotspot editor.
 - Uploads are converted to Data URLs and stored directly inside project data.
 - Because assets are embedded, autosave restore and JSON export/import preserve uploaded files.
 - Large image uploads can noticeably increase local draft size and exported JSON file size.
 - Manual URL/path fields remain available as a fallback.
+- This capture flow is a lightweight mobile bridge into scene authoring, not full AR capture, stitching, or world tracking.
 
 ## Hotspot Types
 - `info`: standard insight annotation.

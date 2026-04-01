@@ -191,6 +191,11 @@ function getMultipleChoiceConfig(hotspot: Hotspot) {
   };
 }
 
+function deriveSceneNameFromFile(file: File, fallbackName: string) {
+  const trimmedName = file.name.replace(/\.[^.]+$/, '').trim();
+  return trimmedName || fallbackName;
+}
+
 function App() {
   const initialLoad = useMemo(() => loadLocalDraft(), []);
   const initialWalkthroughDismissed = useMemo(() => loadEditWalkthroughDismissed(), []);
@@ -455,6 +460,29 @@ function App() {
           : scene
       )
     }));
+  };
+
+  const handleCreateSceneFromPanorama = (panoramaUrl: string, sceneName?: string) => {
+    const newSceneId = `scene-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const fallbackSceneName = `Scene ${project.scenes.length + 1}`;
+
+    setProject((currentProject) => ({
+      ...currentProject,
+      activeSceneId: newSceneId,
+      scenes: [
+        ...currentProject.scenes,
+        {
+          id: newSceneId,
+          name: sceneName?.trim() || fallbackSceneName,
+          panoramaUrl,
+          hotspots: []
+        }
+      ]
+    }));
+
+    setActiveEditSection('sceneDetails');
+    setSelectedHotspotId(null);
+    setPlacementMode({ type: 'idle' });
   };
 
   const handleDeleteScene = (sceneId: string) => {
@@ -889,6 +917,18 @@ function App() {
     handleUpdateActiveScenePanorama(result.dataUrl);
   };
 
+  const handleCreateSceneFromImageFile = async (file: File) => {
+    const result = await imageFileToDataUrl(file);
+    if (!result.ok) {
+      setImportError(result.error);
+      return;
+    }
+
+    setImportError(null);
+    setNoticeMessage(result.warning ?? `Created a new scene from "${deriveSceneNameFromFile(file, 'Captured Scene')}".`);
+    handleCreateSceneFromPanorama(result.dataUrl, deriveSceneNameFromFile(file, `Scene ${project.scenes.length + 1}`));
+  };
+
   const handleUploadHotspotImage = async (hotspotId: string, file: File) => {
     const result = await imageFileToDataUrl(file);
     if (!result.ok) {
@@ -1159,6 +1199,7 @@ function App() {
               onRenameActiveScene={handleRenameActiveScene}
               onUpdateActiveScenePanorama={handleUpdateActiveScenePanorama}
               onUploadScenePanorama={handleUploadScenePanorama}
+              onCreateSceneFromImageFile={handleCreateSceneFromImageFile}
               onDeleteScene={handleDeleteScene}
               onAddHotspot={handleStartPlacingHotspot}
               onCancelPlacement={handleCancelPlacement}
