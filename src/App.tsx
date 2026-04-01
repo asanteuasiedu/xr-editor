@@ -1275,40 +1275,6 @@ function App() {
               ) : null}
             </section>
           ) : null}
-          {appMode === 'preview' ? (
-            <section className="presentation-shell">
-              <div className="presentation-meta">
-                <div className="presentation-meta-top">
-                  <div className="presentation-identity">
-                    <p className="presentation-kicker">Presentation Mode</p>
-                    <h2 className="presentation-title">{project.name || 'Untitled Project'}</h2>
-                  </div>
-                  <div className="presentation-meta-row">
-                    <span>{activeScene.name || 'Untitled Scene'}</span>
-                    <span>{project.scenes.length} scene(s)</span>
-                  </div>
-                </div>
-                <div className="presentation-learning-card">
-                  <p className="presentation-learning-kicker">Learning Goal</p>
-                  <p className="presentation-description">
-                    {project.description?.trim() || 'Use this scene to guide discussion, observation, and reflection.'}
-                  </p>
-                </div>
-              </div>
-              {!previewHintDismissed ? (
-                <div className="preview-hint-card">
-                  <p>Tap hotspots to explore.</p>
-                  <button
-                    type="button"
-                    className="ui-button ui-button-secondary mini-button"
-                    onClick={handleDismissPreviewHint}
-                  >
-                    Hide
-                  </button>
-                </div>
-              ) : null}
-            </section>
-          ) : null}
           {appMode === 'preview' && importError ? <p className="presentation-toast">{importError}</p> : null}
           {appMode === 'preview' ? (
             <PanoramaViewer
@@ -1318,35 +1284,70 @@ function App() {
               isPreviewMode
               previewEntryId={previewEntryId}
               overlayContent={
-                <div className="presentation-progress-overlay" role="status" aria-live="polite">
-                  <div className="presentation-progress-card">
-                    <div className="presentation-progress-header">
-                      <p className="presentation-progress-kicker">Activity Progress</p>
-                      <strong>
-                        {discoveredHotspotIds.length}/{totalProgressPoints}
-                      </strong>
+                <>
+                  <div className="presentation-meta-overlay">
+                    <div className="presentation-meta">
+                      <div className="presentation-meta-top">
+                        <div className="presentation-identity">
+                          <p className="presentation-kicker">Presentation Mode</p>
+                          <h2 className="presentation-title">{project.name || 'Untitled Project'}</h2>
+                        </div>
+                        <div className="presentation-meta-row">
+                          <span>{activeScene.name || 'Untitled Scene'}</span>
+                          <span>{project.scenes.length} scene(s)</span>
+                        </div>
+                      </div>
+                      <div className="presentation-learning-card">
+                        <p className="presentation-learning-kicker">Learning Goal</p>
+                        <p className="presentation-description">
+                          {project.description?.trim() ||
+                            'Use this scene to guide discussion, observation, and reflection.'}
+                        </p>
+                      </div>
                     </div>
-                    <div className="presentation-progress-bar" aria-hidden="true">
-                      <div
-                        className="presentation-progress-fill"
-                        style={{ width: `${progressPercent}%` }}
-                      />
-                    </div>
-                    <p className="presentation-progress-label">
-                      Insight Zones Found: {discoveredHotspotIds.length} of {totalProgressPoints}
-                    </p>
-                    {activeSceneQuestionHotspots.length > 0 ? (
-                      <div className="presentation-score-block">
-                        <p className="presentation-score-label">Scene Score</p>
+                    {!previewHintDismissed ? (
+                      <div className="preview-hint-card">
+                        <p>Tap hotspots to explore.</p>
+                        <button
+                          type="button"
+                          className="ui-button ui-button-secondary mini-button"
+                          onClick={handleDismissPreviewHint}
+                        >
+                          Hide
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="presentation-progress-overlay" role="status" aria-live="polite">
+                    <div className="presentation-progress-card">
+                      <div className="presentation-progress-header">
+                        <p className="presentation-progress-kicker">Activity Progress</p>
                         <strong>
-                          {activeSceneCorrectCount} / {activeSceneQuestionHotspots.length} correct
+                          {discoveredHotspotIds.length}/{totalProgressPoints}
                         </strong>
                       </div>
-                    ) : (
-                      <p className="presentation-score-empty">No questions in this scene.</p>
-                    )}
+                      <div className="presentation-progress-bar" aria-hidden="true">
+                        <div
+                          className="presentation-progress-fill"
+                          style={{ width: `${progressPercent}%` }}
+                        />
+                      </div>
+                      <p className="presentation-progress-label">
+                        Insight Zones Found: {discoveredHotspotIds.length} of {totalProgressPoints}
+                      </p>
+                      {activeSceneQuestionHotspots.length > 0 ? (
+                        <div className="presentation-score-block">
+                          <p className="presentation-score-label">Scene Score</p>
+                          <strong>
+                            {activeSceneCorrectCount} / {activeSceneQuestionHotspots.length} correct
+                          </strong>
+                        </div>
+                      ) : (
+                        <p className="presentation-score-empty">No questions in this scene.</p>
+                      )}
+                    </div>
                   </div>
-                </div>
+                </>
               }
               interactionMode={viewerInteractionMode}
               onActivateHotspot={handleActivateHotspot}

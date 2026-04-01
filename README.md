@@ -47,14 +47,14 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
   - Primary (accent gradient, pill shape)
   - Secondary (neutral fill + subtle border)
 - Header branding uses the Udēēsa logo from `public/branding/udeesa-logo.png` (`/branding/udeesa-logo.png` in the app).
-- Native panorama compass and zoom controls are visually reskinned to match the frosted XR editor theme while keeping their built-in behavior, including a globe-like rotating compass in the lower-right.
+- Native panorama compass and zoom controls are visually reskinned to match the HUD theme while keeping their built-in behavior, including a stylized futuristic wireframe-globe compass in the lower-right.
 - Styling changes are cosmetic; editor logic and data behavior remain unchanged.
 
 ## Immersive Edit Mode
 - Edit Mode now keeps the panorama viewer dominant and moves authoring controls into frosted overlay panels.
 - The left side now works as a persistent navigation rail for `Controls`, `Project`, `Scenes`, `Details`, and `Insight Zones`, while the right side acts as the main contextual workspace.
 - On desktop and tablet, both navigation and contextual editing surfaces float over the 360 scene so the panorama remains the visual background canvas of the editor.
-- The header, scene title, viewer controls, and contextual surfaces now share the same blurred translucent HUD treatment so the editor chrome feels unified while staying secondary to the panorama.
+- The header, scene title, viewer controls, and contextual surfaces now share a darker blurred-glass HUD treatment with higher-contrast light text so the editor chrome feels unified while staying secondary to the panorama.
 - This refactor is aimed at clearer authoring, stronger information hierarchy, and better classroom facilitation during localized learning activities.
 - The left overlay stack now sits lower so it stays clear of the `Your XR Media` heading and viewer zoom controls.
 - Overlay cards appear in this pilot-focused order: `Project Controls`, `Project Inspector`, `Scenes`, `Active Scene Details`, and `Insight Zones (Active Scene)`.
@@ -92,7 +92,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 
 ## Edit Mode vs Presentation Mode
 - **Edit Mode** shows the full authoring interface: project inspector, scenes/hotspots controls, and hotspot editor.
-- **Presentation Mode** acts like a lightweight immersive viewer with reduced editor chrome, a more compact metadata band, a taller panorama surface for pilot demos, and a stronger cinematic first-entry reveal into the opening scene.
+- **Presentation Mode** acts like a lightweight immersive viewer with reduced editor chrome, a taller panorama surface for pilot demos, overlaid metadata and app controls, and a stronger cinematic first-entry reveal into the opening scene.
 - Presentation Mode is optimized for phone/tablet viewing with touch-friendly progress cards, readable learning-goal content, and mobile-sized overlays for info, image, and question interactions.
 - Use **Present Project** to enter presentation mode quickly, then **Return to Edit Mode** when done.
 - Switching modes does not lose project data; current scene stays active.
