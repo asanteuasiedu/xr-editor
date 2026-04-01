@@ -8,13 +8,8 @@ import type { Hotspot, Project } from './types/project';
 import { exportProjectToJson, importProjectFromFile } from './utils/exportImport';
 import { imageFileToDataUrl } from './utils/fileAssets';
 import { clearLocalDraft, loadLocalDraft, saveLocalDraft } from './utils/localDraft';
-import { exportPresentationPackage } from './utils/presentationPackage';
 import { SCENE_LIBRARY_ITEMS, STARTER_SCENE_PANORAMA_URL } from './utils/sceneLibrary';
-import {
-  createProjectFromTemplate,
-  PROJECT_TEMPLATE_OPTIONS,
-  type ProjectTemplateId
-} from './utils/templates';
+import { createProjectFromTemplate } from './utils/templates';
 
 const DEFAULT_PANORAMA_URL = STARTER_SCENE_PANORAMA_URL;
 
@@ -24,7 +19,7 @@ type PlacementMode =
   | { type: 'movingExistingHotspot'; hotspotId: string };
 
 type SaveState = 'saved' | 'unsaved' | 'restored';
-type AppMode = 'edit' | 'preview';
+type AppMode = 'edit' | 'preview' | 'arPreview';
 type QuestionResponse = {
   selectedIndex: number;
   isCorrect: boolean;
@@ -63,24 +58,6 @@ const EDIT_WALKTHROUGH_STEPS = [
 
 function createDefaultProject(): Project {
   return createProjectFromTemplate('blankTour');
-}
-
-function hasProjectContent(project: Project) {
-  if (project.scenes.length > 1) {
-    return true;
-  }
-
-  if ((project.description ?? '').trim() || (project.authorOrOrganization ?? '').trim()) {
-    return true;
-  }
-
-  return project.scenes.some(
-    (scene) =>
-      scene.hotspots.length > 0 ||
-      scene.panoramaUrl.trim() !== STARTER_SCENE_PANORAMA_URL ||
-      scene.name.trim() !== 'Scene 1' ||
-      project.name.trim() !== 'Blank Tour'
-  );
 }
 
 function loadPreviewHintDismissed() {
@@ -196,6 +173,17 @@ function deriveSceneNameFromFile(file: File, fallbackName: string) {
   return trimmedName || fallbackName;
 }
 
+function getScreenSpaceMarkerPosition(hotspot: Hotspot, index: number) {
+  const baseLeft = ((hotspot.yaw + 180) / 360) * 72 + 14;
+  const baseTop = 52 - hotspot.pitch * 1.6 + ((index % 3) - 1) * 4;
+
+  return {
+    left: `${Math.min(86, Math.max(14, baseLeft))}%`,
+    top: `${Math.min(78, Math.max(20, baseTop))}%`,
+    animationDelay: `${index * 140}ms`
+  };
+}
+
 function App() {
   const initialLoad = useMemo(() => loadLocalDraft(), []);
   const initialWalkthroughDismissed = useMemo(() => loadEditWalkthroughDismissed(), []);
@@ -229,7 +217,13 @@ function App() {
   const [showCompletionMessage, setShowCompletionMessage] = useState(false);
   const [activeEditSection, setActiveEditSection] = useState<EditSection>('controls');
   const [isContextPanelOpen, setIsContextPanelOpen] = useState(true);
+  const [cameraStatus, setCameraStatus] = useState<'idle' | 'requesting' | 'ready' | 'error'>('idle');
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [cameraPreviewRequestId, setCameraPreviewRequestId] = useState(0);
+  const [arPreviewSelectedHotspotId, setArPreviewSelectedHotspotId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const arVideoRef = useRef<HTMLVideoElement | null>(null);
+  const arStreamRef = useRef<MediaStream | null>(null);
   const hasMountedRef = useRef(false);
   const noticeTimeoutRef = useRef<number | null>(null);
 
@@ -323,6 +317,11 @@ function App() {
     () =>
       activeSceneQuestionHotspots.filter((hotspot) => questionResponses[hotspot.id]?.isCorrect).length,
     [activeSceneQuestionHotspots, questionResponses]
+  );
+  const arPreviewHotspots = useMemo(() => activeScene.hotspots.slice(0, 8), [activeScene.hotspots]);
+  const arPreviewSelectedHotspot = useMemo(
+    () => arPreviewHotspots.find((hotspot) => hotspot.id === arPreviewSelectedHotspotId) ?? null,
+    [arPreviewHotspots, arPreviewSelectedHotspotId]
   );
   const isExperienceComplete =
     totalProgressPoints > 0 &&
@@ -803,20 +802,6 @@ function App() {
     exportProjectToJson(project);
   };
 
-  const handleExportPresentationPackage = () => {
-    setImportError(null);
-    exportPresentationPackage(project);
-    setNoticeMessage(
-      'Presentation package exported as HTML, JSON, and README files. Keep the exported files together when reviewing or hosting.'
-    );
-  };
-
-  const openImportFilePicker = () => {
-    setImportError(null);
-    setNoticeMessage(null);
-    fileInputRef.current?.click();
-  };
-
   const handleImportFileSelection = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -905,6 +890,27 @@ function App() {
     setSelectedHotspotId(null);
   };
 
+  const handleEnterCameraPreview = useCallback(() => {
+    setAppMode('arPreview');
+    setImportError(null);
+    setNoticeMessage(null);
+    setImagePreview(null);
+    setInfoPreview(null);
+    setQuestionPreviewHotspotId(null);
+    setIsScenePickerOpen(false);
+    setPlacementMode({ type: 'idle' });
+    setSelectedHotspotId(null);
+    setCameraError(null);
+    setArPreviewSelectedHotspotId(null);
+    setCameraPreviewRequestId((current) => current + 1);
+  }, []);
+
+  const handleExitCameraPreview = useCallback(() => {
+    setAppMode('edit');
+    setCameraError(null);
+    setArPreviewSelectedHotspotId(null);
+  }, []);
+
   const handleUploadScenePanorama = async (file: File) => {
     const result = await imageFileToDataUrl(file);
     if (!result.ok) {
@@ -987,34 +993,6 @@ function App() {
     });
   };
 
-  const handleCreateProjectFromTemplate = (templateId: ProjectTemplateId) => {
-    const replacingCurrent = hasProjectContent(project);
-    if (replacingCurrent) {
-      const shouldReplace = window.confirm(
-        'Start a new project from template?\n\nThis will replace the current in-memory project. You can export first if needed.'
-      );
-      if (!shouldReplace) {
-        return;
-      }
-    }
-
-    const nextProject = createProjectFromTemplate(templateId);
-    setProject(nextProject);
-    setDiscoveredHotspotIds([]);
-    setQuestionResponses({});
-    setAppMode('edit');
-    setImagePreview(null);
-    setInfoPreview(null);
-    setQuestionPreviewHotspotId(null);
-    setImagePreviewBroken(false);
-    setImportError(null);
-    setNoticeMessage(null);
-    setIsScenePickerOpen(false);
-    setPlacementMode({ type: 'idle' });
-    setSelectedHotspotId(null);
-    setSaveState('unsaved');
-  };
-
   const handleDismissPreviewHint = () => {
     setPreviewHintDismissed(true);
     if (typeof window !== 'undefined') {
@@ -1074,15 +1052,83 @@ function App() {
   const shouldHoldInitialViewer =
     shouldRunFirstStartFlow && appMode === 'edit' && (activeWalkthroughStep !== null || isScenePickerOpen);
 
+  useEffect(() => {
+    if (appMode !== 'arPreview') {
+      if (arStreamRef.current) {
+        arStreamRef.current.getTracks().forEach((track) => track.stop());
+        arStreamRef.current = null;
+      }
+      setCameraStatus('idle');
+      return;
+    }
+
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      setCameraStatus('error');
+      setCameraError('Camera preview is unavailable in this browser. You can return to Edit Mode and keep authoring normally.');
+      return;
+    }
+
+    let cancelled = false;
+
+    const startCamera = async () => {
+      setCameraStatus('requesting');
+      setCameraError(null);
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: 'environment' }
+          },
+          audio: false
+        });
+
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        arStreamRef.current = stream;
+        if (arVideoRef.current) {
+          arVideoRef.current.srcObject = stream;
+          void arVideoRef.current.play().catch(() => undefined);
+        }
+        setCameraStatus('ready');
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        setCameraStatus('error');
+        setCameraError(
+          error instanceof Error
+            ? error.message
+            : 'Camera access was unavailable. You can still return to the editor and keep building the scene.'
+        );
+      }
+    };
+
+    void startCamera();
+
+    return () => {
+      cancelled = true;
+      if (arStreamRef.current) {
+        arStreamRef.current.getTracks().forEach((track) => track.stop());
+        arStreamRef.current = null;
+      }
+    };
+  }, [appMode, cameraPreviewRequestId]);
+
   return (
     <Layout
       title="XR Editor"
       subtitle="Local XR experience editor"
-      mode={appMode}
+      mode={appMode === 'edit' ? 'edit' : 'preview'}
       logoSrc="/branding/udeesa-logo.png"
       headerControls={
         <div className="header-mode-group">
-          <span className="mode-indicator-pill">{appMode === 'edit' ? 'Edit Mode' : 'Preview Mode'}</span>
+          <span className="mode-indicator-pill">
+            {appMode === 'edit' ? 'Edit Mode' : appMode === 'arPreview' ? 'AR Preview' : 'Preview Mode'}
+          </span>
           {appMode === 'edit' ? (
             <button
               type="button"
@@ -1095,7 +1141,7 @@ function App() {
             <button
               type="button"
               className="ui-button ui-button-secondary mode-toggle-button"
-              onClick={handleToggleAppMode}
+              onClick={appMode === 'arPreview' ? handleExitCameraPreview : handleToggleAppMode}
             >
               Return to Edit Mode
             </button>
@@ -1136,43 +1182,27 @@ function App() {
       contextPanel={
         appMode === 'edit' && isContextPanelOpen ? (
           <div className="context-panel-stack">
-            <div className="context-panel-toolbar">
-              <button
-                type="button"
-                className="context-panel-close"
-                onClick={() => setIsContextPanelOpen(false)}
-                aria-label="Close context panel"
-              >
-                <span aria-hidden="true">×</span>
-              </button>
-            </div>
             {selectedHotspot ? (
-              <section className="panel context-panel-primary">
-                <div className="context-panel-heading">
-                  <p className="sidebar-section-title">Selected Insight Zone</p>
-                  <h2>Zone Editor</h2>
-                  <p>Edit the selected insight zone with a clearer classroom-facing detail view.</p>
-                </div>
-                <HotspotEditor
-                  hotspot={selectedHotspot}
-                  destinationScenes={project.scenes.filter((scene) => scene.id !== activeScene.id)}
-                  isPlacementModeActive={placementMode.type !== 'idle'}
-                  onStartMovingHotspot={handleStartMovingSelectedHotspot}
-                  onUploadHotspotImage={handleUploadHotspotImage}
-                  onUpdateHotspot={handleUpdateHotspot}
-                  onDeleteHotspot={handleDeleteHotspot}
-                  onCloseEditor={handleClearSelectedHotspot}
-                />
-              </section>
-            ) : (
-              <section className="panel context-panel-primary context-panel-empty">
-                <div className="context-panel-heading">
-                  <p className="sidebar-section-title">Context</p>
-                  <h2>Contextual Editing</h2>
-                  <p>Select an insight zone to edit it here, or use the sections below to manage the scene.</p>
-                </div>
-              </section>
-            )}
+              <>
+                <section className="panel context-panel-primary">
+                  <div className="context-panel-heading">
+                    <p className="sidebar-section-title">Selected Insight Zone</p>
+                    <h2>Zone Editor</h2>
+                    <p>Edit the selected insight zone with a clearer classroom-facing detail view.</p>
+                  </div>
+                  <HotspotEditor
+                    hotspot={selectedHotspot}
+                    destinationScenes={project.scenes.filter((scene) => scene.id !== activeScene.id)}
+                    isPlacementModeActive={placementMode.type !== 'idle'}
+                    onStartMovingHotspot={handleStartMovingSelectedHotspot}
+                    onUploadHotspotImage={handleUploadHotspotImage}
+                    onUpdateHotspot={handleUpdateHotspot}
+                    onDeleteHotspot={handleDeleteHotspot}
+                    onCloseEditor={handleClearSelectedHotspot}
+                  />
+                </section>
+              </>
+            ) : null}
             <Sidebar
               activeSection={activeEditSection}
               project={project}
@@ -1187,25 +1217,21 @@ function App() {
               isPlacementModeActive={placementMode.type !== 'idle'}
               saveStateLabel={saveStateLabel}
               saveStateTone={saveState}
-              templateOptions={PROJECT_TEMPLATE_OPTIONS}
               walkthroughSectionId={activeWalkthroughStep?.id ?? null}
               onAddScene={handleAddScene}
               onPresentProject={handleEnterPresentationMode}
-              onCreateProjectFromTemplate={handleCreateProjectFromTemplate}
+              onEnterCameraPreview={handleEnterCameraPreview}
               onStartWalkthrough={handleStartEditWalkthrough}
               onOpenScenePicker={handleOpenScenePicker}
               onUpdateProjectMetadata={handleUpdateProjectMetadata}
               onSelectScene={handleSelectScene}
               onRenameActiveScene={handleRenameActiveScene}
-              onUpdateActiveScenePanorama={handleUpdateActiveScenePanorama}
               onUploadScenePanorama={handleUploadScenePanorama}
               onCreateSceneFromImageFile={handleCreateSceneFromImageFile}
               onDeleteScene={handleDeleteScene}
               onAddHotspot={handleStartPlacingHotspot}
               onCancelPlacement={handleCancelPlacement}
               onExportProject={handleExportProject}
-              onExportPresentationPackage={handleExportPresentationPackage}
-              onImportProject={openImportFilePicker}
               onResetLocalDraft={handleResetLocalDraft}
               onSelectHotspot={handleSelectHotspot}
               onDeleteHotspot={handleDeleteHotspot}
@@ -1334,6 +1360,99 @@ function App() {
             </section>
           ) : null}
           {appMode === 'preview' && importError ? <p className="presentation-toast">{importError}</p> : null}
+          {appMode === 'arPreview' ? (
+            <section className="camera-preview-shell" aria-label="Camera AR preview">
+              <div className="camera-preview-stage">
+                <video ref={arVideoRef} className="camera-preview-video" autoPlay muted playsInline />
+                <div className="camera-preview-backdrop" aria-hidden="true" />
+                <div className="camera-preview-meta">
+                  <div className="camera-preview-card">
+                    <p className="presentation-kicker">Screen-Space AR Preview</p>
+                    <h2 className="presentation-title">{activeScene.name || project.name || 'AR Preview'}</h2>
+                    <p className="presentation-description">
+                      Preview lightweight floating insight zones over the live camera feed. This mode is visual-only and does not use persistent AR anchoring.
+                    </p>
+                  </div>
+                </div>
+                <div className="camera-preview-overlay">
+                  {cameraStatus === 'ready'
+                    ? arPreviewHotspots.map((hotspot, index) => (
+                        <button
+                          key={`ar-preview-${hotspot.id}`}
+                          type="button"
+                          className={`ar-preview-marker ar-preview-marker-${hotspot.type}`}
+                          style={getScreenSpaceMarkerPosition(hotspot, index)}
+                          onClick={() => setArPreviewSelectedHotspotId(hotspot.id)}
+                        >
+                          <span className="ar-preview-marker-dot" aria-hidden="true" />
+                          <span className="ar-preview-marker-label">{hotspot.title || 'Insight Zone'}</span>
+                        </button>
+                      ))
+                    : null}
+                </div>
+                <div className="camera-preview-status">
+                  {cameraStatus === 'requesting' ? (
+                    <div className="camera-preview-card camera-preview-status-card">
+                      <p className="presentation-kicker">Preparing Camera</p>
+                      <p className="presentation-description">Requesting camera access for the live preview.</p>
+                    </div>
+                  ) : null}
+                  {cameraStatus === 'error' ? (
+                    <div className="camera-preview-card camera-preview-status-card">
+                      <p className="presentation-kicker">Camera Unavailable</p>
+                      <p className="presentation-description">
+                        {cameraError ||
+                          'Camera permission was denied or unavailable. Return to Edit Mode to keep building the experience.'}
+                      </p>
+                      <div className="editor-actions">
+                        <button
+                          type="button"
+                          className="ui-button ui-button-secondary mini-button"
+                          onClick={handleEnterCameraPreview}
+                        >
+                          Try Again
+                        </button>
+                        <button
+                          type="button"
+                          className="ui-button ui-button-primary mini-button"
+                          onClick={handleExitCameraPreview}
+                        >
+                          Return to Edit
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  {cameraStatus === 'ready' && arPreviewSelectedHotspot ? (
+                    <div className="camera-preview-card camera-preview-status-card">
+                      <p className="presentation-kicker">Selected Overlay</p>
+                      <h3 className="camera-preview-selection-title">
+                        {arPreviewSelectedHotspot.title || 'Insight Zone'}
+                      </h3>
+                      <p className="presentation-description">
+                        {arPreviewSelectedHotspot.type === 'sceneLink'
+                          ? 'Scene link preview marker'
+                          : arPreviewSelectedHotspot.type === 'externalLink'
+                            ? 'External resource preview marker'
+                            : arPreviewSelectedHotspot.type === 'image'
+                              ? 'Image preview marker'
+                              : arPreviewSelectedHotspot.type === 'multipleChoice'
+                                ? 'Question preview marker'
+                                : 'Information preview marker'}
+                      </p>
+                    </div>
+                  ) : null}
+                  {cameraStatus === 'ready' && arPreviewHotspots.length === 0 ? (
+                    <div className="camera-preview-card camera-preview-status-card">
+                      <p className="presentation-kicker">No Insight Zones Yet</p>
+                      <p className="presentation-description">
+                        Add insight zones in Edit Mode, then come back here to preview floating screen-space markers.
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </section>
+          ) : null}
           {appMode === 'preview' ? (
             <PanoramaViewer
               panoramaUrl={activeScene.panoramaUrl}

@@ -1,7 +1,6 @@
 import { useRef } from 'react';
 import type { ChangeEvent } from 'react';
 import type { Hotspot, Project, Scene } from '../types/project';
-import type { ProjectTemplateId, ProjectTemplateOption } from '../utils/templates';
 
 type ProjectStats = {
   totalScenes: number;
@@ -11,6 +10,8 @@ type ProjectStats = {
 };
 
 export type EditSection = 'controls' | 'inspector' | 'scenes' | 'sceneDetails' | 'hotspots';
+
+type ControlActionIconName = 'present' | 'export' | 'tour' | 'scene' | 'uploadPanorama' | 'captureScene';
 
 type SidebarProps = {
   activeSection: EditSection;
@@ -26,11 +27,10 @@ type SidebarProps = {
   isPlacementModeActive: boolean;
   saveStateLabel: string;
   saveStateTone: 'saved' | 'unsaved' | 'restored';
-  templateOptions: ProjectTemplateOption[];
   walkthroughSectionId: EditSection | null;
   onAddScene: () => void;
   onPresentProject: () => void;
-  onCreateProjectFromTemplate: (templateId: ProjectTemplateId) => void;
+  onEnterCameraPreview: () => void;
   onStartWalkthrough: () => void;
   onOpenScenePicker: () => void;
   onUpdateProjectMetadata: (
@@ -38,19 +38,110 @@ type SidebarProps = {
   ) => void;
   onSelectScene: (sceneId: string) => void;
   onRenameActiveScene: (name: string) => void;
-  onUpdateActiveScenePanorama: (panoramaUrl: string) => void;
   onUploadScenePanorama: (file: File) => void | Promise<void>;
   onCreateSceneFromImageFile: (file: File) => void | Promise<void>;
   onDeleteScene: (sceneId: string) => void;
   onAddHotspot: () => void;
   onCancelPlacement: () => void;
   onExportProject: () => void;
-  onExportPresentationPackage: () => void;
-  onImportProject: () => void;
   onResetLocalDraft: () => void;
   onSelectHotspot: (hotspotId: string) => void;
   onDeleteHotspot: (hotspotId: string) => void;
 };
+
+function ControlActionIcon({ name }: { name: ControlActionIconName }) {
+  const commonProps = {
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.8,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    className: 'control-action-icon-svg'
+  };
+
+  if (name === 'present') {
+    return (
+      <svg {...commonProps}>
+        <path d="M5 5.5h14a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 19 16.5H5A1.5 1.5 0 0 1 3.5 15v-8A1.5 1.5 0 0 1 5 5.5z" />
+        <path d="M10 10l4 2.5-4 2.5z" />
+        <path d="M8.5 19.5h7" />
+      </svg>
+    );
+  }
+
+  if (name === 'export') {
+    return (
+      <svg {...commonProps}>
+        <path d="M12 4.5v10" />
+        <path d="M8.5 11 12 14.5 15.5 11" />
+        <path d="M5.5 16.5v2a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5v-2" />
+      </svg>
+    );
+  }
+
+  if (name === 'tour') {
+    return (
+      <svg {...commonProps}>
+        <circle cx="7" cy="7" r="2" />
+        <circle cx="17" cy="17" r="2" />
+        <path d="M8.5 8.5c1.5 1 2.3 1.6 3.5 3.5s2.5 2.6 3.5 3.5" />
+        <path d="M10.5 6.5h4" />
+        <path d="M9.5 17.5h-4" />
+      </svg>
+    );
+  }
+
+  if (name === 'uploadPanorama') {
+    return (
+      <svg {...commonProps}>
+        <rect x="4.5" y="6" width="15" height="12" rx="2" />
+        <path d="M7.5 14l3-3 2.2 2.2 2.8-3.2 1.5 1.8" />
+        <circle cx="9" cy="9.5" r="1" />
+        <path d="M12 4.5v4" />
+        <path d="M10.5 6h3" />
+      </svg>
+    );
+  }
+
+  if (name === 'captureScene') {
+    return (
+      <svg {...commonProps}>
+        <path d="M7 8.5h2l1.2-1.8h3.6L15 8.5h2A1.5 1.5 0 0 1 18.5 10v6A1.5 1.5 0 0 1 17 17.5H7A1.5 1.5 0 0 1 5.5 16v-6A1.5 1.5 0 0 1 7 8.5z" />
+        <circle cx="12" cy="13" r="2.5" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...commonProps}>
+      <rect x="4.5" y="5.5" width="15" height="12" rx="2" />
+      <path d="M7.5 14l3-3 2.2 2.2 2.8-3.2 1.5 1.8" />
+      <circle cx="9" cy="9" r="1" />
+    </svg>
+  );
+}
+
+function ProjectActionIcon() {
+  const commonProps = {
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.8,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    className: 'control-action-icon-svg'
+  };
+
+  return (
+    <svg {...commonProps}>
+      <path d="M19 6.5v4" />
+      <path d="M19 10.5l-2-2" />
+      <path d="M19 10.5l2-2" />
+      <path d="M17.5 17.5a6 6 0 1 1-1.8-10.7" />
+    </svg>
+  );
+}
 
 function Sidebar({
   activeSection,
@@ -66,32 +157,26 @@ function Sidebar({
   isPlacementModeActive,
   saveStateLabel,
   saveStateTone,
-  templateOptions,
   walkthroughSectionId,
   onAddScene,
   onPresentProject,
-  onCreateProjectFromTemplate,
+  onEnterCameraPreview,
   onStartWalkthrough,
   onOpenScenePicker,
   onUpdateProjectMetadata,
   onSelectScene,
   onRenameActiveScene,
-  onUpdateActiveScenePanorama,
   onUploadScenePanorama,
   onCreateSceneFromImageFile,
   onDeleteScene,
   onAddHotspot,
   onCancelPlacement,
   onExportProject,
-  onExportPresentationPackage,
-  onImportProject,
   onResetLocalDraft,
   onSelectHotspot,
   onDeleteHotspot
 }: SidebarProps) {
   const sceneUploadInputRef = useRef<HTMLInputElement | null>(null);
-  const sceneCreateInputRef = useRef<HTMLInputElement | null>(null);
-  const sceneCaptureReplaceInputRef = useRef<HTMLInputElement | null>(null);
   const sceneCaptureCreateInputRef = useRef<HTMLInputElement | null>(null);
 
   const onProjectNameChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -110,20 +195,8 @@ function Sidebar({
     onRenameActiveScene(event.target.value);
   };
 
-  const onScenePanoramaChange = (event: ChangeEvent<HTMLInputElement>) => {
-    onUpdateActiveScenePanorama(event.target.value);
-  };
-
   const openPanoramaUpload = () => {
     sceneUploadInputRef.current?.click();
-  };
-
-  const openCreateSceneUpload = () => {
-    sceneCreateInputRef.current?.click();
-  };
-
-  const openCameraReplace = () => {
-    sceneCaptureReplaceInputRef.current?.click();
   };
 
   const openCameraCreate = () => {
@@ -163,16 +236,35 @@ function Sidebar({
       <p className={`save-state-indicator save-state-${saveStateTone}`}>{saveStateLabel}</p>
       <div className="stacked-actions">
         <button type="button" className="ui-button ui-button-primary control-button" onClick={onPresentProject}>
-          Present Project
+          <span className="control-action-icon" aria-hidden="true">
+            <ControlActionIcon name="present" />
+          </span>
+          <span className="control-action-label">Present Project</span>
+        </button>
+        <button
+          type="button"
+          className="ui-button ui-button-secondary control-button mobile-ar-preview-button"
+          onClick={onEnterCameraPreview}
+        >
+          Camera AR Preview
         </button>
         <button type="button" className="ui-button ui-button-secondary control-button" onClick={onExportProject}>
-          Export Project
+          <span className="control-action-icon" aria-hidden="true">
+            <ControlActionIcon name="export" />
+          </span>
+          <span className="control-action-label">Export Project</span>
         </button>
         <button type="button" className="ui-button ui-button-secondary control-button" onClick={onStartWalkthrough}>
-          Start Guided Tour
+          <span className="control-action-icon" aria-hidden="true">
+            <ControlActionIcon name="tour" />
+          </span>
+          <span className="control-action-label">Start Guided Tour</span>
         </button>
         <button type="button" className="ui-button ui-button-secondary control-button" onClick={onOpenScenePicker}>
-          Select a Scene
+          <span className="control-action-icon" aria-hidden="true">
+            <ControlActionIcon name="scene" />
+          </span>
+          <span className="control-action-label">Select a Scene</span>
         </button>
       </div>
     </section>
@@ -223,35 +315,12 @@ function Sidebar({
       <div className="sidebar-subsection">
         <p className="sidebar-subsection-title">Project Actions</p>
         <div className="stacked-actions compact-actions">
-          <button
-            type="button"
-            className="ui-button ui-button-secondary control-button"
-            onClick={onExportPresentationPackage}
-          >
-            Export Presentation Package
-          </button>
-          <button type="button" className="ui-button ui-button-secondary control-button" onClick={onImportProject}>
-            Import Project
-          </button>
           <button type="button" className="ui-button ui-button-secondary control-button" onClick={onResetLocalDraft}>
-            Reset Local Draft
+            <span className="control-action-icon" aria-hidden="true">
+              <ProjectActionIcon />
+            </span>
+            <span className="control-action-label">Reset Local Draft</span>
           </button>
-        </div>
-      </div>
-      <div className="sidebar-subsection">
-        <p className="sidebar-subsection-title">New Project from Template</p>
-        <div className="template-list template-list-inline">
-          {templateOptions.map((template) => (
-            <button
-              key={template.id}
-              type="button"
-              className="template-button"
-              onClick={() => onCreateProjectFromTemplate(template.id)}
-            >
-              <span className="template-name">{template.name}</span>
-              <span className="template-description">{template.description}</span>
-            </button>
-          ))}
         </div>
       </div>
     </section>
@@ -331,21 +400,6 @@ function Sidebar({
         onChange={onSceneUploadChange}
       />
       <input
-        ref={sceneCreateInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden-file-input"
-        onChange={onCreateSceneUploadChange}
-      />
-      <input
-        ref={sceneCaptureReplaceInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden-file-input"
-        onChange={onSceneUploadChange}
-      />
-      <input
         ref={sceneCaptureCreateInputRef}
         type="file"
         accept="image/*"
@@ -357,34 +411,30 @@ function Sidebar({
         <span>Scene Name</span>
         <input value={activeScene.name} onChange={onSceneNameChange} placeholder="Scene name" />
       </label>
-      <label className="editor-field compact-field">
-        <span>Panorama URL / Path</span>
-        <input
-          value={activeScene.panoramaUrl}
-          onChange={onScenePanoramaChange}
-          placeholder="/scene-library/starry-night-moon.jpg"
-        />
-      </label>
       <button
         type="button"
-        className="ui-button ui-button-secondary mini-button upload-button"
+        className="ui-button ui-button-secondary mini-button upload-button scene-media-button"
         onClick={openPanoramaUpload}
       >
-        Upload Panorama
+        <span className="control-action-icon" aria-hidden="true">
+          <ControlActionIcon name="uploadPanorama" />
+        </span>
+        <span className="control-action-label">Upload Panorama</span>
       </button>
       <div className="scene-source-actions">
-        <button type="button" className="ui-button ui-button-secondary mini-button upload-button" onClick={openCameraReplace}>
-          Capture to Active Scene
-        </button>
-        <button type="button" className="ui-button ui-button-secondary mini-button upload-button" onClick={openCameraCreate}>
-          New Scene from Capture
-        </button>
-        <button type="button" className="ui-button ui-button-secondary mini-button upload-button" onClick={openCreateSceneUpload}>
-          New Scene from Image
+        <button
+          type="button"
+          className="ui-button ui-button-secondary mini-button upload-button scene-media-button"
+          onClick={openCameraCreate}
+        >
+          <span className="control-action-icon" aria-hidden="true">
+            <ControlActionIcon name="captureScene" />
+          </span>
+          <span className="control-action-label">Capture New Scene</span>
         </button>
       </div>
       <p className="helper-note">
-        Mobile capture opens the device camera when supported. All selected images stay local in this MVP and feed directly into the current scene workflow.
+        Upload replaces the active scene panorama. Capture New Scene opens the device camera when supported and falls back to image selection elsewhere, creating a new local scene in the current workflow.
       </p>
     </section>
   );
@@ -439,9 +489,6 @@ function Sidebar({
               <li key={hotspot.id} className={`hotspot-row ${isSelected ? 'hotspot-row-selected' : ''}`}>
                 <button type="button" className="hotspot-select" onClick={() => onSelectHotspot(hotspot.id)}>
                   <span className="hotspot-name">{hotspot.title}</span>
-                  <span className="hotspot-meta">
-                    yaw {hotspot.yaw.toFixed(1)} | pitch {hotspot.pitch.toFixed(1)}
-                  </span>
                   <span className={`hotspot-link-chip ${hotspotTypeChipClass}`}>{hotspotTypeLabel}</span>
                 </button>
                 <button

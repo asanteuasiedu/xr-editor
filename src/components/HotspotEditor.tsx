@@ -123,8 +123,13 @@ function HotspotEditor({
       <div className="editor-panel-header">
         <h2 className="panel-title">Selected Hotspot Editor</h2>
         {onCloseEditor ? (
-          <button type="button" className="ui-button ui-button-secondary mini-button" onClick={onCloseEditor}>
-            Close
+          <button
+            type="button"
+            className="context-panel-close editor-panel-close"
+            onClick={onCloseEditor}
+            aria-label="Close selected details"
+          >
+            <span aria-hidden="true">×</span>
           </button>
         ) : null}
       </div>

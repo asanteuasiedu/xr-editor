@@ -584,9 +584,16 @@ select {
 
 .scene-source-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 8px;
   margin-top: 10px;
+}
+
+.scene-media-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
 }
 
 .stacked-actions {
@@ -601,6 +608,9 @@ select {
 }
 
 .template-button {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: #fbfcff;
@@ -614,6 +624,25 @@ select {
   border-color: #c9c1ff;
   background: #f7f4ff;
   box-shadow: 0 4px 12px rgba(88, 74, 208, 0.12);
+}
+
+.template-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  margin-top: 1px;
+}
+
+.template-icon-svg {
+  width: 18px;
+  height: 18px;
+}
+
+.template-copy {
+  min-width: 0;
 }
 
 .template-name {
@@ -1722,7 +1751,28 @@ select {
 }
 
 .control-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   text-align: left;
+}
+
+.control-action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+
+.control-action-icon-svg {
+  width: 18px;
+  height: 18px;
+}
+
+.control-action-label {
+  min-width: 0;
 }
 
 .mini-button {
@@ -1992,6 +2042,172 @@ select {
 
 .preview-hint-card p {
   margin: 0;
+}
+
+.mobile-ar-preview-button {
+  display: none;
+}
+
+.camera-preview-shell {
+  position: relative;
+  width: 100%;
+  min-height: calc(100vh - 32px);
+  height: calc(100vh - 32px);
+  border-radius: 24px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(10, 12, 18, 0.96), rgba(5, 7, 12, 0.98));
+  box-shadow: 0 24px 48px rgba(8, 10, 18, 0.28);
+}
+
+.camera-preview-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.camera-preview-video,
+.camera-preview-backdrop,
+.camera-preview-overlay,
+.camera-preview-meta,
+.camera-preview-status {
+  position: absolute;
+  inset: 0;
+}
+
+.camera-preview-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #06080f;
+}
+
+.camera-preview-backdrop {
+  background:
+    radial-gradient(circle at top left, rgba(124, 108, 255, 0.18), transparent 30%),
+    linear-gradient(180deg, rgba(4, 7, 14, 0.18), rgba(4, 7, 14, 0.44));
+  pointer-events: none;
+}
+
+.camera-preview-meta {
+  z-index: 3;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 108px 16px 16px;
+  pointer-events: none;
+}
+
+.camera-preview-card {
+  width: min(420px, calc(100% - 32px));
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    linear-gradient(180deg, rgba(20, 24, 38, 0.34), rgba(10, 12, 20, 0.24)),
+    rgba(8, 10, 18, 0.34);
+  backdrop-filter: blur(18px);
+  box-shadow:
+    0 18px 34px rgba(6, 8, 16, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  pointer-events: auto;
+}
+
+.camera-preview-overlay {
+  z-index: 2;
+  pointer-events: none;
+}
+
+.camera-preview-status {
+  z-index: 4;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+  pointer-events: none;
+}
+
+.camera-preview-status-card {
+  width: min(520px, calc(100% - 32px));
+}
+
+.camera-preview-selection-title {
+  margin: 2px 0 0;
+  color: rgba(255, 255, 255, 0.98);
+  font-size: 1rem;
+  line-height: 1.15;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.34);
+}
+
+.camera-preview-status .editor-actions,
+.camera-preview-status .ui-button {
+  pointer-events: auto;
+}
+
+.ar-preview-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background:
+    linear-gradient(180deg, rgba(20, 24, 38, 0.34), rgba(10, 12, 20, 0.22)),
+    rgba(8, 10, 18, 0.3);
+  box-shadow:
+    0 12px 26px rgba(6, 8, 16, 0.22),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  color: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(14px);
+  pointer-events: auto;
+  cursor: pointer;
+  animation: ar-preview-float 4.4s ease-in-out infinite;
+}
+
+.ar-preview-marker-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 35%, #ffffff, #d9d1ff 56%, #8f80ff 100%);
+  box-shadow:
+    0 0 0 3px rgba(124, 108, 255, 0.16),
+    0 0 18px rgba(154, 142, 255, 0.46);
+  flex: 0 0 auto;
+}
+
+.ar-preview-marker-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.32);
+  white-space: nowrap;
+}
+
+.ar-preview-marker-sceneLink .ar-preview-marker-dot,
+.ar-preview-marker-externalLink .ar-preview-marker-dot {
+  background: radial-gradient(circle at 35% 35%, #ece7ff, #ae9fff 56%, #6f5eff 100%);
+}
+
+.ar-preview-marker-image .ar-preview-marker-dot {
+  background: radial-gradient(circle at 35% 35%, #ffffff, #f0f3ff 58%, #d8def7 100%);
+}
+
+.ar-preview-marker-multipleChoice .ar-preview-marker-dot {
+  background: radial-gradient(circle at 35% 35%, #fff4c8, #ffd977 56%, #f0b143 100%);
+  box-shadow:
+    0 0 0 3px rgba(240, 177, 67, 0.2),
+    0 0 18px rgba(240, 177, 67, 0.34);
+}
+
+@keyframes ar-preview-float {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) translateY(0);
+  }
+  50% {
+    transform: translate(-50%, -50%) translateY(-8px);
+  }
 }
 
 @keyframes panorama-orbit {
@@ -2632,6 +2848,10 @@ select {
     display: none;
   }
 
+  .mobile-ar-preview-button {
+    display: inline-flex;
+  }
+
   .app-body,
   .app-shell-edit .app-body,
   .app-shell-preview .app-body {
@@ -2724,6 +2944,45 @@ select {
     gap: 0;
     min-height: calc(100vh - 20px);
     width: 100%;
+  }
+
+  .camera-preview-shell {
+    min-height: calc(100vh - 20px);
+    height: calc(100vh - 20px);
+    border-radius: 18px;
+  }
+
+  .camera-preview-meta {
+    padding: 86px 10px 10px;
+  }
+
+  .camera-preview-card {
+    width: min(100%, calc(100% - 20px));
+    padding: 12px 14px;
+    border-radius: 16px;
+  }
+
+  .camera-preview-status {
+    padding: 10px 10px 118px;
+    align-items: flex-end;
+  }
+
+  .camera-preview-status-card {
+    width: 100%;
+  }
+
+  .ar-preview-marker {
+    padding: 7px 10px;
+    gap: 7px;
+  }
+
+  .ar-preview-marker-dot {
+    width: 11px;
+    height: 11px;
+  }
+
+  .ar-preview-marker-label {
+    font-size: 0.72rem;
   }
 
   .main-stack,
