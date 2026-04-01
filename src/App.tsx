@@ -223,6 +223,7 @@ function App() {
   const [completionDismissed, setCompletionDismissed] = useState(false);
   const [showCompletionMessage, setShowCompletionMessage] = useState(false);
   const [activeEditSection, setActiveEditSection] = useState<EditSection>('controls');
+  const [isContextPanelOpen, setIsContextPanelOpen] = useState(true);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const hasMountedRef = useRef(false);
   const noticeTimeoutRef = useRef<number | null>(null);
@@ -517,6 +518,7 @@ function App() {
     setInfoPreview(null);
     setQuestionPreviewHotspotId(null);
     setActiveEditSection('hotspots');
+    setIsContextPanelOpen(true);
     setPlacementMode({ type: 'placingNewHotspot' });
   };
 
@@ -526,6 +528,7 @@ function App() {
     }
 
     setActiveEditSection('hotspots');
+    setIsContextPanelOpen(true);
     setPlacementMode({ type: 'movingExistingHotspot', hotspotId: selectedHotspotId });
   };
 
@@ -990,6 +993,7 @@ function App() {
   const handleSelectHotspot = (hotspotId: string) => {
     setSelectedHotspotId(hotspotId);
     setActiveEditSection('hotspots');
+    setIsContextPanelOpen(true);
   };
 
   const handleOpenScenePicker = () => {
@@ -1074,7 +1078,10 @@ function App() {
                   key={sectionId}
                   type="button"
                   className={`edit-rail-button ${isActive ? 'edit-rail-button-active' : ''}`}
-                  onClick={() => setActiveEditSection(sectionId as EditSection)}
+                  onClick={() => {
+                    setActiveEditSection(sectionId as EditSection);
+                    setIsContextPanelOpen(true);
+                  }}
                 >
                   <span className="edit-rail-icon">
                     <RailIcon section={sectionId as EditSection} />
@@ -1087,8 +1094,18 @@ function App() {
         ) : null
       }
       contextPanel={
-        appMode === 'edit' ? (
+        appMode === 'edit' && isContextPanelOpen ? (
           <div className="context-panel-stack">
+            <div className="context-panel-toolbar">
+              <button
+                type="button"
+                className="context-panel-close"
+                onClick={() => setIsContextPanelOpen(false)}
+                aria-label="Close context panel"
+              >
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
             {selectedHotspot ? (
               <section className="panel context-panel-primary">
                 <div className="context-panel-heading">

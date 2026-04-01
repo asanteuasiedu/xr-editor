@@ -384,6 +384,54 @@ select {
   max-height: inherit;
 }
 
+.context-panel-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 4px;
+}
+
+.context-panel-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04)),
+    rgba(8, 10, 18, 0.3);
+  color: rgba(255, 255, 255, 0.94);
+  box-shadow:
+    0 10px 20px rgba(6, 8, 16, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    transform 160ms ease,
+    border-color 160ms ease;
+}
+
+.context-panel-close:hover {
+  border-color: rgba(255, 255, 255, 0.24);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.06)),
+    rgba(8, 10, 18, 0.34);
+  transform: translateY(-1px);
+}
+
+.context-panel-close:focus-visible {
+  outline: 2px solid rgba(124, 108, 255, 0.9);
+  outline-offset: 2px;
+}
+
+.context-panel-close span {
+  font-size: 1.15rem;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
 .sidebar-card {
   background: var(--card);
   border: 1px solid var(--border);
@@ -2818,6 +2866,15 @@ select {
     gap: 6px;
   }
 
+  .context-panel-toolbar {
+    margin-bottom: 2px;
+  }
+
+  .context-panel-close {
+    width: 32px;
+    height: 32px;
+  }
+
   .app-shell-edit .sidebar-card,
   .app-shell-edit .context-panel-primary,
   .app-shell-edit .overlay-card {
@@ -2871,7 +2928,7 @@ select {
   }
 
   .pannellum-container .pnlm-controls-container {
-    bottom: 84px;
+    bottom: 108px;
     left: 10px;
   }
 
@@ -2893,7 +2950,7 @@ select {
 
   .pannellum-container .pnlm-compass {
     right: 10px;
-    bottom: 82px;
+    bottom: 106px;
   }
 
   .app-shell-edit .pannellum-shell,
