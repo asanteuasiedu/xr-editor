@@ -41,7 +41,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 - Product-style layout with clear zones: header, left sidebar, viewer area, and bottom hotspot editor panel.
 - Edit Mode now uses a more immersive HUD-style product frame on desktop/tablet: the panorama acts as the dominant workspace surface, while the left navigation rail and right contextual panel float over it as frosted foreground controls.
 - The layout is now responsive across desktop, tablet, and phone sizes. On smaller screens, the rail collapses into a horizontal touch-friendly navigator and the contextual panel stacks below the viewer for easier mobile editing.
-- On phone-width screens, the layout now shifts into a mobile-first fullscreen HUD: the panorama stays dominant, the top bar overlays the scene, and compact dark-glass control/context panels float over the image instead of compressing it into a desktop-style frame.
+- On phone-width screens, the layout now shifts into a mobile-first fullscreen HUD: the panorama stays dominant, the top bar overlays the scene, compact context cards sit beneath it when needed, and the primary section navigation moves into a bottom control bar with zoom/navigation widgets floating just above it.
 - Card-based sections with rounded corners, soft shadows, and consistent spacing.
 - Theme tokens applied in CSS (`#F6F7FB` background, `#FFFFFF` cards, `#E6E8EF` borders, `#7C6CFF` accent).
 - Reusable button hierarchy:
