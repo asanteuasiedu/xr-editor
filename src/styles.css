@@ -3240,14 +3240,15 @@ select {
   }
 
   .presentation-meta-overlay {
-    top: 88px;
+    top: auto;
+    bottom: 10px;
     left: 10px;
     right: 10px;
   }
 
   .presentation-progress-overlay {
-    top: auto;
-    bottom: 92px;
+    top: 88px;
+    bottom: auto;
     left: 10px;
     right: 10px;
   }
@@ -3259,6 +3260,11 @@ select {
 
   .presentation-progress-bar {
     margin-top: 10px;
+  }
+
+  .panorama-panel-preview .pannellum-container .pnlm-compass {
+    right: 10px;
+    bottom: 156px;
   }
 
   .panorama-panel-preview .pannellum-shell,
