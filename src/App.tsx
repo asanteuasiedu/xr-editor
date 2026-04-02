@@ -1387,6 +1387,14 @@ function App() {
                   onViewChange={setCurrentView}
                 />
               )}
+              <button
+                type="button"
+                className="floating-ar-utility"
+                onClick={handleEnterCameraPreview}
+                aria-label="Open camera AR preview"
+              >
+                AR
+              </button>
               {importError ? <p className="panel error-banner edit-toast">{importError}</p> : null}
               {noticeMessage ? <p className="panel info-banner edit-toast">{noticeMessage}</p> : null}
               {activeWalkthroughStep ? (

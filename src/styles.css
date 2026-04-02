@@ -2178,6 +2178,10 @@ select {
   display: none;
 }
 
+.floating-ar-utility {
+  display: none;
+}
+
 .camera-preview-shell {
   position: relative;
   width: 100%;
@@ -3099,7 +3103,7 @@ select {
   }
 
   .mobile-ar-preview-button {
-    display: inline-flex;
+    display: none;
   }
 
   .app-body,
@@ -3544,8 +3548,9 @@ select {
 
   .pannellum-container .pnlm-orientation-button {
     position: absolute;
-    left: 0;
-    bottom: 78px;
+    left: auto;
+    right: 10px;
+    bottom: 148px;
     width: 34px;
     height: 34px;
     margin-top: 0;
@@ -3556,11 +3561,74 @@ select {
       0 12px 22px rgba(8, 10, 18, 0.24),
       inset 0 1px 0 rgba(255, 255, 255, 0.12);
     backdrop-filter: blur(16px);
+    background-image: none;
+    color: rgba(245, 248, 255, 0.96);
+    position: absolute;
   }
 
   .pannellum-container .pnlm-compass {
     right: 10px;
     bottom: 106px;
+  }
+
+  .pannellum-container .pnlm-orientation-button::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 12px;
+    height: 18px;
+    border: 1.7px solid currentColor;
+    border-radius: 4px;
+    transform: translate(-55%, -52%) rotate(-12deg);
+    box-shadow: inset 0 -2px 0 rgba(245, 248, 255, 0.96);
+    opacity: 0.94;
+  }
+
+  .pannellum-container .pnlm-orientation-button::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    border: 1.5px solid currentColor;
+    border-left-color: transparent;
+    border-bottom-color: transparent;
+    border-radius: 999px;
+    transform: translate(1px, -8px) rotate(18deg);
+    opacity: 0.78;
+  }
+
+  .floating-ar-utility {
+    display: inline-flex;
+    position: absolute;
+    right: 10px;
+    bottom: 190px;
+    z-index: 8;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    height: 34px;
+    padding: 0 10px;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background:
+      linear-gradient(180deg, rgba(20, 24, 38, 0.34), rgba(10, 12, 20, 0.22)),
+      rgba(8, 10, 18, 0.76);
+    color: rgba(245, 248, 255, 0.96);
+    box-shadow:
+      0 12px 22px rgba(8, 10, 18, 0.24),
+      inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(16px);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+  }
+
+  .floating-ar-utility:focus-visible {
+    outline: 2px solid rgba(124, 108, 255, 0.9);
+    outline-offset: 2px;
   }
 
   .app-shell-edit .pannellum-shell,
