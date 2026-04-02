@@ -55,8 +55,6 @@ function PanoramaViewer({
   const pointerDownRef = useRef<{ x: number; y: number; yaw: number; pitch: number } | null>(null);
   const previousPanoramaUrlRef = useRef<string>('');
   const loadingTimeoutRef = useRef<number | null>(null);
-  const previewAnimationTimeoutsRef = useRef<number[]>([]);
-  const previewEntryAnimatedRef = useRef<number | null>(null);
   const onActivateHotspotRef = useRef(onActivateHotspot);
   const onPanoramaClickRef = useRef(onPanoramaClick);
   const onQuickPlaceHotspotRef = useRef(onQuickPlaceHotspot);
@@ -257,12 +255,6 @@ function PanoramaViewer({
 
     viewerRef.current = viewer;
     renderedHotspotIdsRef.current.clear();
-    previewAnimationTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
-    previewAnimationTimeoutsRef.current = [];
-
-    if (isPreviewMode && previewEntryAnimatedRef.current !== previewEntryId) {
-      viewer.lookAt(16, -34, 148, 0);
-    }
 
     const emitViewPosition = () => {
       if (!viewerRef.current) {
@@ -288,24 +280,6 @@ function PanoramaViewer({
     };
 
     viewer.on('load', () => {
-      if (isPreviewMode && previewEntryAnimatedRef.current !== previewEntryId) {
-        previewEntryAnimatedRef.current = previewEntryId;
-        const sweepTimeout = window.setTimeout(() => {
-          if (viewerRef.current !== viewer) {
-            return;
-          }
-
-          viewer.lookAt(6, 24, 114, 920);
-        }, 40);
-        const settleTimeout = window.setTimeout(() => {
-          if (viewerRef.current !== viewer) {
-            return;
-          }
-
-          viewer.lookAt(0, 0, 100, 760);
-        }, 540);
-        previewAnimationTimeoutsRef.current = [sweepTimeout, settleTimeout];
-      }
       emitViewPosition();
       clearLoading();
       scheduleIdleAutoRotateResume();
@@ -509,8 +483,6 @@ function PanoramaViewer({
         window.clearTimeout(loadingTimeoutRef.current);
         loadingTimeoutRef.current = null;
       }
-      previewAnimationTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
-      previewAnimationTimeoutsRef.current = [];
 
       if (viewerRef.current) {
         viewerRef.current.destroy();
@@ -519,7 +491,7 @@ function PanoramaViewer({
 
       renderedHotspotIdsRef.current.clear();
     };
-  }, [isPreviewMode, panoramaUrl, previewEntryId]);
+  }, [panoramaUrl]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
