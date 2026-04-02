@@ -3474,6 +3474,7 @@ select {
   .app-shell-edit .sidebar-card,
   .app-shell-edit .context-panel-primary,
   .app-shell-edit .overlay-card {
+    position: relative;
     border-radius: 16px;
     background:
       linear-gradient(180deg, rgba(20, 24, 38, 0.32), rgba(10, 12, 20, 0.2)),
@@ -3483,6 +3484,18 @@ select {
       0 16px 28px rgba(6, 8, 16, 0.24),
       inset 0 1px 0 rgba(255, 255, 255, 0.08);
     padding: 10px;
+  }
+
+  .app-shell-edit .context-panel-primary::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 26px;
+    border-radius: 0 0 16px 16px;
+    background: linear-gradient(180deg, rgba(8, 10, 18, 0), rgba(8, 10, 18, 0.82));
+    pointer-events: none;
   }
 
   .app-shell-edit .sidebar-section-title,
@@ -3621,7 +3634,7 @@ select {
     position: absolute;
     left: 10px;
     right: auto;
-    bottom: 186px;
+    bottom: 146px;
     width: 34px;
     height: 34px;
     margin-top: 0;
