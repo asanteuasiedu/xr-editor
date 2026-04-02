@@ -1235,7 +1235,7 @@ function App() {
               className="ui-button ui-button-secondary mode-toggle-button"
               onClick={appMode === 'arPreview' ? handleExitCameraPreview : handleToggleAppMode}
             >
-              Return to Edit Mode
+              Edit Mode
             </button>
           )}
         </div>
@@ -1460,8 +1460,12 @@ function App() {
                           className="scene-library-button"
                           onClick={() => handleApplySceneLibraryItem(item.panoramaUrl, item.label)}
                         >
+                          <img
+                            src={item.panoramaUrl}
+                            alt={item.label}
+                            className="scene-library-preview"
+                          />
                           <span className="scene-library-title">{item.label}</span>
-                          <span className="scene-library-path">{item.panoramaUrl}</span>
                         </button>
                       ))}
                     </div>

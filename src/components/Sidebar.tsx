@@ -12,6 +12,7 @@ type ProjectStats = {
 export type EditSection = 'controls' | 'inspector' | 'scenes' | 'sceneDetails' | 'hotspots';
 
 type ControlActionIconName = 'present' | 'export' | 'tour' | 'scene' | 'uploadPanorama' | 'captureScene';
+type SectionHeadingIconName = 'controls' | 'project' | 'scenes' | 'sceneDetails' | 'hotspots';
 
 type SidebarProps = {
   activeSection: EditSection;
@@ -143,6 +144,68 @@ function ProjectActionIcon() {
   );
 }
 
+function SectionHeadingIcon({ name }: { name: SectionHeadingIconName }) {
+  const commonProps = {
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.8,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    className: 'section-heading-icon-svg'
+  };
+
+  if (name === 'controls') {
+    return (
+      <svg {...commonProps}>
+        <line x1="5" y1="6" x2="19" y2="6" />
+        <line x1="5" y1="12" x2="19" y2="12" />
+        <line x1="5" y1="18" x2="19" y2="18" />
+        <circle cx="9" cy="6" r="2" />
+        <circle cx="15" cy="12" r="2" />
+        <circle cx="11" cy="18" r="2" />
+      </svg>
+    );
+  }
+
+  if (name === 'project') {
+    return (
+      <svg {...commonProps}>
+        <path d="M4.5 7.5a2 2 0 0 1 2-2h4.7l2 2H17.5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2z" />
+        <path d="M8 12h8" />
+      </svg>
+    );
+  }
+
+  if (name === 'scenes') {
+    return (
+      <svg {...commonProps}>
+        <rect x="4.5" y="5" width="12" height="10" rx="2" />
+        <path d="M7.5 12l2.5-2.5 2 2 2.5-3 2 2.5" />
+        <circle cx="9" cy="8.5" r="1" />
+        <path d="M17 9h2.5a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H10" />
+      </svg>
+    );
+  }
+
+  if (name === 'sceneDetails') {
+    return (
+      <svg {...commonProps}>
+        <path d="M7 4.5h7l4 4v11a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19.5v-13A2 2 0 0 1 7 4.5z" />
+        <path d="M14 4.5v4h4" />
+        <path d="M9 13h6" />
+        <path d="M9 16h4" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...commonProps}>
+      <path d="M12 4.5l1.8 3.9 4.2.6-3 2.9.7 4.1-3.7-2-3.7 2 .7-4.1-3-2.9 4.2-.6z" />
+    </svg>
+  );
+}
+
 function Sidebar({
   activeSection,
   project,
@@ -226,14 +289,41 @@ function Sidebar({
   const sectionCardClass = (sectionId: EditSection) =>
     `sidebar-card context-card ${walkthroughSectionId === sectionId ? 'walkthrough-focus' : ''}`;
 
+  const renderHeadingTitle = (iconName: SectionHeadingIconName, title: string) => (
+    <div className="section-heading-title">
+      <span className="section-heading-icon" aria-hidden="true">
+        <SectionHeadingIcon name={iconName} />
+      </span>
+      <h2>{title}</h2>
+    </div>
+  );
+
   const renderControls = () => (
     <section className={sectionCardClass('controls')} data-walkthrough-id="controls">
       <div className="context-panel-heading">
-        <h2>Project Controls</h2>
+        {renderHeadingTitle('controls', 'Project Controls')}
         <p>Guide the class, swap scenes, and prepare the experience for presentation.</p>
       </div>
       <p className={`save-state-indicator save-state-${saveStateTone}`}>{saveStateLabel}</p>
       <div className="stacked-actions">
+        <button type="button" className="ui-button ui-button-secondary control-button" onClick={onStartWalkthrough}>
+          <span className="control-action-icon" aria-hidden="true">
+            <ControlActionIcon name="tour" />
+          </span>
+          <span className="control-action-label">Start Guided Tour</span>
+        </button>
+        <button type="button" className="ui-button ui-button-secondary control-button" onClick={onOpenScenePicker}>
+          <span className="control-action-icon" aria-hidden="true">
+            <ControlActionIcon name="scene" />
+          </span>
+          <span className="control-action-label">Select a Scene</span>
+        </button>
+        <button type="button" className="ui-button ui-button-secondary control-button" onClick={onExportProject}>
+          <span className="control-action-icon" aria-hidden="true">
+            <ControlActionIcon name="export" />
+          </span>
+          <span className="control-action-label">Export Project</span>
+        </button>
         <button type="button" className="ui-button ui-button-primary control-button" onClick={onPresentProject}>
           <span className="control-action-icon" aria-hidden="true">
             <ControlActionIcon name="present" />
@@ -247,24 +337,6 @@ function Sidebar({
         >
           Camera AR Preview
         </button>
-        <button type="button" className="ui-button ui-button-secondary control-button" onClick={onExportProject}>
-          <span className="control-action-icon" aria-hidden="true">
-            <ControlActionIcon name="export" />
-          </span>
-          <span className="control-action-label">Export Project</span>
-        </button>
-        <button type="button" className="ui-button ui-button-secondary control-button" onClick={onStartWalkthrough}>
-          <span className="control-action-icon" aria-hidden="true">
-            <ControlActionIcon name="tour" />
-          </span>
-          <span className="control-action-label">Start Guided Tour</span>
-        </button>
-        <button type="button" className="ui-button ui-button-secondary control-button" onClick={onOpenScenePicker}>
-          <span className="control-action-icon" aria-hidden="true">
-            <ControlActionIcon name="scene" />
-          </span>
-          <span className="control-action-label">Select a Scene</span>
-        </button>
       </div>
     </section>
   );
@@ -272,7 +344,7 @@ function Sidebar({
   const renderInspector = () => (
     <section className={sectionCardClass('inspector')} data-walkthrough-id="inspector">
       <div className="context-panel-heading">
-        <h2>Project Overview</h2>
+        {renderHeadingTitle('project', 'Project Overview')}
         <p>Set the framing, learning context, and project-level actions for this experience.</p>
       </div>
       <label className="editor-field compact-field">
@@ -328,7 +400,7 @@ function Sidebar({
     <section className={sectionCardClass('scenes')} data-walkthrough-id="scenes">
       <div className="context-panel-heading">
         <p className="sidebar-section-title">Scenes</p>
-        <h2>Scene Navigation</h2>
+        {renderHeadingTitle('scenes', 'Scene Navigation')}
         <p>Move between locations and manage the sequence of local learning spaces.</p>
       </div>
       <div className="section-header-row">
@@ -392,7 +464,7 @@ function Sidebar({
     <section className={sectionCardClass('sceneDetails')} data-walkthrough-id="sceneDetails">
       <div className="context-panel-heading">
         <p className="sidebar-section-title">Scene Details</p>
-        <h2>Active Scene Details</h2>
+        {renderHeadingTitle('sceneDetails', 'Active Scene Details')}
         <p>Update the current panorama and prepare the scene for localized learning.</p>
       </div>
       <input
@@ -414,17 +486,27 @@ function Sidebar({
         <span>Scene Name</span>
         <input value={activeScene.name} onChange={onSceneNameChange} placeholder="Scene name" />
       </label>
-      <button
-        type="button"
-        className="ui-button ui-button-secondary mini-button upload-button scene-media-button"
-        onClick={openPanoramaUpload}
-      >
-        <span className="control-action-icon" aria-hidden="true">
-          <ControlActionIcon name="uploadPanorama" />
-        </span>
-        <span className="control-action-label">Upload Panorama</span>
-      </button>
       <div className="scene-source-actions">
+        <button
+          type="button"
+          className="ui-button ui-button-secondary mini-button upload-button scene-media-button"
+          onClick={onOpenScenePicker}
+        >
+          <span className="control-action-icon" aria-hidden="true">
+            <ControlActionIcon name="scene" />
+          </span>
+          <span className="control-action-label">Select a Scene</span>
+        </button>
+        <button
+          type="button"
+          className="ui-button ui-button-secondary mini-button upload-button scene-media-button"
+          onClick={openPanoramaUpload}
+        >
+          <span className="control-action-icon" aria-hidden="true">
+            <ControlActionIcon name="uploadPanorama" />
+          </span>
+          <span className="control-action-label">Upload Panorama</span>
+        </button>
         <button
           type="button"
           className="ui-button ui-button-secondary mini-button upload-button scene-media-button"
@@ -446,7 +528,7 @@ function Sidebar({
     <section className={sectionCardClass('hotspots')} data-walkthrough-id="hotspots">
       <div className="context-panel-heading">
         <p className="sidebar-section-title">Insight Zones</p>
-        <h2>Insight Zones</h2>
+        {renderHeadingTitle('hotspots', 'Insight Zones')}
         <p>Review prompts, questions, and links for the active scene.</p>
       </div>
       <div className="section-header-row">
