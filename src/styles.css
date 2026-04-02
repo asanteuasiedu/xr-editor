@@ -3731,7 +3731,11 @@ select {
 
   .app-shell-edit .pannellum-container .pnlm-orientation-button {
     left: 4px;
-    bottom: 72px;
+    bottom: 78px;
+  }
+
+  .app-shell-preview .pannellum-container .pnlm-orientation-button {
+    bottom: 269px;
   }
 
   .pannellum-container .pnlm-compass {
