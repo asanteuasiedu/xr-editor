@@ -3650,6 +3650,10 @@ select {
     position: absolute;
   }
 
+  .app-shell-edit .pannellum-container .pnlm-orientation-button {
+    bottom: 132px;
+  }
+
   .pannellum-container .pnlm-compass {
     right: 10px;
     bottom: 106px;
@@ -3682,6 +3686,14 @@ select {
     border-radius: 999px;
     transform: translate(1px, -8px) rotate(18deg);
     opacity: 0.78;
+  }
+
+  .app-shell-preview .pannellum-container .pnlm-zoom-in::before {
+    transform: translateY(-2px);
+  }
+
+  .app-shell-preview .pannellum-container .pnlm-zoom-out::before {
+    transform: translateY(-3px);
   }
 
   .floating-ar-utility {
