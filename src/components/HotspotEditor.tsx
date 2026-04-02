@@ -7,16 +7,66 @@ type HotspotEditorProps = {
   destinationScenes: Scene[];
   isPlacementModeActive: boolean;
   onStartMovingHotspot: () => void;
+  onDoneEditing: () => void;
   onUploadHotspotImage: (hotspotId: string, file: File) => void | Promise<void>;
   onUpdateHotspot: (hotspotId: string, patch: Partial<Hotspot>) => void;
   onDeleteHotspot: (hotspotId: string) => void;
 };
+
+function MoveHotspotIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="control-action-icon-svg"
+      aria-hidden="true"
+    >
+      <path d="M12 4.5v15" />
+      <path d="M12 4.5 9.5 7" />
+      <path d="M12 4.5 14.5 7" />
+      <path d="M12 19.5 9.5 17" />
+      <path d="M12 19.5 14.5 17" />
+      <path d="M4.5 12h15" />
+      <path d="M4.5 12 7 9.5" />
+      <path d="M4.5 12 7 14.5" />
+      <path d="M19.5 12 17 9.5" />
+      <path d="M19.5 12 17 14.5" />
+      <circle cx="12" cy="12" r="1.5" />
+    </svg>
+  );
+}
+
+function DeleteTrashIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="delete-action-icon-svg"
+      aria-hidden="true"
+    >
+      <path d="M8 6.5h8" />
+      <path d="M10 4.5h4" />
+      <path d="M6.5 6.5h11l-.9 11a2 2 0 0 1-2 1.8H9.4a2 2 0 0 1-2-1.8z" />
+      <path d="M10 10v5.5" />
+      <path d="M14 10v5.5" />
+    </svg>
+  );
+}
 
 function HotspotEditor({
   hotspot,
   destinationScenes,
   isPlacementModeActive,
   onStartMovingHotspot,
+  onDoneEditing,
   onUploadHotspotImage,
   onUpdateHotspot,
   onDeleteHotspot
@@ -277,14 +327,30 @@ function HotspotEditor({
         <div className="editor-actions">
           <button
             type="button"
-            className="ui-button ui-button-secondary secondary-button"
+            className="ui-button ui-button-secondary secondary-button hotspot-action-button"
             onClick={onStartMovingHotspot}
             disabled={isPlacementModeActive}
           >
-            Move Selected Hotspot
+            <span className="control-action-icon" aria-hidden="true">
+              <MoveHotspotIcon />
+            </span>
+            <span className="control-action-label">Move Selected Hotspot</span>
           </button>
-          <button type="button" className="ui-button danger-button" onClick={() => onDeleteHotspot(hotspot.id)}>
-            Delete Hotspot
+          <button
+            type="button"
+            className="ui-button done-button"
+            onClick={onDoneEditing}
+          >
+            Done
+          </button>
+          <button
+            type="button"
+            className="ui-button danger-button delete-icon-button"
+            onClick={() => onDeleteHotspot(hotspot.id)}
+            aria-label={`Delete ${hotspot.title || 'insight zone'}`}
+            title={`Delete ${hotspot.title || 'insight zone'}`}
+          >
+            <DeleteTrashIcon />
           </button>
         </div>
       </div>

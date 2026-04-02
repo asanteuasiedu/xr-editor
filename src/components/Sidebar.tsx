@@ -50,6 +50,27 @@ type SidebarProps = {
   onDeleteHotspot: (hotspotId: string) => void;
 };
 
+function DeleteTrashIcon({ className = 'delete-action-icon-svg' }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M8 6.5h8" />
+      <path d="M10 4.5h4" />
+      <path d="M6.5 6.5h11l-.9 11a2 2 0 0 1-2 1.8H9.4a2 2 0 0 1-2-1.8z" />
+      <path d="M10 10v5.5" />
+      <path d="M14 10v5.5" />
+    </svg>
+  );
+}
+
 function ControlActionIcon({ name }: { name: ControlActionIconName }) {
   const commonProps = {
     viewBox: '0 0 24 24',
@@ -450,8 +471,9 @@ function Sidebar({
                 onClick={() => onDeleteScene(scene.id)}
                 disabled={!canDelete}
                 aria-label={`Delete ${scene.name || 'scene'}`}
+                title={`Delete ${scene.name || 'scene'}`}
               >
-                Delete
+                <DeleteTrashIcon />
               </button>
             </li>
           );
@@ -586,8 +608,9 @@ function Sidebar({
                   className="hotspot-delete"
                   onClick={() => onDeleteHotspot(hotspot.id)}
                   aria-label={`Delete ${hotspot.title}`}
+                  title={`Delete ${hotspot.title}`}
                 >
-                  Delete
+                  <DeleteTrashIcon />
                 </button>
               </li>
             );

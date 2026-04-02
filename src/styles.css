@@ -930,13 +930,36 @@ select {
 
 .scene-delete,
 .hotspot-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  padding: 0 10px;
   border: 0;
   border-left: 1px solid var(--border);
-  padding: 0 12px;
-  background: #fff;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.2), transparent 48%),
+    linear-gradient(180deg, rgba(255, 244, 247, 0.92), rgba(255, 236, 239, 0.9));
   color: var(--danger);
-  font-weight: 700;
   cursor: pointer;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.16s ease;
+}
+
+.scene-delete:hover:enabled,
+.hotspot-delete:hover:enabled {
+  transform: translateY(-1px);
+  box-shadow: inset 0 0 0 1px rgba(192, 57, 57, 0.12);
+  color: #a82f2f;
+}
+
+.delete-action-icon-svg {
+  width: 18px;
+  height: 18px;
+  filter: drop-shadow(0 1px 6px rgba(192, 57, 57, 0.12));
 }
 
 .project-stats-grid {
@@ -1104,6 +1127,46 @@ select {
   border-radius: 0;
 }
 
+.app-header,
+.sidebar,
+.context-panel,
+.viewer-overlay-title,
+.floating-ar-utility,
+.edit-toast,
+.walkthrough-card,
+.walkthrough-dim,
+.scene-picker-overlay,
+.pannellum-editor-popover,
+.presentation-meta-overlay,
+.presentation-progress-overlay,
+.presentation-overlay,
+.presentation-toast,
+.pannellum-container .pnlm-controls-container,
+.pannellum-container .pnlm-orientation-button {
+  transition: opacity 180ms ease, visibility 180ms ease;
+}
+
+.app-shell-overlays-hidden .app-header,
+.app-shell-overlays-hidden .sidebar,
+.app-shell-overlays-hidden .context-panel,
+.app-shell-overlays-hidden .viewer-overlay-title,
+.app-shell-overlays-hidden .floating-ar-utility,
+.app-shell-overlays-hidden .edit-toast,
+.app-shell-overlays-hidden .walkthrough-card,
+.app-shell-overlays-hidden .walkthrough-dim,
+.app-shell-overlays-hidden .scene-picker-overlay,
+.app-shell-overlays-hidden .pannellum-editor-popover,
+.app-shell-overlays-hidden .presentation-meta-overlay,
+.app-shell-overlays-hidden .presentation-progress-overlay,
+.app-shell-overlays-hidden .presentation-overlay,
+.app-shell-overlays-hidden .presentation-toast,
+.app-shell-overlays-hidden .pannellum-container .pnlm-controls-container,
+.app-shell-overlays-hidden .pannellum-container .pnlm-orientation-button {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .app-shell-preview .main-content,
 .app-shell-preview .main-stack,
 .app-shell-preview .main-stack-preview,
@@ -1149,6 +1212,49 @@ select {
     linear-gradient(180deg, rgba(10, 14, 26, 0.22), rgba(10, 14, 26, 0.34));
   backdrop-filter: blur(10px);
   animation: preview-scene-veil 320ms ease-out forwards;
+}
+
+.preview-entry-ripple {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.preview-entry-ripple::before,
+.preview-entry-ripple::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 999px;
+  transform: translate(-50%, -50%) scale(0.12);
+  will-change: transform, opacity, box-shadow, backdrop-filter;
+}
+
+.preview-entry-ripple::before {
+  width: min(22vw, 240px);
+  height: min(22vw, 240px);
+  background:
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.72), rgba(212, 243, 255, 0.34) 24%, rgba(171, 227, 255, 0.12) 44%, rgba(171, 227, 255, 0.03) 62%, transparent 76%);
+  box-shadow:
+    0 0 0 1px rgba(232, 247, 255, 0.46),
+    0 0 44px rgba(155, 226, 255, 0.34),
+    0 0 74px rgba(124, 108, 255, 0.12);
+  backdrop-filter: blur(2px);
+  animation: preview-entry-drop 1120ms cubic-bezier(0.18, 0.75, 0.16, 1) forwards;
+}
+
+.preview-entry-ripple::after {
+  width: min(42vw, 440px);
+  height: min(42vw, 440px);
+  border: 1.5px solid rgba(224, 244, 255, 0.48);
+  box-shadow:
+    0 0 0 1px rgba(124, 108, 255, 0.12),
+    0 0 28px rgba(176, 228, 255, 0.2),
+    inset 0 0 34px rgba(158, 220, 255, 0.1);
+  animation: preview-entry-ring 1120ms cubic-bezier(0.16, 0.72, 0.18, 1) forwards;
 }
 
 .pannellum-container .pnlm-load-box,
@@ -1890,6 +1996,29 @@ select {
   justify-content: flex-end;
 }
 
+.hotspot-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.done-button {
+  width: auto;
+  border-color: rgba(137, 214, 170, 0.72);
+  color: #165536;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.26), transparent 54%),
+    linear-gradient(180deg, rgba(229, 255, 238, 0.98), rgba(203, 246, 219, 0.96));
+  box-shadow:
+    0 8px 18px rgba(83, 166, 112, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.done-button:hover:enabled {
+  color: #0f472b;
+}
+
 .quiz-option-list {
   display: grid;
   gap: 8px;
@@ -1981,6 +2110,78 @@ select {
   min-width: 0;
 }
 
+@media (min-width: 981px) {
+  .app-shell-edit [data-walkthrough-id='controls'] .stacked-actions {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .app-shell-edit [data-walkthrough-id='controls'] .control-button {
+    width: 100%;
+    min-height: 78px;
+    padding: 10px 8px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+    text-align: center;
+    border-radius: 16px;
+  }
+
+  .app-shell-edit [data-walkthrough-id='controls'] .control-action-icon {
+    width: 26px;
+    height: 26px;
+    flex: 0 0 26px;
+  }
+
+  .app-shell-edit [data-walkthrough-id='controls'] .control-action-icon-svg {
+    width: 26px;
+    height: 26px;
+  }
+
+  .app-shell-edit [data-walkthrough-id='controls'] .control-action-label {
+    display: block;
+    font-size: 0.66rem;
+    line-height: 1.18;
+    opacity: 0.84;
+  }
+
+  .app-shell-edit [data-walkthrough-id='sceneDetails'] .scene-source-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .app-shell-edit [data-walkthrough-id='sceneDetails'] .scene-media-button {
+    width: 100%;
+    min-height: 78px;
+    padding: 10px 8px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+    text-align: center;
+    border-radius: 16px;
+  }
+
+  .app-shell-edit [data-walkthrough-id='sceneDetails'] .control-action-icon {
+    width: 26px;
+    height: 26px;
+    flex: 0 0 26px;
+  }
+
+  .app-shell-edit [data-walkthrough-id='sceneDetails'] .control-action-icon-svg {
+    width: 26px;
+    height: 26px;
+  }
+
+  .app-shell-edit [data-walkthrough-id='sceneDetails'] .control-action-label {
+    display: block;
+    font-size: 0.66rem;
+    line-height: 1.18;
+    opacity: 0.84;
+  }
+}
+
 .mini-button {
   width: auto;
   border: 1px solid var(--border);
@@ -2003,6 +2204,28 @@ select {
   border-color: #f1c9c9;
   color: var(--danger);
   background: #fff5f5;
+}
+
+.delete-icon-button {
+  width: auto;
+  min-width: 42px;
+  min-height: 42px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 42px;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.16), transparent 50%),
+    linear-gradient(180deg, rgba(255, 243, 246, 0.98), rgba(255, 232, 236, 0.96));
+  box-shadow:
+    0 8px 16px rgba(192, 57, 57, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42);
+}
+
+.delete-icon-button:hover:enabled {
+  color: #a82f2f;
 }
 
 .compact-field {
@@ -2442,6 +2665,48 @@ select {
   50% {
     transform: scale(1.1);
     opacity: 1;
+  }
+}
+
+@keyframes preview-entry-drop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.06);
+    filter: blur(0px);
+  }
+  16% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.22);
+    filter: blur(0.15px);
+  }
+  38% {
+    opacity: 0.68;
+    transform: translate(-50%, -50%) scale(1.38);
+    filter: blur(0.8px);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(2.8);
+    filter: blur(1.6px);
+  }
+}
+
+@keyframes preview-entry-ring {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.1);
+  }
+  14% {
+    opacity: 0.34;
+    transform: translate(-50%, -50%) scale(0.2);
+  }
+  52% {
+    opacity: 0.3;
+    transform: translate(-50%, -50%) scale(1.24);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(2.24);
   }
 }
 

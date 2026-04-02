@@ -4,6 +4,7 @@ type LayoutProps = {
   title: string;
   subtitle: string;
   mode: 'edit' | 'preview';
+  overlaysHidden?: boolean;
   logoSrc?: string;
   headerControls?: ReactNode;
   sidebar: ReactNode;
@@ -11,9 +12,9 @@ type LayoutProps = {
   main: ReactNode;
 };
 
-function Layout({ title, subtitle, mode, logoSrc, headerControls, sidebar, contextPanel, main }: LayoutProps) {
+function Layout({ title, subtitle, mode, overlaysHidden = false, logoSrc, headerControls, sidebar, contextPanel, main }: LayoutProps) {
   return (
-    <div className={`app-shell app-shell-${mode}`}>
+    <div className={`app-shell app-shell-${mode} ${overlaysHidden ? 'app-shell-overlays-hidden' : ''}`}>
       <header className="app-header">
         <div className="app-brand">
           {logoSrc ? <img src={logoSrc} alt="Udēēsa logo" className="app-logo" /> : null}

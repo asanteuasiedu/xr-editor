@@ -222,6 +222,7 @@ function App() {
   const [completionPendingAfterOverlayClose, setCompletionPendingAfterOverlayClose] = useState(false);
   const [activeEditSection, setActiveEditSection] = useState<EditSection>('controls');
   const [isContextPanelOpen, setIsContextPanelOpen] = useState(true);
+  const [areViewerOverlaysHidden, setAreViewerOverlaysHidden] = useState(false);
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'requesting' | 'ready' | 'error'>('idle');
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraPreviewRequestId, setCameraPreviewRequestId] = useState(0);
@@ -517,6 +518,8 @@ function App() {
           : scene
       )
     }));
+    setActiveEditSection('scenes');
+    setIsContextPanelOpen(true);
   };
 
   const handleCreateSceneFromPanorama = (panoramaUrl: string, sceneName?: string) => {
@@ -537,7 +540,8 @@ function App() {
       ]
     }));
 
-    setActiveEditSection('sceneDetails');
+    setActiveEditSection('scenes');
+    setIsContextPanelOpen(true);
     setSelectedHotspotId(null);
     setPlacementMode({ type: 'idle' });
   };
@@ -606,6 +610,32 @@ function App() {
     setIsContextPanelOpen(true);
     setPlacementMode({ type: 'placingNewHotspot' });
   };
+
+  const openHotspotDetails = useCallback((hotspotId: string) => {
+    setSelectedHotspotId(hotspotId);
+    setActiveEditSection('hotspots');
+    setIsContextPanelOpen(true);
+  }, []);
+
+  const handleCreateHotspotAtPosition = useCallback(
+    ({ yaw, pitch }: { yaw: number; pitch: number }) => {
+      const hotspotId = `hotspot-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const nextHotspot: Hotspot = {
+        id: hotspotId,
+        type: 'info',
+        title: 'New Insight Zone',
+        body: 'Add description here',
+        yaw: Number(yaw.toFixed(2)),
+        pitch: Number(pitch.toFixed(2))
+      };
+
+      updateHotspots((current) => [...current, nextHotspot]);
+      openHotspotDetails(hotspotId);
+      setPlacementMode({ type: 'idle' });
+      showTemporaryNotice('Insight Zone placed');
+    },
+    [openHotspotDetails, showTemporaryNotice, updateHotspots]
+  );
 
   const handleStartMovingSelectedHotspot = () => {
     if (!selectedHotspotId) {
@@ -812,20 +842,7 @@ function App() {
       }
 
       if (placementMode.type === 'placingNewHotspot') {
-        const hotspotId = `hotspot-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-        const nextHotspot: Hotspot = {
-          id: hotspotId,
-          type: 'info',
-          title: 'New Insight Zone',
-          body: 'Add description here',
-          yaw: Number(yaw.toFixed(2)),
-          pitch: Number(pitch.toFixed(2))
-        };
-
-        updateHotspots((current) => [...current, nextHotspot]);
-        setSelectedHotspotId(hotspotId);
-        setPlacementMode({ type: 'idle' });
-        showTemporaryNotice('Insight Zone placed');
+        handleCreateHotspotAtPosition({ yaw, pitch });
         return;
       }
 
@@ -844,7 +861,7 @@ function App() {
       setPlacementMode({ type: 'idle' });
       showTemporaryNotice('Insight Zone moved');
     },
-    [activeScene.hotspots, handleUpdateHotspot, placementMode, showTemporaryNotice, updateHotspots]
+    [activeScene.hotspots, handleCreateHotspotAtPosition, handleUpdateHotspot, placementMode, showTemporaryNotice]
   );
 
   const handleCancelPlacement = () => {
@@ -1094,10 +1111,12 @@ function App() {
     }
   };
 
+  const handleToggleViewerOverlays = useCallback(() => {
+    setAreViewerOverlaysHidden((current) => !current);
+  }, []);
+
   const handleSelectHotspot = (hotspotId: string) => {
-    setSelectedHotspotId(hotspotId);
-    setActiveEditSection('hotspots');
-    setIsContextPanelOpen(true);
+    openHotspotDetails(hotspotId);
   };
 
   const handleOpenScenePicker = () => {
@@ -1215,6 +1234,7 @@ function App() {
       title="XR Editor"
       subtitle="Local XR experience editor"
       mode={appMode === 'edit' ? 'edit' : 'preview'}
+      overlaysHidden={appMode !== 'arPreview' && areViewerOverlaysHidden}
       logoSrc="/branding/udeesa-logo.png"
       headerControls={
         <div className="header-mode-group">
@@ -1299,6 +1319,7 @@ function App() {
                     destinationScenes={project.scenes.filter((scene) => scene.id !== activeScene.id)}
                     isPlacementModeActive={placementMode.type !== 'idle'}
                     onStartMovingHotspot={handleStartMovingSelectedHotspot}
+                    onDoneEditing={handleClearSelectedHotspot}
                     onUploadHotspotImage={handleUploadHotspotImage}
                     onUpdateHotspot={handleUpdateHotspot}
                     onDeleteHotspot={handleDeleteHotspot}
@@ -1384,6 +1405,8 @@ function App() {
                   interactionMode={viewerInteractionMode}
                   onActivateHotspot={handleActivateHotspot}
                   onPanoramaClick={handlePanoramaClick}
+                  onQuickPlaceHotspot={handleCreateHotspotAtPosition}
+                  onToggleOverlays={handleToggleViewerOverlays}
                   onViewChange={setCurrentView}
                 />
               )}
@@ -1646,6 +1669,8 @@ function App() {
               interactionMode={viewerInteractionMode}
               onActivateHotspot={handleActivateHotspot}
               onPanoramaClick={handlePanoramaClick}
+              onQuickPlaceHotspot={undefined}
+              onToggleOverlays={handleToggleViewerOverlays}
               onViewChange={setCurrentView}
             />
           ) : null}

@@ -17,11 +17,18 @@ type PanoramaViewerProps = {
   interactionMode: 'idle' | 'placingNewHotspot' | 'movingExistingHotspot';
   onActivateHotspot: (hotspotId: string, anchor?: { x: number; y: number }) => void;
   onPanoramaClick: (position: { yaw: number; pitch: number }) => void;
+  onQuickPlaceHotspot?: (position: { yaw: number; pitch: number }) => void;
+  onToggleOverlays?: () => void;
   onViewChange: (position: { yaw: number; pitch: number }) => void;
 };
 
 // Set true temporarily to compare click-derived coordinates with viewer debug output.
 const PANNELLUM_HOTSPOT_DEBUG = false;
+const MOBILE_LONG_PRESS_DELAY_MS = 500;
+const MOBILE_LONG_PRESS_MOVE_TOLERANCE_PX = 12;
+const IDLE_AUTOROTATE_RESUME_DELAY_MS = 5000;
+const IDLE_AUTOROTATE_SPEED = -0.35;
+const PREVIEW_RIPPLE_DURATION_MS = 980;
 
 function PanoramaViewer({
   panoramaUrl,
@@ -36,6 +43,8 @@ function PanoramaViewer({
   interactionMode,
   onActivateHotspot,
   onPanoramaClick,
+  onQuickPlaceHotspot,
+  onToggleOverlays,
   onViewChange
 }: PanoramaViewerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -50,12 +59,19 @@ function PanoramaViewer({
   const previewEntryAnimatedRef = useRef<number | null>(null);
   const onActivateHotspotRef = useRef(onActivateHotspot);
   const onPanoramaClickRef = useRef(onPanoramaClick);
+  const onQuickPlaceHotspotRef = useRef(onQuickPlaceHotspot);
+  const onToggleOverlaysRef = useRef(onToggleOverlays);
   const onViewChangeRef = useRef(onViewChange);
   const interactionModeRef = useRef(interactionMode);
+  const longPressTimeoutRef = useRef<number | null>(null);
+  const longPressTouchRef = useRef<{ x: number; y: number; touchId: number } | null>(null);
+  const autoRotateResumeTimeoutRef = useRef<number | null>(null);
+  const previewRippleTimeoutRef = useRef<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPanoramaLoading, setIsPanoramaLoading] = useState(false);
   const [editorPopoverStyle, setEditorPopoverStyle] = useState<CSSProperties | null>(null);
   const [useEditorPopoverFallback, setUseEditorPopoverFallback] = useState(false);
+  const [showPreviewEntryRipple, setShowPreviewEntryRipple] = useState(false);
 
   useEffect(() => {
     onActivateHotspotRef.current = onActivateHotspot;
@@ -66,6 +82,14 @@ function PanoramaViewer({
   }, [onPanoramaClick]);
 
   useEffect(() => {
+    onQuickPlaceHotspotRef.current = onQuickPlaceHotspot;
+  }, [onQuickPlaceHotspot]);
+
+  useEffect(() => {
+    onToggleOverlaysRef.current = onToggleOverlays;
+  }, [onToggleOverlays]);
+
+  useEffect(() => {
     onViewChangeRef.current = onViewChange;
   }, [onViewChange]);
 
@@ -74,6 +98,118 @@ function PanoramaViewer({
   }, [interactionMode]);
 
   useEffect(() => {
+    if (!isPreviewMode) {
+      setShowPreviewEntryRipple(false);
+      if (previewRippleTimeoutRef.current !== null) {
+        window.clearTimeout(previewRippleTimeoutRef.current);
+        previewRippleTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    setShowPreviewEntryRipple(true);
+    if (previewRippleTimeoutRef.current !== null) {
+      window.clearTimeout(previewRippleTimeoutRef.current);
+    }
+    previewRippleTimeoutRef.current = window.setTimeout(() => {
+      setShowPreviewEntryRipple(false);
+      previewRippleTimeoutRef.current = null;
+    }, PREVIEW_RIPPLE_DURATION_MS);
+
+    return () => {
+      if (previewRippleTimeoutRef.current !== null) {
+        window.clearTimeout(previewRippleTimeoutRef.current);
+        previewRippleTimeoutRef.current = null;
+      }
+    };
+  }, [isPreviewMode, previewEntryId]);
+
+  useEffect(() => {
+    const clearAutoRotateResume = () => {
+      if (autoRotateResumeTimeoutRef.current !== null) {
+        window.clearTimeout(autoRotateResumeTimeoutRef.current);
+        autoRotateResumeTimeoutRef.current = null;
+      }
+    };
+
+    const stopIdleAutoRotate = () => {
+      if (!viewerRef.current) {
+        return;
+      }
+
+      (viewerRef.current as typeof viewerRef.current & { stopMovement: () => void }).stopMovement();
+    };
+
+    const startIdleAutoRotate = () => {
+      const viewer = viewerRef.current;
+      if (!viewer) {
+        return;
+      }
+
+      (viewer as typeof viewer & { startAutoRotate: (speed?: number, pitch?: number) => void }).startAutoRotate(
+        IDLE_AUTOROTATE_SPEED,
+        viewer.getPitch()
+      );
+    };
+
+    const scheduleIdleAutoRotateResume = () => {
+      clearAutoRotateResume();
+      autoRotateResumeTimeoutRef.current = window.setTimeout(() => {
+        startIdleAutoRotate();
+        autoRotateResumeTimeoutRef.current = null;
+      }, IDLE_AUTOROTATE_RESUME_DELAY_MS);
+    };
+
+    const markViewerInteraction = () => {
+      stopIdleAutoRotate();
+      scheduleIdleAutoRotateResume();
+    };
+
+    const clearLongPress = () => {
+      if (longPressTimeoutRef.current !== null) {
+        window.clearTimeout(longPressTimeoutRef.current);
+        longPressTimeoutRef.current = null;
+      }
+      longPressTouchRef.current = null;
+    };
+
+    const shouldIgnoreGestureTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) {
+        return false;
+      }
+
+      return Boolean(
+        target.closest(
+          '.panorama-overlay-slot, .pnlm-hotspot-base, .pnlm-controls-container, .pnlm-compass, .pnlm-orientation-button'
+        )
+      );
+    };
+
+    const getCoordsFromClient = (clientX: number, clientY: number) => {
+      const viewer = viewerRef.current;
+      if (!viewer || !shellRef.current) {
+        return null;
+      }
+
+      const syntheticEvent = new MouseEvent('mousedown', {
+        bubbles: true,
+        cancelable: true,
+        clientX,
+        clientY
+      });
+      const coords = viewer.mouseEventToCoords?.(syntheticEvent);
+      if (!coords || coords.length < 2) {
+        return null;
+      }
+
+      const [pitch, yaw] = coords;
+      if (!Number.isFinite(yaw) || !Number.isFinite(pitch)) {
+        return null;
+      }
+
+      return { yaw, pitch };
+    };
+
     const trimmedPanoramaUrl = panoramaUrl.trim();
     const hasChanged = previousPanoramaUrlRef.current !== '' && previousPanoramaUrlRef.current !== trimmedPanoramaUrl;
     previousPanoramaUrlRef.current = trimmedPanoramaUrl;
@@ -114,6 +250,10 @@ function PanoramaViewer({
     } as unknown as Parameters<typeof window.pannellum.viewer>[1];
 
     const viewer = window.pannellum.viewer(containerRef.current, viewerConfig);
+    const shell = shellRef.current;
+    const dragFix = shell?.querySelector<HTMLElement>('.pnlm-dragfix') ?? null;
+    const aboutMessage = shell?.querySelector<HTMLElement>('.pnlm-about-msg') ?? null;
+    const orbControl = shell?.querySelector<HTMLElement>('.pnlm-compass') ?? null;
 
     viewerRef.current = viewer;
     renderedHotspotIdsRef.current.clear();
@@ -168,6 +308,7 @@ function PanoramaViewer({
       }
       emitViewPosition();
       clearLoading();
+      scheduleIdleAutoRotateResume();
     });
     viewer.on('mouseup', emitViewPosition);
     viewer.on('touchend', emitViewPosition);
@@ -176,6 +317,8 @@ function PanoramaViewer({
         pointerDownRef.current = null;
         return;
       }
+
+      markViewerInteraction();
 
       const coords = viewerRef.current.mouseEventToCoords?.(event);
       if (!coords || coords.length < 2) {
@@ -219,13 +362,148 @@ function PanoramaViewer({
       onPanoramaClickRef.current({ yaw: down.yaw, pitch: down.pitch });
     });
     viewer.on('error', () => {
+      clearAutoRotateResume();
       setIsPanoramaLoading(false);
       setErrorMessage('Unable to load panorama image. Check the active scene panorama URL/path.');
     });
 
+    const handleContextMenu = (event: MouseEvent) => {
+      if (isPreviewMode || interactionModeRef.current !== 'idle' || !onQuickPlaceHotspotRef.current) {
+        return;
+      }
+
+      if (shouldIgnoreGestureTarget(event.target)) {
+        return;
+      }
+
+      const coords = getCoordsFromClient(event.clientX, event.clientY);
+      if (!coords) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      markViewerInteraction();
+      aboutMessage?.style.setProperty('display', 'none');
+      aboutMessage?.style.setProperty('opacity', '0');
+      onQuickPlaceHotspotRef.current(coords);
+    };
+
+    const handleTouchStart = (event: TouchEvent) => {
+      if (isPreviewMode || interactionModeRef.current !== 'idle' || !onQuickPlaceHotspotRef.current) {
+        return;
+      }
+
+      if (event.touches.length !== 1 || shouldIgnoreGestureTarget(event.target)) {
+        clearLongPress();
+        return;
+      }
+
+      markViewerInteraction();
+
+      const touch = event.touches[0];
+      longPressTouchRef.current = {
+        x: touch.clientX,
+        y: touch.clientY,
+        touchId: touch.identifier
+      };
+
+      if (longPressTimeoutRef.current !== null) {
+        window.clearTimeout(longPressTimeoutRef.current);
+      }
+
+      longPressTimeoutRef.current = window.setTimeout(() => {
+        const activeTouch = longPressTouchRef.current;
+        if (!activeTouch || !onQuickPlaceHotspotRef.current) {
+          clearLongPress();
+          return;
+        }
+
+        const coords = getCoordsFromClient(activeTouch.x, activeTouch.y);
+        clearLongPress();
+        if (!coords) {
+          return;
+        }
+
+        onQuickPlaceHotspotRef.current(coords);
+      }, MOBILE_LONG_PRESS_DELAY_MS);
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      const activeTouch = longPressTouchRef.current;
+      if (!activeTouch) {
+        return;
+      }
+
+      const matchingTouch = Array.from(event.touches).find((touch) => touch.identifier === activeTouch.touchId);
+      if (!matchingTouch) {
+        clearLongPress();
+        return;
+      }
+
+      const distance = Math.hypot(matchingTouch.clientX - activeTouch.x, matchingTouch.clientY - activeTouch.y);
+      if (distance > MOBILE_LONG_PRESS_MOVE_TOLERANCE_PX) {
+        clearLongPress();
+      }
+    };
+
+    const handleTouchEnd = () => {
+      clearLongPress();
+    };
+
+    const handleOrbToggle = (event: Event) => {
+      if (!onToggleOverlaysRef.current) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      clearLongPress();
+      markViewerInteraction();
+      onToggleOverlaysRef.current();
+    };
+
+    const handleOrbKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' && event.key !== ' ') {
+        return;
+      }
+
+      handleOrbToggle(event);
+    };
+
+    if (orbControl) {
+      orbControl.setAttribute('role', 'button');
+      orbControl.setAttribute('tabindex', '0');
+      orbControl.setAttribute('aria-label', 'Toggle overlays');
+      orbControl.setAttribute('title', 'Toggle overlays');
+    }
+
+    dragFix?.addEventListener('contextmenu', handleContextMenu, { capture: true });
+    shell?.addEventListener('pointerdown', markViewerInteraction, { passive: true });
+    shell?.addEventListener('wheel', markViewerInteraction, { passive: true });
+    shell?.addEventListener('touchstart', handleTouchStart, { passive: true });
+    shell?.addEventListener('touchmove', handleTouchMove, { passive: true });
+    shell?.addEventListener('touchend', handleTouchEnd);
+    shell?.addEventListener('touchcancel', handleTouchEnd);
+    orbControl?.addEventListener('click', handleOrbToggle);
+    orbControl?.addEventListener('touchend', handleOrbToggle);
+    orbControl?.addEventListener('keydown', handleOrbKeyDown);
+
     const intervalId = window.setInterval(emitViewPosition, 300);
 
     return () => {
+      dragFix?.removeEventListener('contextmenu', handleContextMenu, true);
+      shell?.removeEventListener('pointerdown', markViewerInteraction);
+      shell?.removeEventListener('wheel', markViewerInteraction);
+      shell?.removeEventListener('touchstart', handleTouchStart);
+      shell?.removeEventListener('touchmove', handleTouchMove);
+      shell?.removeEventListener('touchend', handleTouchEnd);
+      shell?.removeEventListener('touchcancel', handleTouchEnd);
+      orbControl?.removeEventListener('click', handleOrbToggle);
+      orbControl?.removeEventListener('touchend', handleOrbToggle);
+      orbControl?.removeEventListener('keydown', handleOrbKeyDown);
+      clearLongPress();
+      clearAutoRotateResume();
       window.clearInterval(intervalId);
       if (loadingTimeoutRef.current !== null) {
         window.clearTimeout(loadingTimeoutRef.current);
@@ -446,6 +724,7 @@ function PanoramaViewer({
           aria-label="Panorama viewer"
         />
         {overlayContent ? <div className="panorama-overlay-slot">{overlayContent}</div> : null}
+        {isPreviewMode && showPreviewEntryRipple ? <div className="preview-entry-ripple" aria-hidden="true" /> : null}
         {isPreviewMode && isPanoramaLoading ? <div className="preview-scene-transition-veil" aria-hidden="true" /> : null}
         {isPanoramaLoading ? (
           <div className="panorama-loading-overlay" role="status" aria-live="polite">
