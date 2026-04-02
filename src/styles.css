@@ -3010,8 +3010,10 @@ select {
   .app-shell-preview {
     grid-template-rows: 1fr;
     gap: 0;
-    padding: 10px;
+    padding: 0;
+    min-height: 100vh;
     position: relative;
+    background: #060911;
   }
 
   .app-header {
@@ -3035,6 +3037,17 @@ select {
     flex-wrap: nowrap;
     align-items: center;
     justify-content: space-between;
+  }
+
+  .app-shell-edit .app-header,
+  .app-shell-preview .app-header {
+    background:
+      linear-gradient(180deg, rgba(20, 24, 38, 0.34), rgba(10, 12, 20, 0.22)),
+      rgba(8, 10, 18, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    box-shadow:
+      0 16px 30px rgba(6, 8, 16, 0.28),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
   }
 
   .app-logo {
@@ -3084,7 +3097,7 @@ select {
     position: relative;
     display: block !important;
     grid-template-columns: none !important;
-    min-height: calc(100vh - 20px);
+    min-height: 100vh;
     width: 100%;
   }
 
@@ -3099,7 +3112,7 @@ select {
   .main-content {
     position: relative;
     z-index: 1;
-    height: calc(100vh - 20px);
+    height: 100vh;
   }
 
   .app-shell-edit .sidebar {
@@ -3168,14 +3181,14 @@ select {
   .main-stack-preview,
   .main-stack-edit {
     gap: 0;
-    min-height: calc(100vh - 20px);
+    min-height: 100vh;
     width: 100%;
   }
 
   .camera-preview-shell {
-    min-height: calc(100vh - 20px);
-    height: calc(100vh - 20px);
-    border-radius: 18px;
+    min-height: 100vh;
+    height: 100vh;
+    border-radius: 0;
   }
 
   .camera-preview-meta {
@@ -3216,8 +3229,8 @@ select {
   .panorama-panel,
   .panorama-panel-preview,
   .viewer-card {
-    min-height: calc(100vh - 20px);
-    height: calc(100vh - 20px);
+    min-height: 100vh;
+    height: 100vh;
     width: 100%;
     max-width: 100%;
     min-width: 0;
@@ -3264,14 +3277,15 @@ select {
 
   .panorama-panel-preview .pannellum-container .pnlm-compass {
     right: 10px;
-    bottom: 156px;
+    bottom: 178px;
   }
 
   .panorama-panel-preview .pannellum-shell,
   .panorama-panel-preview .pannellum-container,
   .edit-workspace .pannellum-shell,
   .edit-workspace .pannellum-container {
-    min-height: calc(100vh - 20px);
+    min-height: 100vh;
+    height: 100vh;
     width: 100%;
     max-width: 100%;
   }
@@ -3461,6 +3475,6 @@ select {
 
   .app-shell-edit .pannellum-shell,
   .app-shell-preview .pannellum-shell {
-    border-radius: 18px;
+    border-radius: 0;
   }
 }
