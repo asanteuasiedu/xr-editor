@@ -55,6 +55,7 @@ select {
 .app-shell-preview {
   grid-template-rows: 1fr;
   position: relative;
+  padding: 0;
 }
 
 .app-header {
@@ -213,7 +214,7 @@ select {
 .app-shell-preview .app-body {
   grid-column: 1;
   grid-row: 1;
-  min-height: calc(100vh - 32px);
+  min-height: 100vh;
 }
 
 .app-body-preview {
@@ -388,6 +389,10 @@ select {
   display: flex;
   justify-content: flex-end;
   margin-bottom: 4px;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  align-self: flex-end;
 }
 
 .context-panel-close {
@@ -1032,14 +1037,15 @@ select {
 }
 
 .panorama-panel-preview {
-  min-height: calc(100vh - 180px);
-  box-shadow: 0 14px 34px rgba(14, 20, 42, 0.14);
-  padding: 10px;
+  min-height: 100vh;
+  box-shadow: none;
+  padding: 0;
 }
 
 .panorama-panel-preview .pannellum-shell,
 .panorama-panel-preview .pannellum-container {
-  min-height: calc(100vh - 210px);
+  min-height: 100vh;
+  height: 100vh;
 }
 
 .pannellum-shell {
@@ -1054,6 +1060,11 @@ select {
 .viewer-clip-boundary {
   overflow: hidden;
   border-radius: 14px;
+}
+
+.app-shell-preview .pannellum-shell,
+.app-shell-preview .viewer-clip-boundary {
+  border-radius: 0;
 }
 
 .pannellum-container {
@@ -3387,12 +3398,17 @@ select {
   }
 
   .context-panel-toolbar {
+    top: 0;
     margin-bottom: 2px;
   }
 
   .context-panel-close {
     width: 32px;
     height: 32px;
+  }
+
+  .app-shell-edit .context-panel {
+    max-height: min(28vh, 212px);
   }
 
   .app-shell-edit .sidebar-card,
@@ -3445,6 +3461,80 @@ select {
   .app-shell-edit .sidebar-section-title,
   .app-shell-edit .sidebar-subsection-title {
     font-size: 0.7rem;
+  }
+
+  .app-shell-edit .context-panel-primary .editor-panel {
+    padding-top: 8px;
+  }
+
+  .app-shell-edit .editor-panel-header {
+    margin-bottom: 4px;
+  }
+
+  .app-shell-edit .panel-title {
+    font-size: 0.9rem;
+  }
+
+  .app-shell-edit .editor-selection-note {
+    margin-bottom: 8px;
+    font-size: 0.72rem;
+    line-height: 1.2;
+  }
+
+  .app-shell-edit .editor-grid {
+    gap: 8px;
+  }
+
+  .app-shell-edit .editor-field {
+    gap: 4px;
+  }
+
+  .app-shell-edit .editor-field span,
+  .app-shell-edit .field-help,
+  .app-shell-edit .helper-note {
+    font-size: 0.68rem;
+    line-height: 1.2;
+  }
+
+  .app-shell-edit .editor-field input,
+  .app-shell-edit .editor-field textarea,
+  .app-shell-edit .editor-field select {
+    padding: 8px 10px;
+    font-size: 0.74rem;
+    border-radius: 10px;
+  }
+
+  .app-shell-edit .editor-field textarea {
+    min-height: 76px;
+  }
+
+  .app-shell-edit .hotspot-image-preview-card {
+    min-height: 120px;
+    padding: 8px;
+    border-radius: 12px;
+  }
+
+  .app-shell-edit .hotspot-image-preview-img {
+    max-height: 140px;
+    border-radius: 10px;
+  }
+
+  .app-shell-edit .ui-button,
+  .app-shell-edit .upload-button,
+  .app-shell-edit .secondary-button,
+  .app-shell-edit .danger-button,
+  .app-shell-edit .mini-button {
+    font-size: 0.72rem;
+  }
+
+  .app-shell-edit .edit-rail-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .app-shell-edit .edit-rail-svg {
+    width: 16px;
+    height: 16px;
   }
 
   .pannellum-container .pnlm-controls-container {
