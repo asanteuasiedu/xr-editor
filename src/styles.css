@@ -3651,6 +3651,7 @@ select {
   }
 
   .app-shell-edit .pannellum-container .pnlm-orientation-button {
+    left: 6px;
     bottom: 78px;
   }
 
