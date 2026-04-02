@@ -228,7 +228,6 @@ function Sidebar({
 
   const renderControls = () => (
     <section className={sectionCardClass('controls')} data-walkthrough-id="controls">
-      <p className="sidebar-section-title">Controls</p>
       <div className="context-panel-heading">
         <h2>Project Controls</h2>
         <p>Guide the class, swap scenes, and prepare the experience for presentation.</p>
@@ -272,7 +271,6 @@ function Sidebar({
 
   const renderInspector = () => (
     <section className={sectionCardClass('inspector')} data-walkthrough-id="inspector">
-      <p className="sidebar-section-title">Project</p>
       <div className="context-panel-heading">
         <h2>Project Overview</h2>
         <p>Set the framing, learning context, and project-level actions for this experience.</p>
