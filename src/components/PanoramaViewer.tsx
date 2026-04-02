@@ -8,12 +8,14 @@ type PanoramaViewerProps = {
   panoramaUrl: string;
   hotspots: Hotspot[];
   selectedHotspotId: string | null;
+  activePreviewHotspotId?: string | null;
+  visitedPreviewHotspotIds?: string[];
   isPreviewMode?: boolean;
   previewEntryId?: number;
   overlayContent?: ReactNode;
   editorPopoverContent?: ReactNode;
   interactionMode: 'idle' | 'placingNewHotspot' | 'movingExistingHotspot';
-  onActivateHotspot: (hotspotId: string) => void;
+  onActivateHotspot: (hotspotId: string, anchor?: { x: number; y: number }) => void;
   onPanoramaClick: (position: { yaw: number; pitch: number }) => void;
   onViewChange: (position: { yaw: number; pitch: number }) => void;
 };
@@ -25,6 +27,8 @@ function PanoramaViewer({
   panoramaUrl,
   hotspots,
   selectedHotspotId,
+  activePreviewHotspotId = null,
+  visitedPreviewHotspotIds = [],
   isPreviewMode = false,
   previewEntryId = 0,
   overlayContent,
@@ -255,9 +259,14 @@ function PanoramaViewer({
     renderedHotspotIdsRef.current.clear();
 
     hotspots.forEach((hotspot) => {
+      const isVisitedInPreview = isPreviewMode && visitedPreviewHotspotIds.includes(hotspot.id);
       // Keep one native-compatible baseline marker class, then add a single
       // type class for themed meaning without changing the anchor geometry.
-      const markerClassName = `xr-hotspot-marker-native xr-hotspot-type-${hotspot.type}`;
+      const markerClassName = `xr-hotspot-marker-native xr-hotspot-type-${hotspot.type}${
+        isVisitedInPreview ? ' xr-hotspot-visited-preview' : ''
+      }${
+        hotspot.id === activePreviewHotspotId ? ' xr-hotspot-active-preview' : ''
+      }${hotspot.id === selectedHotspotId ? ' xr-hotspot-selected-editor' : ''}`;
 
       viewer.addHotSpot({
         id: hotspot.id,
@@ -271,12 +280,35 @@ function PanoramaViewer({
         },
         clickHandlerFunc:
           interactionModeRef.current === 'idle'
-            ? () => onActivateHotspotRef.current(hotspot.id)
+            ? () => {
+                const hotspotElement = shellRef.current?.querySelector<HTMLElement>(
+                  `.pnlm-hotspot-base[data-hotspot-id="${hotspot.id}"]`
+                );
+                const shellRect = shellRef.current?.getBoundingClientRect();
+                const hotspotRect = hotspotElement?.getBoundingClientRect();
+                const anchor =
+                  shellRect && hotspotRect
+                    ? {
+                        x: hotspotRect.left - shellRect.left + hotspotRect.width / 2,
+                        y: hotspotRect.top - shellRect.top + hotspotRect.height / 2
+                      }
+                    : undefined;
+
+                onActivateHotspotRef.current(hotspot.id, anchor);
+              }
             : undefined
       });
       renderedHotspotIdsRef.current.add(hotspot.id);
     });
-  }, [hotspots, interactionMode, selectedHotspotId, onActivateHotspot]);
+  }, [
+    activePreviewHotspotId,
+    hotspots,
+    interactionMode,
+    isPreviewMode,
+    onActivateHotspot,
+    selectedHotspotId,
+    visitedPreviewHotspotIds
+  ]);
 
   useEffect(() => {
     if (!selectedHotspotId) {
@@ -366,6 +398,44 @@ function PanoramaViewer({
     };
   }, [editorPopoverContent, isPreviewMode, selectedHotspotId, hotspots, panoramaUrl]);
 
+  useEffect(() => {
+    const shell = shellRef.current;
+    if (!shell) {
+      return;
+    }
+
+    const resetOrbPointer = () => {
+      shell.style.setProperty('--orb-pointer-x', '50%');
+      shell.style.setProperty('--orb-pointer-y', '50%');
+      shell.style.setProperty('--orb-drift-x', '0px');
+      shell.style.setProperty('--orb-drift-y', '0px');
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const rect = shell.getBoundingClientRect();
+      const x = (event.clientX - rect.left) / rect.width;
+      const y = (event.clientY - rect.top) / rect.height;
+      const clampedX = Math.min(1, Math.max(0, x));
+      const clampedY = Math.min(1, Math.max(0, y));
+      const driftX = (clampedX - 0.5) * 10;
+      const driftY = (clampedY - 0.5) * 10;
+
+      shell.style.setProperty('--orb-pointer-x', `${(clampedX * 100).toFixed(2)}%`);
+      shell.style.setProperty('--orb-pointer-y', `${(clampedY * 100).toFixed(2)}%`);
+      shell.style.setProperty('--orb-drift-x', `${driftX.toFixed(2)}px`);
+      shell.style.setProperty('--orb-drift-y', `${driftY.toFixed(2)}px`);
+    };
+
+    resetOrbPointer();
+    shell.addEventListener('pointermove', handlePointerMove);
+    shell.addEventListener('pointerleave', resetOrbPointer);
+
+    return () => {
+      shell.removeEventListener('pointermove', handlePointerMove);
+      shell.removeEventListener('pointerleave', resetOrbPointer);
+    };
+  }, []);
+
   return (
     <section className={`panel panorama-panel viewer-card ${isPreviewMode ? 'panorama-panel-preview' : ''}`}>
       {!isPreviewMode ? <h2 className="viewer-overlay-title">Your XR Media</h2> : null}
@@ -376,6 +446,7 @@ function PanoramaViewer({
           aria-label="Panorama viewer"
         />
         {overlayContent ? <div className="panorama-overlay-slot">{overlayContent}</div> : null}
+        {isPreviewMode && isPanoramaLoading ? <div className="preview-scene-transition-veil" aria-hidden="true" /> : null}
         {isPanoramaLoading ? (
           <div className="panorama-loading-overlay" role="status" aria-live="polite">
             <div className="panorama-loading-core">

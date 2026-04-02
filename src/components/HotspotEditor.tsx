@@ -10,7 +10,6 @@ type HotspotEditorProps = {
   onUploadHotspotImage: (hotspotId: string, file: File) => void | Promise<void>;
   onUpdateHotspot: (hotspotId: string, patch: Partial<Hotspot>) => void;
   onDeleteHotspot: (hotspotId: string) => void;
-  onCloseEditor?: () => void;
 };
 
 function HotspotEditor({
@@ -20,8 +19,7 @@ function HotspotEditor({
   onStartMovingHotspot,
   onUploadHotspotImage,
   onUpdateHotspot,
-  onDeleteHotspot,
-  onCloseEditor
+  onDeleteHotspot
 }: HotspotEditorProps) {
   const hotspotImageInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -83,6 +81,7 @@ function HotspotEditor({
         ? hotspot.answerOptions
         : ['Option 1', 'Option 2']
       : [];
+  const hotspotImageSrc = hotspot.type === 'image' ? hotspot.imageUrl?.trim() ?? '' : '';
 
   const handleAnswerOptionChange = (index: number) => (event: ChangeEvent<HTMLInputElement>) => {
     const nextOptions = [...answerOptions];
@@ -122,16 +121,6 @@ function HotspotEditor({
     <section className="panel editor-panel">
       <div className="editor-panel-header">
         <h2 className="panel-title">Selected Hotspot Editor</h2>
-        {onCloseEditor ? (
-          <button
-            type="button"
-            className="context-panel-close editor-panel-close"
-            onClick={onCloseEditor}
-            aria-label="Close selected details"
-          >
-            <span aria-hidden="true">×</span>
-          </button>
-        ) : null}
       </div>
       <p className="editor-selection-note">
         Editing: <strong>{hotspot.title || 'Untitled Insight Zone'}</strong>
@@ -194,17 +183,18 @@ function HotspotEditor({
               className="hidden-file-input"
               onChange={onHotspotImageUploadChange}
             />
-            <label className="editor-field">
-              <span>Image URL</span>
-              <input
-                value={hotspot.imageUrl ?? ''}
-                onChange={handleTextChange('imageUrl')}
-                placeholder="https://example.com/image.jpg"
-              />
-            </label>
-            {!hotspot.imageUrl?.trim() ? (
-              <p className="helper-note">Add an image URL or upload an image file to enable preview.</p>
-            ) : null}
+            <div className="editor-field">
+              <span>Image Preview</span>
+              {hotspotImageSrc ? (
+                <div className="hotspot-image-preview-card">
+                  <img src={hotspotImageSrc} alt={hotspot.title || 'Insight zone preview'} className="hotspot-image-preview-img" />
+                </div>
+              ) : (
+                <div className="hotspot-image-preview-card hotspot-image-preview-empty">
+                  <p className="placeholder-note">No image uploaded yet.</p>
+                </div>
+              )}
+            </div>
             <button
               type="button"
               className="ui-button ui-button-secondary secondary-button upload-button"

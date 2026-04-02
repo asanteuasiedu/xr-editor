@@ -335,8 +335,13 @@ function Sidebar({
       </div>
       <div className="section-header-row">
         <div />
-        <button type="button" className="ui-button ui-button-primary mini-button" onClick={onAddScene}>
-          Add Scene
+        <button
+          type="button"
+          className="ui-button ui-button-primary mini-button add-text-button"
+          onClick={onAddScene}
+        >
+          <span className="add-text-button-plus" aria-hidden="true">+</span>
+          <span>Add Scene</span>
         </button>
       </div>
       <ul className="scene-list">
@@ -448,8 +453,13 @@ function Sidebar({
       </div>
       <div className="section-header-row">
         <div />
-        <button type="button" className="ui-button ui-button-primary mini-button" onClick={onAddHotspot}>
-          Add Insight Zone
+        <button
+          type="button"
+          className="ui-button ui-button-primary mini-button add-text-button"
+          onClick={onAddHotspot}
+        >
+          <span className="add-text-button-plus" aria-hidden="true">+</span>
+          <span>Add Insight Zone</span>
         </button>
       </div>
 

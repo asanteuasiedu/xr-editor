@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ChangeEvent } from 'react';
+import type { CSSProperties, ChangeEvent } from 'react';
 import Layout from './components/Layout';
 import Sidebar, { type EditSection } from './components/Sidebar';
 import HotspotEditor from './components/HotspotEditor';
@@ -24,6 +24,10 @@ type QuestionResponse = {
   selectedIndex: number;
   isCorrect: boolean;
   sceneId: string;
+};
+type RevealOrigin = {
+  x: number;
+  y: number;
 };
 const PREVIEW_HINT_DISMISSED_KEY = 'xr-editor.preview-hint-dismissed.v1';
 const EDIT_WALKTHROUGH_DISMISSED_KEY = 'xr-editor.edit-walkthrough-dismissed.v1';
@@ -215,17 +219,21 @@ function App() {
   const [previewEntryId, setPreviewEntryId] = useState(0);
   const [completionDismissed, setCompletionDismissed] = useState(false);
   const [showCompletionMessage, setShowCompletionMessage] = useState(false);
+  const [completionPendingAfterOverlayClose, setCompletionPendingAfterOverlayClose] = useState(false);
   const [activeEditSection, setActiveEditSection] = useState<EditSection>('controls');
   const [isContextPanelOpen, setIsContextPanelOpen] = useState(true);
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'requesting' | 'ready' | 'error'>('idle');
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraPreviewRequestId, setCameraPreviewRequestId] = useState(0);
   const [arPreviewSelectedHotspotId, setArPreviewSelectedHotspotId] = useState<string | null>(null);
+  const [activePreviewHotspotId, setActivePreviewHotspotId] = useState<string | null>(null);
+  const [previewRevealOrigin, setPreviewRevealOrigin] = useState<RevealOrigin | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const arVideoRef = useRef<HTMLVideoElement | null>(null);
   const arStreamRef = useRef<MediaStream | null>(null);
   const hasMountedRef = useRef(false);
   const noticeTimeoutRef = useRef<number | null>(null);
+  const previewHotspotPulseTimeoutRef = useRef<number | null>(null);
 
   const showTemporaryNotice = useCallback((message: string, durationMs = 2200) => {
     setNoticeMessage(message);
@@ -238,6 +246,14 @@ function App() {
       setNoticeMessage((current) => (current === message ? null : current));
       noticeTimeoutRef.current = null;
     }, durationMs);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (previewHotspotPulseTimeoutRef.current !== null) {
+        window.clearTimeout(previewHotspotPulseTimeoutRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -327,18 +343,60 @@ function App() {
     totalProgressPoints > 0 &&
     discoveredHotspotIds.length === totalProgressPoints &&
     answeredQuestionCount === totalQuestionCount;
+  const hasActivePreviewOverlay = Boolean(infoPreview || imagePreview || questionPreviewHotspotId);
 
   useEffect(() => {
-    if (isExperienceComplete) {
-      if (!completionDismissed) {
-        setShowCompletionMessage(true);
-      }
+    if (!isExperienceComplete) {
+      setShowCompletionMessage(false);
+      setCompletionDismissed(false);
+      setCompletionPendingAfterOverlayClose(false);
       return;
     }
 
-    setShowCompletionMessage(false);
-    setCompletionDismissed(false);
-  }, [completionDismissed, isExperienceComplete]);
+    if (completionDismissed) {
+      return;
+    }
+
+    if (hasActivePreviewOverlay) {
+      setShowCompletionMessage(false);
+      setCompletionPendingAfterOverlayClose(true);
+      return;
+    }
+
+    if (completionPendingAfterOverlayClose || !hasActivePreviewOverlay) {
+      setShowCompletionMessage(true);
+      setCompletionPendingAfterOverlayClose(false);
+    }
+  }, [
+    completionDismissed,
+    completionPendingAfterOverlayClose,
+    hasActivePreviewOverlay,
+    isExperienceComplete
+  ]);
+
+  const handleCloseInfoPreview = () => {
+    setInfoPreview(null);
+  };
+
+  const handleCloseImagePreview = () => {
+    setImagePreview(null);
+  };
+
+  const handleCloseQuestionPreview = () => {
+    setQuestionPreviewHotspotId(null);
+  };
+
+  useEffect(() => {
+    if (appMode !== 'preview') {
+      setActivePreviewHotspotId(null);
+      setPreviewRevealOrigin(null);
+    }
+  }, [appMode]);
+
+  useEffect(() => {
+    setActivePreviewHotspotId(null);
+    setPreviewRevealOrigin(null);
+  }, [activeScene.id]);
 
   const projectStats = useMemo(() => {
     const totalScenes = project.scenes.length;
@@ -602,7 +660,7 @@ function App() {
   };
 
   const handleActivateHotspot = useCallback(
-    (hotspotId: string) => {
+    (hotspotId: string, anchor?: RevealOrigin) => {
       if (placementMode.type !== 'idle') {
         return;
       }
@@ -613,11 +671,13 @@ function App() {
       }
 
       if (appMode === 'preview') {
+        setActivePreviewHotspotId(hotspotId);
         setDiscoveredHotspotIds((current) => (current.includes(hotspotId) ? current : [...current, hotspotId]));
       }
 
       if (clickedHotspot.type === 'multipleChoice') {
         if (appMode === 'preview') {
+          setPreviewRevealOrigin(anchor ?? null);
           const questionConfig = getMultipleChoiceConfig(clickedHotspot);
           if (!questionConfig) {
             setImportError('Multiple Choice hotspot is missing a valid prompt, answers, or correct answer.');
@@ -657,6 +717,7 @@ function App() {
           ...currentProject,
           activeSceneId: clickedHotspot.targetSceneId as string
         }));
+        setPreviewRevealOrigin(null);
         setImagePreview(null);
         setInfoPreview(null);
         setQuestionPreviewHotspotId(null);
@@ -674,6 +735,7 @@ function App() {
         }
 
         window.open(normalized, '_blank', 'noopener,noreferrer');
+        setPreviewRevealOrigin(anchor ?? null);
         setImagePreview(null);
         setInfoPreview(null);
         setQuestionPreviewHotspotId(null);
@@ -689,6 +751,7 @@ function App() {
           return;
         }
 
+        setPreviewRevealOrigin(anchor ?? null);
         setImagePreview({
           src,
           title: clickedHotspot.title || 'Image Preview',
@@ -704,6 +767,7 @@ function App() {
       if (appMode === 'preview') {
         setSelectedHotspotId(null);
         setImagePreview(null);
+        setPreviewRevealOrigin(anchor ?? null);
         setInfoPreview({
           title: clickedHotspot.title || 'Info',
           body: clickedHotspot.body || 'No details provided.'
@@ -718,6 +782,28 @@ function App() {
     },
     [activeScene.hotspots, activeScene.id, appMode, placementMode.type, project.scenes]
   );
+
+  useEffect(() => {
+    if (appMode !== 'preview' || !activePreviewHotspotId) {
+      return;
+    }
+
+    if (previewHotspotPulseTimeoutRef.current !== null) {
+      window.clearTimeout(previewHotspotPulseTimeoutRef.current);
+    }
+
+    previewHotspotPulseTimeoutRef.current = window.setTimeout(() => {
+      setActivePreviewHotspotId((current) => (current === activePreviewHotspotId ? null : current));
+      previewHotspotPulseTimeoutRef.current = null;
+    }, 920);
+
+    return () => {
+      if (previewHotspotPulseTimeoutRef.current !== null) {
+        window.clearTimeout(previewHotspotPulseTimeoutRef.current);
+        previewHotspotPulseTimeoutRef.current = null;
+      }
+    };
+  }, [activePreviewHotspotId, appMode]);
 
   const handlePanoramaClick = useCallback(
     ({ yaw, pitch }: { yaw: number; pitch: number }) => {
@@ -1047,6 +1133,12 @@ function App() {
         : null;
 
   const viewerInteractionMode = appMode === 'preview' ? 'idle' : placementMode.type;
+  const presentationRevealStyle = previewRevealOrigin
+    ? ({
+        '--reveal-origin-x': `${previewRevealOrigin.x}px`,
+        '--reveal-origin-y': `${previewRevealOrigin.y}px`
+      } as CSSProperties)
+    : undefined;
   // On the first-run path, onboarding overlays take precedence over the starter panorama.
   // Hold the viewer until the walkthrough / Scene Library handoff has completed.
   const shouldHoldInitialViewer =
@@ -1183,6 +1275,18 @@ function App() {
         appMode === 'edit' && isContextPanelOpen ? (
           <div className="context-panel-stack">
             {selectedHotspot ? (
+              <div className="context-panel-toolbar">
+                <button
+                  type="button"
+                  className="context-panel-close"
+                  onClick={handleClearSelectedHotspot}
+                  aria-label="Close selected details"
+                >
+                  <span aria-hidden="true">×</span>
+                </button>
+              </div>
+            ) : null}
+            {selectedHotspot ? (
               <>
                 <section className="panel context-panel-primary">
                   <div className="context-panel-heading">
@@ -1198,7 +1302,6 @@ function App() {
                     onUploadHotspotImage={handleUploadHotspotImage}
                     onUpdateHotspot={handleUpdateHotspot}
                     onDeleteHotspot={handleDeleteHotspot}
-                    onCloseEditor={handleClearSelectedHotspot}
                   />
                 </section>
               </>
@@ -1458,6 +1561,8 @@ function App() {
               panoramaUrl={activeScene.panoramaUrl}
               hotspots={activeScene.hotspots}
               selectedHotspotId={selectedHotspotId}
+              activePreviewHotspotId={activePreviewHotspotId}
+              visitedPreviewHotspotIds={discoveredHotspotIds}
               isPreviewMode
               previewEntryId={previewEntryId}
               overlayContent={
@@ -1534,11 +1639,12 @@ function App() {
           ) : null}
           {infoPreview ? (
             <div
-              className="presentation-overlay"
+              className="presentation-overlay presentation-overlay-reveal"
+              style={presentationRevealStyle}
               role="dialog"
               aria-modal="true"
               aria-label="Info hotspot details"
-              onClick={() => setInfoPreview(null)}
+              onClick={handleCloseInfoPreview}
             >
               <div className="presentation-modal info-preview-modal" onClick={(event) => event.stopPropagation()}>
                 <div className="presentation-modal-header">
@@ -1549,7 +1655,7 @@ function App() {
                   <button
                     type="button"
                     className="ui-button ui-button-secondary mini-button"
-                    onClick={() => setInfoPreview(null)}
+                    onClick={handleCloseInfoPreview}
                   >
                     Close
                   </button>
@@ -1560,11 +1666,12 @@ function App() {
           ) : null}
           {imagePreview ? (
             <div
-              className="presentation-overlay"
+              className="presentation-overlay presentation-overlay-reveal"
+              style={presentationRevealStyle}
               role="dialog"
               aria-modal="true"
               aria-label="Image preview"
-              onClick={() => setImagePreview(null)}
+              onClick={handleCloseImagePreview}
             >
               <div className="presentation-modal image-preview-modal" onClick={(event) => event.stopPropagation()}>
                 <div className="presentation-modal-header">
@@ -1575,7 +1682,7 @@ function App() {
                   <button
                     type="button"
                     className="ui-button ui-button-secondary mini-button"
-                    onClick={() => setImagePreview(null)}
+                    onClick={handleCloseImagePreview}
                   >
                     Close
                   </button>
@@ -1598,11 +1705,12 @@ function App() {
           ) : null}
           {activeQuestionEntry && activeQuestionConfig ? (
             <div
-              className="presentation-overlay"
+              className="presentation-overlay presentation-overlay-reveal"
+              style={presentationRevealStyle}
               role="dialog"
               aria-modal="true"
               aria-label="Multiple choice question"
-              onClick={() => setQuestionPreviewHotspotId(null)}
+              onClick={handleCloseQuestionPreview}
             >
               <div className="presentation-modal quiz-preview-modal" onClick={(event) => event.stopPropagation()}>
                 <div className="presentation-modal-header">
@@ -1613,7 +1721,7 @@ function App() {
                   <button
                     type="button"
                     className="ui-button ui-button-secondary mini-button"
-                    onClick={() => setQuestionPreviewHotspotId(null)}
+                    onClick={handleCloseQuestionPreview}
                   >
                     Close
                   </button>
