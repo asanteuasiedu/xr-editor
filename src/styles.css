@@ -967,9 +967,10 @@ select {
 }
 
 .main-stack-preview {
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 8px;
-  min-height: calc(100vh - 112px);
+  grid-template-rows: 1fr;
+  gap: 0;
+  min-height: 100vh;
+  height: 100vh;
 }
 
 .edit-workspace {
@@ -1066,7 +1067,14 @@ select {
 }
 
 .panorama-panel-preview {
+  display: grid;
+  grid-template-rows: 1fr;
   min-height: 100vh;
+  height: 100vh;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   box-shadow: none;
   padding: 0;
 }
@@ -1094,6 +1102,15 @@ select {
 .app-shell-preview .pannellum-shell,
 .app-shell-preview .viewer-clip-boundary {
   border-radius: 0;
+}
+
+.app-shell-preview .main-content,
+.app-shell-preview .main-stack,
+.app-shell-preview .main-stack-preview,
+.app-shell-preview .viewer-card {
+  min-height: 100vh;
+  height: 100vh;
+  width: 100%;
 }
 
 .pannellum-container {
@@ -3000,7 +3017,9 @@ select {
   }
 
   .main-stack-preview {
-    grid-template-rows: auto;
+    grid-template-rows: 1fr;
+    min-height: 100vh;
+    height: 100vh;
   }
 
   .scene-picker-overlay {
@@ -3040,12 +3059,14 @@ select {
   }
 
   .panorama-panel-preview {
-    min-height: 72vh;
+    min-height: 100vh;
+    height: 100vh;
   }
 
   .panorama-panel-preview .pannellum-shell,
   .panorama-panel-preview .pannellum-container {
-    min-height: 66vh;
+    min-height: 100vh;
+    height: 100vh;
   }
 
   .preview-hint-card {
