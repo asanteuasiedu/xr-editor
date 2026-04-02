@@ -3351,13 +3351,13 @@ select {
   }
 
   .panorama-panel-preview .pannellum-container .pnlm-controls-container {
-    bottom: 178px;
+    bottom: 192px;
     left: 10px;
   }
 
   .panorama-panel-preview .pannellum-container .pnlm-compass {
     right: 10px;
-    bottom: 178px;
+    bottom: 192px;
   }
 
   .panorama-panel-preview .pannellum-shell,
