@@ -1374,6 +1374,10 @@ select {
     inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
+.panorama-panel-preview .pannellum-container .pnlm-controls-container {
+  bottom: 12px;
+}
+
 @keyframes compass-globe-glow {
   0%,
   100% {
@@ -3344,6 +3348,11 @@ select {
 
   .presentation-progress-bar {
     margin-top: 10px;
+  }
+
+  .panorama-panel-preview .pannellum-container .pnlm-controls-container {
+    bottom: 178px;
+    left: 10px;
   }
 
   .panorama-panel-preview .pannellum-container .pnlm-compass {
