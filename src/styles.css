@@ -392,7 +392,15 @@ select {
   position: sticky;
   top: 0;
   z-index: 3;
-  align-self: flex-end;
+  align-self: stretch;
+}
+
+.context-panel-toolbar-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .context-panel-close {
@@ -435,6 +443,14 @@ select {
   font-size: 1.15rem;
   line-height: 1;
   transform: translateY(-1px);
+}
+
+.context-panel-done {
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .sidebar-card {

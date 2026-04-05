@@ -7,7 +7,6 @@ type HotspotEditorProps = {
   destinationScenes: Scene[];
   isPlacementModeActive: boolean;
   onStartMovingHotspot: () => void;
-  onDoneEditing: () => void;
   onUploadHotspotImage: (hotspotId: string, file: File) => void | Promise<void>;
   onUpdateHotspot: (hotspotId: string, patch: Partial<Hotspot>) => void;
   onDeleteHotspot: (hotspotId: string) => void;
@@ -66,7 +65,6 @@ function HotspotEditor({
   destinationScenes,
   isPlacementModeActive,
   onStartMovingHotspot,
-  onDoneEditing,
   onUploadHotspotImage,
   onUpdateHotspot,
   onDeleteHotspot
@@ -335,13 +333,6 @@ function HotspotEditor({
               <MoveHotspotIcon />
             </span>
             <span className="control-action-label">Move Selected Hotspot</span>
-          </button>
-          <button
-            type="button"
-            className="ui-button done-button"
-            onClick={onDoneEditing}
-          >
-            Done
           </button>
           <button
             type="button"

@@ -725,7 +725,7 @@ function App() {
         setImagePreview(null);
         setInfoPreview(null);
         setQuestionPreviewHotspotId(null);
-        setSelectedHotspotId(hotspotId);
+        openHotspotDetails(hotspotId);
         return;
       }
 
@@ -760,7 +760,7 @@ function App() {
         const normalized = normalizeExternalLink(clickedHotspot.url ?? '');
         if (!normalized) {
           setImportError('External Link hotspot has an invalid or missing URL.');
-          setSelectedHotspotId(hotspotId);
+          openHotspotDetails(hotspotId);
           return;
         }
 
@@ -769,7 +769,11 @@ function App() {
         setImagePreview(null);
         setInfoPreview(null);
         setQuestionPreviewHotspotId(null);
-        setSelectedHotspotId(hotspotId);
+        if (appMode === 'edit') {
+          openHotspotDetails(hotspotId);
+        } else {
+          setSelectedHotspotId(hotspotId);
+        }
         return;
       }
 
@@ -777,7 +781,7 @@ function App() {
         const src = (clickedHotspot.imageUrl ?? '').trim();
         if (!src) {
           setImportError('Image hotspot is missing an image URL.');
-          setSelectedHotspotId(hotspotId);
+          openHotspotDetails(hotspotId);
           return;
         }
 
@@ -790,7 +794,11 @@ function App() {
         setImagePreviewBroken(false);
         setInfoPreview(null);
         setQuestionPreviewHotspotId(null);
-        setSelectedHotspotId(hotspotId);
+        if (appMode === 'edit') {
+          openHotspotDetails(hotspotId);
+        } else {
+          setSelectedHotspotId(hotspotId);
+        }
         return;
       }
 
@@ -808,9 +816,9 @@ function App() {
 
       setInfoPreview(null);
       setQuestionPreviewHotspotId(null);
-      setSelectedHotspotId(hotspotId);
+      openHotspotDetails(hotspotId);
     },
-    [activeScene.hotspots, activeScene.id, appMode, placementMode.type, project.scenes]
+    [activeScene.hotspots, activeScene.id, appMode, openHotspotDetails, placementMode.type, project.scenes]
   );
 
   useEffect(() => {
@@ -857,11 +865,11 @@ function App() {
         yaw: Number(yaw.toFixed(2)),
         pitch: Number(pitch.toFixed(2))
       });
-      setSelectedHotspotId(movingHotspotId);
+      openHotspotDetails(movingHotspotId);
       setPlacementMode({ type: 'idle' });
       showTemporaryNotice('Insight Zone moved');
     },
-    [activeScene.hotspots, handleCreateHotspotAtPosition, handleUpdateHotspot, placementMode, showTemporaryNotice]
+    [activeScene.hotspots, handleCreateHotspotAtPosition, handleUpdateHotspot, openHotspotDetails, placementMode, showTemporaryNotice]
   );
 
   const handleCancelPlacement = () => {
@@ -1103,13 +1111,13 @@ function App() {
     }
   };
 
-  const handleClearSelectedHotspot = () => {
+  const handleCloseContextPanel = useCallback(() => {
+    setIsContextPanelOpen(false);
     setSelectedHotspotId(null);
-    setActiveEditSection('hotspots');
     if (placementMode.type === 'movingExistingHotspot') {
       setPlacementMode({ type: 'idle' });
     }
-  };
+  }, [placementMode.type]);
 
   const handleToggleViewerOverlays = useCallback(() => {
     setAreViewerOverlaysHidden((current) => !current);
@@ -1294,18 +1302,26 @@ function App() {
       contextPanel={
         appMode === 'edit' && isContextPanelOpen ? (
           <div className="context-panel-stack">
-            {selectedHotspot ? (
-              <div className="context-panel-toolbar">
+            <div className="context-panel-toolbar">
+              <div className="context-panel-toolbar-actions">
+                <button
+                  type="button"
+                  className="ui-button done-button context-panel-done"
+                  onClick={handleCloseContextPanel}
+                >
+                  Done
+                </button>
                 <button
                   type="button"
                   className="context-panel-close"
-                  onClick={handleClearSelectedHotspot}
+                  onClick={handleCloseContextPanel}
                   aria-label="Close selected details"
+                  title="Close selected details"
                 >
                   <span aria-hidden="true">×</span>
                 </button>
               </div>
-            ) : null}
+            </div>
             {selectedHotspot ? (
               <>
                 <section className="panel context-panel-primary">
@@ -1319,7 +1335,6 @@ function App() {
                     destinationScenes={project.scenes.filter((scene) => scene.id !== activeScene.id)}
                     isPlacementModeActive={placementMode.type !== 'idle'}
                     onStartMovingHotspot={handleStartMovingSelectedHotspot}
-                    onDoneEditing={handleClearSelectedHotspot}
                     onUploadHotspotImage={handleUploadHotspotImage}
                     onUpdateHotspot={handleUpdateHotspot}
                     onDeleteHotspot={handleDeleteHotspot}
