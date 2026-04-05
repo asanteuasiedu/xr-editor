@@ -29,6 +29,7 @@ const MOBILE_LONG_PRESS_MOVE_TOLERANCE_PX = 12;
 const IDLE_AUTOROTATE_RESUME_DELAY_MS = 5000;
 const IDLE_AUTOROTATE_SPEED = -0.35;
 const PREVIEW_RIPPLE_DURATION_MS = 980;
+const PREVIEW_RIPPLE_POST_LOAD_DELAY_MS = 320;
 
 function PanoramaViewer({
   panoramaUrl,
@@ -47,6 +48,8 @@ function PanoramaViewer({
   onToggleOverlays,
   onViewChange
 }: PanoramaViewerProps) {
+  const trimmedPanoramaUrl = panoramaUrl.trim();
+  const hasPanorama = trimmedPanoramaUrl !== '';
   const containerRef = useRef<HTMLDivElement | null>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const editorPopoverRef = useRef<HTMLDivElement | null>(null);
@@ -65,8 +68,11 @@ function PanoramaViewer({
   const longPressTouchRef = useRef<{ x: number; y: number; touchId: number } | null>(null);
   const autoRotateResumeTimeoutRef = useRef<number | null>(null);
   const previewRippleTimeoutRef = useRef<number | null>(null);
+  const pendingPreviewRippleEntryRef = useRef<number | null>(null);
+  const previewRippleStartDelayRef = useRef<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPanoramaLoading, setIsPanoramaLoading] = useState(false);
+  const [isLoadingOverlayVisible, setIsLoadingOverlayVisible] = useState(false);
   const [editorPopoverStyle, setEditorPopoverStyle] = useState<CSSProperties | null>(null);
   const [useEditorPopoverFallback, setUseEditorPopoverFallback] = useState(false);
   const [showPreviewEntryRipple, setShowPreviewEntryRipple] = useState(false);
@@ -98,6 +104,11 @@ function PanoramaViewer({
   useEffect(() => {
     if (!isPreviewMode) {
       setShowPreviewEntryRipple(false);
+      pendingPreviewRippleEntryRef.current = null;
+      if (previewRippleStartDelayRef.current !== null) {
+        window.clearTimeout(previewRippleStartDelayRef.current);
+        previewRippleStartDelayRef.current = null;
+      }
       if (previewRippleTimeoutRef.current !== null) {
         window.clearTimeout(previewRippleTimeoutRef.current);
         previewRippleTimeoutRef.current = null;
@@ -105,14 +116,8 @@ function PanoramaViewer({
       return;
     }
 
-    setShowPreviewEntryRipple(true);
-    if (previewRippleTimeoutRef.current !== null) {
-      window.clearTimeout(previewRippleTimeoutRef.current);
-    }
-    previewRippleTimeoutRef.current = window.setTimeout(() => {
-      setShowPreviewEntryRipple(false);
-      previewRippleTimeoutRef.current = null;
-    }, PREVIEW_RIPPLE_DURATION_MS);
+    pendingPreviewRippleEntryRef.current = previewEntryId;
+    setShowPreviewEntryRipple(false);
 
     return () => {
       if (previewRippleTimeoutRef.current !== null) {
@@ -121,6 +126,37 @@ function PanoramaViewer({
       }
     };
   }, [isPreviewMode, previewEntryId]);
+
+  useEffect(() => {
+    setIsLoadingOverlayVisible(isPanoramaLoading);
+  }, [isPanoramaLoading]);
+
+  useEffect(() => {
+    if (!isPreviewMode || isLoadingOverlayVisible || pendingPreviewRippleEntryRef.current === null) {
+      return;
+    }
+
+    previewRippleStartDelayRef.current = window.setTimeout(() => {
+      setShowPreviewEntryRipple(true);
+      pendingPreviewRippleEntryRef.current = null;
+      previewRippleStartDelayRef.current = null;
+
+      if (previewRippleTimeoutRef.current !== null) {
+        window.clearTimeout(previewRippleTimeoutRef.current);
+      }
+      previewRippleTimeoutRef.current = window.setTimeout(() => {
+        setShowPreviewEntryRipple(false);
+        previewRippleTimeoutRef.current = null;
+      }, PREVIEW_RIPPLE_DURATION_MS);
+    }, PREVIEW_RIPPLE_POST_LOAD_DELAY_MS);
+
+    return () => {
+      if (previewRippleStartDelayRef.current !== null) {
+        window.clearTimeout(previewRippleStartDelayRef.current);
+        previewRippleStartDelayRef.current = null;
+      }
+    };
+  }, [isLoadingOverlayVisible, isPreviewMode]);
 
   useEffect(() => {
     const clearAutoRotateResume = () => {
@@ -208,7 +244,6 @@ function PanoramaViewer({
       return { yaw, pitch };
     };
 
-    const trimmedPanoramaUrl = panoramaUrl.trim();
     const hasChanged = previousPanoramaUrlRef.current !== '' && previousPanoramaUrlRef.current !== trimmedPanoramaUrl;
     previousPanoramaUrlRef.current = trimmedPanoramaUrl;
 
@@ -220,7 +255,7 @@ function PanoramaViewer({
     if (trimmedPanoramaUrl === '') {
       renderedHotspotIdsRef.current.clear();
       setIsPanoramaLoading(false);
-      setErrorMessage('No panorama URL set for this scene. Add one in Active Scene Details.');
+      setErrorMessage(null);
       return;
     }
 
@@ -696,9 +731,15 @@ function PanoramaViewer({
           aria-label="Panorama viewer"
         />
         {overlayContent ? <div className="panorama-overlay-slot">{overlayContent}</div> : null}
-        {isPreviewMode && showPreviewEntryRipple ? <div className="preview-entry-ripple" aria-hidden="true" /> : null}
-        {isPreviewMode && isPanoramaLoading ? <div className="preview-scene-transition-veil" aria-hidden="true" /> : null}
-        {isPanoramaLoading ? (
+        {isPreviewMode && showPreviewEntryRipple ? (
+          <div className="preview-entry-ripple" aria-hidden="true">
+            <div className="preview-entry-ripple-core" />
+            <div className="preview-entry-ripple-rings" />
+            <div className="preview-entry-ripple-sheen" />
+          </div>
+        ) : null}
+        {isPreviewMode && isLoadingOverlayVisible ? <div className="preview-scene-transition-veil" aria-hidden="true" /> : null}
+        {isLoadingOverlayVisible ? (
           <div className="panorama-loading-overlay" role="status" aria-live="polite">
             <div className="panorama-loading-core">
               <div className="panorama-loading-sky">
@@ -713,12 +754,14 @@ function PanoramaViewer({
             </div>
           </div>
         ) : null}
-        {errorMessage ? (
-          <div className="viewer-fallback-overlay" role="status" aria-live="polite">
-            <p className="error-note">{errorMessage}</p>
-            <p className="placeholder-note">
-              Set a valid panorama URL/path in the active scene to continue editing in the viewer.
-            </p>
+        {!hasPanorama || errorMessage ? (
+          <div className="viewer-fallback-overlay viewer-fallback-overlay-empty" role="status" aria-live="polite">
+            <div className="viewer-empty-ripple" aria-hidden="true">
+              <div className="viewer-empty-ripple-core" />
+              <div className="viewer-empty-ripple-rings" />
+              <div className="viewer-empty-ripple-sheen" />
+            </div>
+            <p className="viewer-empty-message">Select or upload a scene</p>
           </div>
         ) : null}
         {!isPreviewMode && editorPopoverContent ? (

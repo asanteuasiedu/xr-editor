@@ -1217,44 +1217,60 @@ select {
 .preview-entry-ripple {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: 4;
   pointer-events: none;
   overflow: hidden;
+  background:
+    radial-gradient(circle at center, rgba(214, 239, 255, 0.12), rgba(214, 239, 255, 0.03) 11%, rgba(7, 12, 24, 0) 24%),
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 32%);
 }
 
-.preview-entry-ripple::before,
-.preview-entry-ripple::after {
-  content: '';
+.preview-entry-ripple-core,
+.preview-entry-ripple-rings,
+.preview-entry-ripple-sheen {
   position: absolute;
   left: 50%;
   top: 50%;
   border-radius: 999px;
   transform: translate(-50%, -50%) scale(0.12);
-  will-change: transform, opacity, box-shadow, backdrop-filter;
+  will-change: transform, opacity, box-shadow, filter;
 }
 
-.preview-entry-ripple::before {
-  width: min(22vw, 240px);
-  height: min(22vw, 240px);
+.preview-entry-ripple-core {
+  width: min(24vw, 260px);
+  height: min(24vw, 260px);
   background:
-    radial-gradient(circle at center, rgba(255, 255, 255, 0.72), rgba(212, 243, 255, 0.34) 24%, rgba(171, 227, 255, 0.12) 44%, rgba(171, 227, 255, 0.03) 62%, transparent 76%);
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.78), rgba(223, 245, 255, 0.44) 20%, rgba(189, 233, 255, 0.22) 34%, rgba(149, 216, 255, 0.08) 48%, rgba(149, 216, 255, 0.02) 62%, transparent 76%);
   box-shadow:
-    0 0 0 1px rgba(232, 247, 255, 0.46),
-    0 0 44px rgba(155, 226, 255, 0.34),
-    0 0 74px rgba(124, 108, 255, 0.12);
-  backdrop-filter: blur(2px);
+    0 0 0 1px rgba(232, 247, 255, 0.52),
+    0 0 46px rgba(155, 226, 255, 0.42),
+    0 0 88px rgba(124, 108, 255, 0.16);
   animation: preview-entry-drop 1120ms cubic-bezier(0.18, 0.75, 0.16, 1) forwards;
 }
 
-.preview-entry-ripple::after {
-  width: min(42vw, 440px);
-  height: min(42vw, 440px);
-  border: 1.5px solid rgba(224, 244, 255, 0.48);
-  box-shadow:
-    0 0 0 1px rgba(124, 108, 255, 0.12),
-    0 0 28px rgba(176, 228, 255, 0.2),
-    inset 0 0 34px rgba(158, 220, 255, 0.1);
-  animation: preview-entry-ring 1120ms cubic-bezier(0.16, 0.72, 0.18, 1) forwards;
+.preview-entry-ripple-rings {
+  width: min(70vw, 900px);
+  height: min(70vw, 900px);
+  background:
+    radial-gradient(circle at center, transparent 0 10%, rgba(255, 255, 255, 0.34) 11.4%, rgba(255, 255, 255, 0.06) 13.4%, transparent 16%),
+    radial-gradient(circle at center, transparent 0 22%, rgba(210, 239, 255, 0.28) 23.3%, rgba(210, 239, 255, 0.06) 25.2%, transparent 28.5%),
+    radial-gradient(circle at center, transparent 0 35%, rgba(183, 227, 255, 0.24) 36.4%, rgba(183, 227, 255, 0.05) 38.4%, transparent 41.4%),
+    radial-gradient(circle at center, transparent 0 50%, rgba(144, 208, 255, 0.18) 51.2%, rgba(144, 208, 255, 0.04) 53%, transparent 56%);
+  filter: blur(1.4px);
+  opacity: 0;
+  animation: preview-entry-ring 1240ms cubic-bezier(0.16, 0.72, 0.18, 1) forwards;
+}
+
+.preview-entry-ripple-sheen {
+  width: min(48vw, 560px);
+  height: min(48vw, 560px);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03) 34%, rgba(255, 255, 255, 0) 58%),
+    radial-gradient(circle at 44% 46%, rgba(224, 246, 255, 0.18), rgba(224, 246, 255, 0) 26%);
+  mix-blend-mode: screen;
+  filter: blur(8px);
+  opacity: 0;
+  animation: preview-entry-sheen 1160ms ease-out forwards;
 }
 
 .pannellum-container .pnlm-load-box,
@@ -1591,6 +1607,79 @@ select {
   justify-content: center;
   gap: 8px;
   z-index: 3;
+}
+
+.viewer-fallback-overlay-empty {
+  border: 0;
+  background:
+    radial-gradient(circle at center, rgba(198, 226, 255, 0.24), rgba(198, 226, 255, 0) 34%),
+    linear-gradient(180deg, #ffffff, #f8fbff);
+  align-items: center;
+  text-align: center;
+  overflow: hidden;
+}
+
+.viewer-empty-ripple {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.viewer-empty-ripple-core,
+.viewer-empty-ripple-rings,
+.viewer-empty-ripple-sheen {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+}
+
+.viewer-empty-ripple-core {
+  width: min(24vw, 220px);
+  height: min(24vw, 220px);
+  background:
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.92), rgba(219, 241, 255, 0.6) 24%, rgba(177, 224, 255, 0.18) 44%, rgba(177, 224, 255, 0.02) 62%, transparent 76%);
+  box-shadow:
+    0 0 0 1px rgba(210, 234, 255, 0.58),
+    0 0 34px rgba(170, 217, 255, 0.34),
+    0 0 76px rgba(138, 119, 255, 0.12);
+  animation: viewer-empty-ripple-core 6.2s ease-in-out infinite;
+}
+
+.viewer-empty-ripple-rings {
+  width: min(72vw, 780px);
+  height: min(72vw, 780px);
+  background:
+    radial-gradient(circle at center, transparent 0 10%, rgba(255, 255, 255, 0.42) 11.2%, rgba(255, 255, 255, 0.08) 13.2%, transparent 16.4%),
+    radial-gradient(circle at center, transparent 0 22%, rgba(211, 236, 255, 0.34) 23.1%, rgba(211, 236, 255, 0.08) 25.2%, transparent 28.2%),
+    radial-gradient(circle at center, transparent 0 35%, rgba(181, 222, 255, 0.26) 36.1%, rgba(181, 222, 255, 0.06) 38.2%, transparent 41.4%),
+    radial-gradient(circle at center, transparent 0 50%, rgba(152, 204, 255, 0.18) 51%, rgba(152, 204, 255, 0.04) 52.9%, transparent 56%);
+  filter: blur(1.3px);
+  animation: viewer-empty-ripple-rings 6.2s ease-in-out infinite;
+}
+
+.viewer-empty-ripple-sheen {
+  width: min(52vw, 520px);
+  height: min(52vw, 520px);
+  background:
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.05) 36%, rgba(255, 255, 255, 0) 60%),
+    radial-gradient(circle at 46% 46%, rgba(219, 242, 255, 0.24), rgba(219, 242, 255, 0) 28%);
+  mix-blend-mode: screen;
+  filter: blur(10px);
+  animation: viewer-empty-ripple-sheen 6.2s ease-in-out infinite;
+}
+
+.viewer-empty-message {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  color: #24324d;
+  font-size: clamp(1rem, 1rem + 0.3vw, 1.2rem);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.58);
 }
 
 .error-note {
@@ -2674,39 +2763,108 @@ select {
     transform: translate(-50%, -50%) scale(0.06);
     filter: blur(0px);
   }
-  16% {
+  14% {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(0.22);
+    transform: translate(-50%, -50%) scale(0.2);
     filter: blur(0.15px);
   }
-  38% {
-    opacity: 0.68;
-    transform: translate(-50%, -50%) scale(1.38);
+  34% {
+    opacity: 0.72;
+    transform: translate(-50%, -50%) scale(1.22);
     filter: blur(0.8px);
   }
   100% {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(2.8);
-    filter: blur(1.6px);
+    transform: translate(-50%, -50%) scale(2.35);
+    filter: blur(1.8px);
   }
 }
 
 @keyframes preview-entry-ring {
   0% {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(0.1);
+    transform: translate(-50%, -50%) scale(0.16);
   }
-  14% {
-    opacity: 0.34;
-    transform: translate(-50%, -50%) scale(0.2);
+  18% {
+    opacity: 0.9;
+    transform: translate(-50%, -50%) scale(0.24);
   }
-  52% {
-    opacity: 0.3;
-    transform: translate(-50%, -50%) scale(1.24);
+  56% {
+    opacity: 0.54;
+    transform: translate(-50%, -50%) scale(0.96);
   }
   100% {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(2.24);
+    transform: translate(-50%, -50%) scale(1.48);
+  }
+}
+
+@keyframes preview-entry-sheen {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.22);
+  }
+  20% {
+    opacity: 0.44;
+    transform: translate(-50%, -50%) scale(0.38);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.34);
+  }
+}
+
+@keyframes viewer-empty-ripple-core {
+  0%,
+  100% {
+    opacity: 0.56;
+    transform: translate(-50%, -50%) scale(0.94);
+    filter: blur(0px);
+  }
+  22% {
+    opacity: 0.94;
+    transform: translate(-50%, -50%) scale(1.02);
+    filter: blur(0.2px);
+  }
+  58% {
+    opacity: 0.72;
+    transform: translate(-50%, -50%) scale(1.1);
+    filter: blur(0.8px);
+  }
+}
+
+@keyframes viewer-empty-ripple-rings {
+  0% {
+    opacity: 0.12;
+    transform: translate(-50%, -50%) scale(0.7);
+  }
+  18% {
+    opacity: 0.76;
+    transform: translate(-50%, -50%) scale(0.88);
+  }
+  54% {
+    opacity: 0.38;
+    transform: translate(-50%, -50%) scale(1.04);
+  }
+  100% {
+    opacity: 0.14;
+    transform: translate(-50%, -50%) scale(1.14);
+  }
+}
+
+@keyframes viewer-empty-ripple-sheen {
+  0%,
+  100% {
+    opacity: 0.18;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+  28% {
+    opacity: 0.52;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  64% {
+    opacity: 0.24;
+    transform: translate(-50%, -50%) scale(1.1);
   }
 }
 
