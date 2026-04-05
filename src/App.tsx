@@ -286,6 +286,16 @@ function App() {
   );
   const activeWalkthroughStep = walkthroughStepIndex === null ? null : EDIT_WALKTHROUGH_STEPS[walkthroughStepIndex];
 
+  useEffect(() => {
+    if (appMode !== 'edit' || !activeWalkthroughStep) {
+      return;
+    }
+
+    setActiveEditSection(activeWalkthroughStep.id);
+    setIsContextPanelOpen(true);
+    setSelectedHotspotId(null);
+  }, [activeWalkthroughStep, appMode]);
+
   const sceneNameById = useMemo(
     () => Object.fromEntries(project.scenes.map((scene) => [scene.id, scene.name || 'Untitled Scene'])),
     [project.scenes]
