@@ -1,4 +1,5 @@
 import type { Hotspot, Project, Scene } from '../types/project';
+import { getDefaultZoneMetadata } from '../types/project';
 import { STARTER_SCENE_PANORAMA_URL } from './sceneLibrary';
 
 export type ProjectTemplateId = 'blankTour' | 'museumExhibit' | 'lessonModule' | 'photoStory';
@@ -40,6 +41,7 @@ function createScene(name: string, panoramaUrl = ''): Scene {
   return {
     id: makeId('scene'),
     name,
+    mediaType: 'image',
     panoramaUrl,
     hotspots: []
   };
@@ -49,6 +51,7 @@ function createInfoHotspot(title: string, body: string, yaw: number, pitch: numb
   return {
     id: makeId('hotspot'),
     type: 'info',
+    ...getDefaultZoneMetadata('info'),
     title,
     body,
     yaw,
@@ -67,6 +70,7 @@ export function createProjectFromTemplate(templateId: ProjectTemplateId): Projec
       {
         id: makeId('hotspot'),
         type: 'sceneLink',
+        ...getDefaultZoneMetadata('sceneLink'),
         title: 'Enter Gallery',
         body: 'Continue to the featured gallery scene.',
         yaw: 24,
@@ -80,6 +84,7 @@ export function createProjectFromTemplate(templateId: ProjectTemplateId): Projec
       {
         id: makeId('hotspot'),
         type: 'sceneLink',
+        ...getDefaultZoneMetadata('sceneLink'),
         title: 'Back to Lobby',
         body: 'Return to the lobby scene.',
         yaw: -34,
@@ -94,6 +99,9 @@ export function createProjectFromTemplate(templateId: ProjectTemplateId): Projec
       name: 'Museum Exhibit Tour',
       description: 'A starter museum walkthrough with two connected scenes.',
       authorOrOrganization: 'Museum Team',
+      projectObjective: 'Guide learners through a connected exhibit and prompt close observation of featured artifacts.',
+      targetAgeOrGradeBand: 'General learners',
+      subjectOrDomain: 'Museum education',
       scenes: [lobby, gallery],
       activeSceneId: lobby.id
     };
@@ -106,6 +114,7 @@ export function createProjectFromTemplate(templateId: ProjectTemplateId): Projec
       {
         id: makeId('hotspot'),
         type: 'externalLink',
+        ...getDefaultZoneMetadata('externalLink'),
         title: 'Reference Material',
         body: 'Open supporting content for students.',
         yaw: -18,
@@ -119,6 +128,9 @@ export function createProjectFromTemplate(templateId: ProjectTemplateId): Projec
       name: 'Lesson Module Starter',
       description: 'A teaching-oriented starter scene with sample insights.',
       authorOrOrganization: 'Instructor',
+      projectObjective: 'Introduce a topic through an immersive scene with supporting prompts and resources.',
+      targetAgeOrGradeBand: 'Grade 6-12',
+      subjectOrDomain: 'Interdisciplinary lesson',
       scenes: [lessonScene],
       activeSceneId: lessonScene.id
     };
@@ -133,6 +145,7 @@ export function createProjectFromTemplate(templateId: ProjectTemplateId): Projec
       {
         id: makeId('hotspot'),
         type: 'sceneLink',
+        ...getDefaultZoneMetadata('sceneLink'),
         title: 'Continue Story',
         body: 'Move to the next story scene.',
         yaw: 16,
@@ -145,6 +158,7 @@ export function createProjectFromTemplate(templateId: ProjectTemplateId): Projec
       {
         id: makeId('hotspot'),
         type: 'sceneLink',
+        ...getDefaultZoneMetadata('sceneLink'),
         title: 'Final Scene',
         body: 'Go to the closing scene.',
         yaw: 21,
@@ -158,6 +172,7 @@ export function createProjectFromTemplate(templateId: ProjectTemplateId): Projec
       {
         id: makeId('hotspot'),
         type: 'sceneLink',
+        ...getDefaultZoneMetadata('sceneLink'),
         title: 'Restart Story',
         body: 'Return to the opening scene.',
         yaw: -30,
@@ -171,6 +186,9 @@ export function createProjectFromTemplate(templateId: ProjectTemplateId): Projec
       name: 'Photo Story Starter',
       description: 'A simple three-scene story arc template.',
       authorOrOrganization: 'Story Team',
+      projectObjective: 'Structure a visual story path that asks learners to notice sequence, setting, and perspective.',
+      targetAgeOrGradeBand: 'General learners',
+      subjectOrDomain: 'Storytelling',
       scenes: [opening, mid, ending],
       activeSceneId: opening.id
     };
@@ -182,6 +200,9 @@ export function createProjectFromTemplate(templateId: ProjectTemplateId): Projec
     name: 'Blank Tour',
     description: 'Start with a starry scene, then upload or swap in your own panorama.',
     authorOrOrganization: '',
+    projectObjective: '',
+    targetAgeOrGradeBand: '',
+    subjectOrDomain: '',
     scenes: [blankScene],
     activeSceneId: blankScene.id
   };

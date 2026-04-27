@@ -280,7 +280,7 @@ function createPresentationHtml(project: Project, jsonFileName: string) {
         document.getElementById('project-title').textContent = project.name || 'Untitled Project';
         document.getElementById('scene-name').textContent = scene.name || 'Untitled Scene';
         document.getElementById('scene-count').textContent = project.scenes.length + ' scene(s)';
-        document.getElementById('project-description').textContent = project.description || '';
+        document.getElementById('project-description').textContent = project.projectObjective || project.description || '';
       }
 
       function normalizeExternalLink(rawUrl) {
@@ -357,6 +357,17 @@ function createPresentationHtml(project: Project, jsonFileName: string) {
         });
       }
 
+      function buildViewerConfig(scene) {
+        return {
+          type: 'equirectangular',
+          panorama: scene.panoramaUrl,
+          autoLoad: true,
+          showZoomCtrl: true,
+          showFullscreenCtrl: false,
+          hotSpots: []
+        };
+      }
+
       function renderScene(sceneId) {
         const scene = getSceneById(sceneId);
         activeSceneId = scene.id;
@@ -364,27 +375,13 @@ function createPresentationHtml(project: Project, jsonFileName: string) {
         hideStatus();
 
         if (!viewer) {
-          viewer = window.pannellum.viewer(viewerContainer, {
-            type: 'equirectangular',
-            panorama: scene.panoramaUrl,
-            autoLoad: true,
-            showZoomCtrl: true,
-            showFullscreenCtrl: false,
-            hotSpots: []
-          });
+          viewer = window.pannellum.viewer(viewerContainer, buildViewerConfig(scene));
           syncHotspots(scene);
           return;
         }
 
         viewer.destroy();
-        viewer = window.pannellum.viewer(viewerContainer, {
-          type: 'equirectangular',
-          panorama: scene.panoramaUrl,
-          autoLoad: true,
-          showZoomCtrl: true,
-          showFullscreenCtrl: false,
-          hotSpots: []
-        });
+        viewer = window.pannellum.viewer(viewerContainer, buildViewerConfig(scene));
         syncHotspots(scene);
       }
 

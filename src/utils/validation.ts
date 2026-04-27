@@ -1,4 +1,16 @@
-import type { Hotspot, Project, Scene } from '../types/project';
+import type {
+  FeedbackRewardState,
+  Hotspot,
+  HotspotType,
+  Project,
+  Scene,
+  ZoneCompletionLogic,
+  ZoneDifficulty,
+  ZoneIntent,
+  ZoneInteractionType,
+  ZoneType
+} from '../types/project';
+import { getDefaultZoneMetadata } from '../types/project';
 
 type ValidationResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -12,6 +24,90 @@ function isNumber(value: unknown): value is number {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim() !== '';
+}
+
+function isOptionalString(value: unknown) {
+  return value === undefined || typeof value === 'string';
+}
+
+const zoneTypes: ZoneType[] = ['information', 'media', 'question', 'navigation', 'externalResource'];
+const zoneIntents: ZoneIntent[] = ['observe', 'reflect', 'identify', 'compare', 'answer', 'discover', 'navigate'];
+const zoneDifficulties: ZoneDifficulty[] = ['introductory', 'developing', 'challenging'];
+const zoneInteractionTypes: ZoneInteractionType[] = [
+  'read',
+  'viewImage',
+  'answerQuestion',
+  'navigateScene',
+  'openExternalResource'
+];
+const zoneCompletionLogicValues: ZoneCompletionLogic[] = [
+  'viewed',
+  'answered',
+  'answeredCorrectly',
+  'opened',
+  'navigated'
+];
+const rewardTypes: FeedbackRewardState['rewardType'][] = ['none', 'acknowledgement', 'points', 'badge'];
+
+function isOneOf<T extends string>(value: unknown, options: readonly T[]): value is T {
+  return typeof value === 'string' && options.includes(value as T);
+}
+
+function validateFeedbackRewardState(
+  value: unknown,
+  fallback: FeedbackRewardState,
+  sceneIndex: number,
+  hotspotIndex: number
+): ValidationResult<FeedbackRewardState> {
+  if (value === undefined) {
+    return { ok: true, value: fallback };
+  }
+
+  if (!isObject(value)) {
+    return {
+      ok: false,
+      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: feedbackRewardState must be an object if provided.`
+    };
+  }
+
+  const rewardType = value.rewardType === undefined ? fallback.rewardType : value.rewardType;
+  if (!isOneOf(rewardType, rewardTypes)) {
+    return {
+      ok: false,
+      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: feedbackRewardState.rewardType must be none, acknowledgement, points, or badge.`
+    };
+  }
+
+  if (value.message !== undefined && typeof value.message !== 'string') {
+    return {
+      ok: false,
+      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: feedbackRewardState.message must be a string if provided.`
+    };
+  }
+
+  if (value.points !== undefined && (!Number.isInteger(value.points) || Number(value.points) < 0)) {
+    return {
+      ok: false,
+      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: feedbackRewardState.points must be a non-negative integer if provided.`
+    };
+  }
+
+  if (value.badgeId !== undefined && !isNonEmptyString(value.badgeId)) {
+    return {
+      ok: false,
+      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: feedbackRewardState.badgeId must be a non-empty string if provided.`
+    };
+  }
+
+  return {
+    ok: true,
+    value: {
+      rewardType,
+      message: typeof value.message === 'string' ? value.message : fallback.message,
+      points: typeof value.points === 'number' ? value.points : fallback.points,
+      badgeId: typeof value.badgeId === 'string' ? value.badgeId : fallback.badgeId
+    }
+  };
 }
 
 function validateHotspot(value: unknown, sceneIndex: number, hotspotIndex: number): ValidationResult<Hotspot> {
@@ -38,7 +134,7 @@ function validateHotspot(value: unknown, sceneIndex: number, hotspotIndex: numbe
     };
   }
 
-  const type = value.type === undefined ? 'info' : value.type;
+  const type = (value.type === undefined ? 'info' : value.type) as HotspotType;
   if (
     type !== 'info' &&
     type !== 'sceneLink' &&
@@ -181,12 +277,73 @@ function validateHotspot(value: unknown, sceneIndex: number, hotspotIndex: numbe
   const validatedAnswerOptions = Array.isArray(answerOptions) ? [...answerOptions] : undefined;
   const validatedCorrectAnswerIndex =
     typeof correctAnswerIndex === 'number' ? correctAnswerIndex : undefined;
+  const defaultZoneMetadata = getDefaultZoneMetadata(type);
+
+  if (value.zoneType !== undefined && !isOneOf(value.zoneType, zoneTypes)) {
+    return {
+      ok: false,
+      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: zoneType must be information, media, question, navigation, or externalResource.`
+    };
+  }
+
+  if (value.zoneIntent !== undefined && !isOneOf(value.zoneIntent, zoneIntents)) {
+    return {
+      ok: false,
+      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: zoneIntent must be observe, reflect, identify, compare, answer, discover, or navigate.`
+    };
+  }
+
+  if (value.difficulty !== undefined && !isOneOf(value.difficulty, zoneDifficulties)) {
+    return {
+      ok: false,
+      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: difficulty must be introductory, developing, or challenging.`
+    };
+  }
+
+  if (value.interactionType !== undefined && !isOneOf(value.interactionType, zoneInteractionTypes)) {
+    return {
+      ok: false,
+      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: interactionType must be read, viewImage, answerQuestion, navigateScene, or openExternalResource.`
+    };
+  }
+
+  if (value.completionLogic !== undefined && !isOneOf(value.completionLogic, zoneCompletionLogicValues)) {
+    return {
+      ok: false,
+      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: completionLogic must be viewed, answered, answeredCorrectly, opened, or navigated.`
+    };
+  }
+
+  const checkedFeedbackRewardState = validateFeedbackRewardState(
+    value.feedbackRewardState,
+    defaultZoneMetadata.feedbackRewardState,
+    sceneIndex,
+    hotspotIndex
+  );
+  if (!checkedFeedbackRewardState.ok) {
+    return checkedFeedbackRewardState;
+  }
+  const zoneType = isOneOf(value.zoneType, zoneTypes) ? value.zoneType : defaultZoneMetadata.zoneType;
+  const zoneIntent = isOneOf(value.zoneIntent, zoneIntents) ? value.zoneIntent : defaultZoneMetadata.zoneIntent;
+  const difficulty = isOneOf(value.difficulty, zoneDifficulties) ? value.difficulty : defaultZoneMetadata.difficulty;
+  const interactionType = isOneOf(value.interactionType, zoneInteractionTypes)
+    ? value.interactionType
+    : defaultZoneMetadata.interactionType;
+  const completionLogic = isOneOf(value.completionLogic, zoneCompletionLogicValues)
+    ? value.completionLogic
+    : defaultZoneMetadata.completionLogic;
 
   return {
     ok: true,
     value: {
       id: value.id,
       type,
+      zoneType,
+      zoneIntent,
+      difficulty,
+      interactionType,
+      completionLogic,
+      feedbackRewardState: checkedFeedbackRewardState.value,
       title: value.title,
       body: value.body,
       yaw: value.yaw,
@@ -215,9 +372,12 @@ function validateScene(value: unknown, sceneIndex: number): ValidationResult<Sce
     return { ok: false, error: `Scene ${sceneIndex + 1}: missing name.` };
   }
 
-  // Panorama URL can be a path, http(s) URL, or embedded data URL.
-  if (!isNonEmptyString(value.panoramaUrl)) {
-    return { ok: false, error: `Scene ${sceneIndex + 1}: missing panoramaUrl.` };
+  if (typeof value.panoramaUrl !== 'string') {
+    return { ok: false, error: `Scene ${sceneIndex + 1}: panoramaUrl must be a string.` };
+  }
+
+  if (value.mediaType !== undefined && value.mediaType !== 'image') {
+    return { ok: false, error: `Scene ${sceneIndex + 1}: mediaType must be image.` };
   }
 
   if (!Array.isArray(value.hotspots)) {
@@ -238,6 +398,7 @@ function validateScene(value: unknown, sceneIndex: number): ValidationResult<Sce
     value: {
       id: value.id,
       name: value.name,
+      mediaType: 'image',
       panoramaUrl: value.panoramaUrl,
       hotspots
     }
@@ -263,6 +424,18 @@ export function validateProjectData(value: unknown): ValidationResult<Project> {
 
   if (value.authorOrOrganization !== undefined && typeof value.authorOrOrganization !== 'string') {
     return { ok: false, error: 'Project authorOrOrganization must be a string if provided.' };
+  }
+
+  if (!isOptionalString(value.projectObjective)) {
+    return { ok: false, error: 'Project projectObjective must be a string if provided.' };
+  }
+
+  if (!isOptionalString(value.targetAgeOrGradeBand)) {
+    return { ok: false, error: 'Project targetAgeOrGradeBand must be a string if provided.' };
+  }
+
+  if (!isOptionalString(value.subjectOrDomain)) {
+    return { ok: false, error: 'Project subjectOrDomain must be a string if provided.' };
   }
 
   if (typeof value.activeSceneId !== 'string' || value.activeSceneId.trim() === '') {
@@ -320,6 +493,15 @@ export function validateProjectData(value: unknown): ValidationResult<Project> {
       name: value.name,
       description: value.description,
       authorOrOrganization: value.authorOrOrganization,
+      projectObjective:
+        typeof value.projectObjective === 'string'
+          ? value.projectObjective
+          : typeof value.description === 'string'
+            ? value.description
+            : '',
+      targetAgeOrGradeBand:
+        typeof value.targetAgeOrGradeBand === 'string' ? value.targetAgeOrGradeBand : '',
+      subjectOrDomain: typeof value.subjectOrDomain === 'string' ? value.subjectOrDomain : '',
       scenes,
       activeSceneId: value.activeSceneId
     }

@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import type { ChangeEvent } from 'react';
 import type { Hotspot, HotspotType, Scene } from '../types/project';
+import { getDefaultZoneMetadata } from '../types/project';
 
 type HotspotEditorProps = {
   hotspot?: Hotspot;
@@ -94,6 +95,7 @@ function HotspotEditor({
         : ['Option 1', 'Option 2'];
     onUpdateHotspot(hotspot.id, {
       type: nextType,
+      ...getDefaultZoneMetadata(nextType),
       targetSceneId: nextType === 'sceneLink' ? hotspot.targetSceneId : undefined,
       url: nextType === 'externalLink' ? hotspot.url : undefined,
       imageUrl: nextType === 'image' ? hotspot.imageUrl : undefined,

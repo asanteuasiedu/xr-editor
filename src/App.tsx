@@ -5,6 +5,7 @@ import Sidebar, { type EditSection } from './components/Sidebar';
 import HotspotEditor from './components/HotspotEditor';
 import PanoramaViewer from './components/PanoramaViewer';
 import type { Hotspot, Project } from './types/project';
+import { getDefaultZoneMetadata } from './types/project';
 import { exportProjectToJson, importProjectFromFile } from './utils/exportImport';
 import { imageFileToDataUrl } from './utils/fileAssets';
 import { clearLocalDraft, loadLocalDraft, saveLocalDraft } from './utils/localDraft';
@@ -28,6 +29,16 @@ type QuestionResponse = {
 type RevealOrigin = {
   x: number;
   y: number;
+};
+type Generate360SceneApiResponse = {
+  imageDataUrl?: string;
+  revisedPrompt?: string;
+  error?: string;
+  message?: string;
+};
+type Generate360SceneResult = {
+  imageDataUrl: string;
+  revisedPrompt?: string;
 };
 const PREVIEW_HINT_DISMISSED_KEY = 'xr-editor.preview-hint-dismissed.v1';
 const EDIT_WALKTHROUGH_DISMISSED_KEY = 'xr-editor.edit-walkthrough-dismissed.v1';
@@ -175,6 +186,35 @@ function getMultipleChoiceConfig(hotspot: Hotspot) {
 function deriveSceneNameFromFile(file: File, fallbackName: string) {
   const trimmedName = file.name.replace(/\.[^.]+$/, '').trim();
   return trimmedName || fallbackName;
+}
+
+async function requestGenerated360Scene(prompt: string): Promise<Generate360SceneResult> {
+  const response = await fetch('/api/generate-360-scene', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ prompt })
+  });
+
+  const data = (await response.json().catch(() => ({}))) as Generate360SceneApiResponse;
+
+  if (!response.ok) {
+    const fallbackMessage =
+      response.status === 404
+        ? 'Scene generation is not available in this environment yet.'
+        : 'Scene generation could not finish. Try again.';
+    throw new Error(data.error ?? data.message ?? fallbackMessage);
+  }
+
+  if (!data.imageDataUrl || !data.imageDataUrl.startsWith('data:image/')) {
+    throw new Error('Scene generation finished without a usable image. Try again.');
+  }
+
+  return {
+    imageDataUrl: data.imageDataUrl,
+    revisedPrompt: data.revisedPrompt
+  };
 }
 
 function getScreenSpaceMarkerPosition(hotspot: Hotspot, index: number) {
@@ -442,7 +482,12 @@ function App() {
   }, []);
 
   const handleUpdateProjectMetadata = (
-    patch: Partial<Pick<Project, 'name' | 'description' | 'authorOrOrganization'>>
+    patch: Partial<
+      Pick<
+        Project,
+        'name' | 'description' | 'authorOrOrganization' | 'projectObjective' | 'targetAgeOrGradeBand' | 'subjectOrDomain'
+      >
+    >
   ) => {
     setProject((currentProject) => ({
       ...currentProject,
@@ -493,6 +538,7 @@ function App() {
         {
           id: newSceneId,
           name: `Scene ${newSceneNumber}`,
+          mediaType: 'image',
           panoramaUrl: DEFAULT_PANORAMA_URL,
           hotspots: []
         }
@@ -516,13 +562,14 @@ function App() {
     }));
   };
 
-  const handleUpdateActiveScenePanorama = (panoramaUrl: string) => {
+  const handleUpdateActiveSceneMedia = (panoramaUrl: string) => {
     setProject((currentProject) => ({
       ...currentProject,
       scenes: currentProject.scenes.map((scene) =>
         scene.id === currentProject.activeSceneId
           ? {
               ...scene,
+              mediaType: 'image',
               panoramaUrl
             }
           : scene
@@ -532,7 +579,7 @@ function App() {
     setIsContextPanelOpen(true);
   };
 
-  const handleCreateSceneFromPanorama = (panoramaUrl: string, sceneName?: string) => {
+  const handleCreateSceneFromMedia = (panoramaUrl: string, sceneName?: string) => {
     const newSceneId = `scene-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const fallbackSceneName = `Scene ${project.scenes.length + 1}`;
 
@@ -544,6 +591,7 @@ function App() {
         {
           id: newSceneId,
           name: sceneName?.trim() || fallbackSceneName,
+          mediaType: 'image',
           panoramaUrl,
           hotspots: []
         }
@@ -633,6 +681,7 @@ function App() {
       const nextHotspot: Hotspot = {
         id: hotspotId,
         type: 'info',
+        ...getDefaultZoneMetadata('info'),
         title: 'New Insight Zone',
         body: 'Add description here',
         yaw: Number(yaw.toFixed(2)),
@@ -1032,7 +1081,7 @@ function App() {
     setArPreviewSelectedHotspotId(null);
   }, []);
 
-  const handleUploadScenePanorama = async (file: File) => {
+  const handleUploadSceneMedia = async (file: File) => {
     const result = await imageFileToDataUrl(file);
     if (!result.ok) {
       setImportError(result.error);
@@ -1041,7 +1090,41 @@ function App() {
 
     setImportError(null);
     setNoticeMessage(result.warning ?? null);
-    handleUpdateActiveScenePanorama(result.dataUrl);
+    handleUpdateActiveSceneMedia(result.dataUrl);
+  };
+
+  const handleGenerateSceneFromPrompt = async (prompt: string) => {
+    const targetSceneId = project.activeSceneId;
+    const result = await requestGenerated360Scene(prompt);
+
+    setImportError(null);
+    setProject((currentProject) => {
+      const hasTargetScene = currentProject.scenes.some((scene) => scene.id === targetSceneId);
+      if (!hasTargetScene) {
+        return currentProject;
+      }
+
+      return {
+        ...currentProject,
+        activeSceneId: targetSceneId,
+        scenes: currentProject.scenes.map((scene) =>
+          scene.id === targetSceneId
+            ? {
+                ...scene,
+                mediaType: 'image',
+                panoramaUrl: result.imageDataUrl
+              }
+            : scene
+        )
+      };
+    });
+    setActiveEditSection('sceneDetails');
+    setIsContextPanelOpen(true);
+    showTemporaryNotice('360 scene generated');
+
+    return {
+      revisedPrompt: result.revisedPrompt
+    };
   };
 
   const handleCreateSceneFromImageFile = async (file: File) => {
@@ -1053,7 +1136,10 @@ function App() {
 
     setImportError(null);
     setNoticeMessage(result.warning ?? `Created a new scene from "${deriveSceneNameFromFile(file, 'Captured Scene')}".`);
-    handleCreateSceneFromPanorama(result.dataUrl, deriveSceneNameFromFile(file, `Scene ${project.scenes.length + 1}`));
+    handleCreateSceneFromMedia(
+      result.dataUrl,
+      deriveSceneNameFromFile(file, `Scene ${project.scenes.length + 1}`)
+    );
   };
 
   const handleUploadHotspotImage = async (hotspotId: string, file: File) => {
@@ -1149,7 +1235,7 @@ function App() {
   };
 
   const handleApplySceneLibraryItem = (panoramaUrl: string, label: string) => {
-    handleUpdateActiveScenePanorama(panoramaUrl);
+    handleUpdateActiveSceneMedia(panoramaUrl);
     setIsScenePickerOpen(false);
     setImportError(null);
     setNoticeMessage(`Applied "${label}" to ${activeScene.name || 'the active scene'}.`);
@@ -1375,7 +1461,8 @@ function App() {
               onUpdateProjectMetadata={handleUpdateProjectMetadata}
               onSelectScene={handleSelectScene}
               onRenameActiveScene={handleRenameActiveScene}
-              onUploadScenePanorama={handleUploadScenePanorama}
+              onUploadScenePanorama={handleUploadSceneMedia}
+              onGenerateSceneFromPrompt={handleGenerateSceneFromPrompt}
               onCreateSceneFromImageFile={handleCreateSceneFromImageFile}
               onDeleteScene={handleDeleteScene}
               onAddHotspot={handleStartPlacingHotspot}
@@ -1642,7 +1729,8 @@ function App() {
                       <div className="presentation-learning-card">
                         <p className="presentation-learning-kicker">Learning Goal</p>
                         <p className="presentation-description">
-                          {project.description?.trim() ||
+                          {project.projectObjective?.trim() ||
+                            project.description?.trim() ||
                             'Use this scene to guide discussion, observation, and reflection.'}
                         </p>
                       </div>

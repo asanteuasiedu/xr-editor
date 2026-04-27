@@ -1,5 +1,5 @@
-import { useRef } from 'react';
-import type { ChangeEvent } from 'react';
+import { useRef, useState } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
 import type { Hotspot, Project, Scene } from '../types/project';
 
 type ProjectStats = {
@@ -7,6 +7,10 @@ type ProjectStats = {
   totalHotspots: number;
   totalLinkedHotspots: number;
   activeSceneName: string;
+};
+type GeneratedSceneStatus = 'idle' | 'loading' | 'success' | 'error';
+type GeneratedSceneResult = {
+  revisedPrompt?: string;
 };
 
 export type EditSection = 'controls' | 'inspector' | 'scenes' | 'sceneDetails' | 'hotspots';
@@ -35,11 +39,17 @@ type SidebarProps = {
   onStartWalkthrough: () => void;
   onOpenScenePicker: () => void;
   onUpdateProjectMetadata: (
-    patch: Partial<Pick<Project, 'name' | 'description' | 'authorOrOrganization'>>
+    patch: Partial<
+      Pick<
+        Project,
+        'name' | 'description' | 'authorOrOrganization' | 'projectObjective' | 'targetAgeOrGradeBand' | 'subjectOrDomain'
+      >
+    >
   ) => void;
   onSelectScene: (sceneId: string) => void;
   onRenameActiveScene: (name: string) => void;
   onUploadScenePanorama: (file: File) => void | Promise<void>;
+  onGenerateSceneFromPrompt: (prompt: string) => Promise<GeneratedSceneResult>;
   onCreateSceneFromImageFile: (file: File) => void | Promise<void>;
   onDeleteScene: (sceneId: string) => void;
   onAddHotspot: () => void;
@@ -251,6 +261,7 @@ function Sidebar({
   onSelectScene,
   onRenameActiveScene,
   onUploadScenePanorama,
+  onGenerateSceneFromPrompt,
   onCreateSceneFromImageFile,
   onDeleteScene,
   onAddHotspot,
@@ -262,13 +273,26 @@ function Sidebar({
 }: SidebarProps) {
   const sceneUploadInputRef = useRef<HTMLInputElement | null>(null);
   const sceneCaptureCreateInputRef = useRef<HTMLInputElement | null>(null);
+  const [generateScenePrompt, setGenerateScenePrompt] = useState('');
+  const [generateSceneStatus, setGenerateSceneStatus] = useState<GeneratedSceneStatus>('idle');
+  const [generateSceneMessage, setGenerateSceneMessage] = useState<string | null>(null);
+  const isGeneratingScene = generateSceneStatus === 'loading';
+  const canGenerateScene = generateScenePrompt.trim().length > 0 && !isGeneratingScene;
 
   const onProjectNameChange = (event: ChangeEvent<HTMLInputElement>) => {
     onUpdateProjectMetadata({ name: event.target.value });
   };
 
-  const onProjectDescriptionChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
-    onUpdateProjectMetadata({ description: event.target.value });
+  const onProjectObjectiveChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    onUpdateProjectMetadata({ projectObjective: event.target.value });
+  };
+
+  const onProjectSubjectChange = (event: ChangeEvent<HTMLInputElement>) => {
+    onUpdateProjectMetadata({ subjectOrDomain: event.target.value });
+  };
+
+  const onProjectAgeBandChange = (event: ChangeEvent<HTMLInputElement>) => {
+    onUpdateProjectMetadata({ targetAgeOrGradeBand: event.target.value });
   };
 
   const onProjectAuthorChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -277,6 +301,45 @@ function Sidebar({
 
   const onSceneNameChange = (event: ChangeEvent<HTMLInputElement>) => {
     onRenameActiveScene(event.target.value);
+  };
+
+  const onGenerateScenePromptChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setGenerateScenePrompt(event.target.value);
+
+    if (generateSceneStatus !== 'loading') {
+      setGenerateSceneStatus('idle');
+      setGenerateSceneMessage(null);
+    }
+  };
+
+  const onGenerateSceneSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const trimmedPrompt = generateScenePrompt.trim();
+    if (!trimmedPrompt || isGeneratingScene) {
+      return;
+    }
+
+    setGenerateScenePrompt(trimmedPrompt);
+    setGenerateSceneStatus('loading');
+    setGenerateSceneMessage('Generating a panoramic learning scene...');
+
+    try {
+      const result = await onGenerateSceneFromPrompt(trimmedPrompt);
+      setGenerateSceneStatus('success');
+      setGenerateSceneMessage(
+        result.revisedPrompt?.trim()
+          ? '360 scene generated with a refined prompt.'
+          : '360 scene generated.'
+      );
+    } catch (error) {
+      setGenerateSceneStatus('error');
+      setGenerateSceneMessage(
+        error instanceof Error
+          ? error.message
+          : 'Scene generation could not finish. Try again.'
+      );
+    }
   };
 
   const openPanoramaUpload = () => {
@@ -373,12 +436,28 @@ function Sidebar({
         <input value={project.name} onChange={onProjectNameChange} placeholder="My XR Project" />
       </label>
       <label className="editor-field compact-field">
-        <span>Learning Goal</span>
+        <span>Project Objective</span>
         <textarea
-          value={project.description ?? ''}
-          onChange={onProjectDescriptionChange}
+          value={project.projectObjective ?? project.description ?? ''}
+          onChange={onProjectObjectiveChange}
           rows={3}
           placeholder="What should learners notice, discuss, or understand?"
+        />
+      </label>
+      <label className="editor-field compact-field">
+        <span>Subject / Domain</span>
+        <input
+          value={project.subjectOrDomain ?? ''}
+          onChange={onProjectSubjectChange}
+          placeholder="Science, history, career exploration..."
+        />
+      </label>
+      <label className="editor-field compact-field">
+        <span>Target Age / Grade Band</span>
+        <input
+          value={project.targetAgeOrGradeBand ?? ''}
+          onChange={onProjectAgeBandChange}
+          placeholder="Grade 6-8, adult learners..."
         />
       </label>
       <label className="editor-field compact-field">
@@ -446,11 +525,14 @@ function Sidebar({
               <button type="button" className="scene-select" onClick={() => onSelectScene(scene.id)}>
                 <span className="scene-thumb-wrap">
                   {hasPreview ? (
-                    <img
-                      src={scene.panoramaUrl}
-                      alt={scene.name || 'Scene preview'}
-                      className="scene-thumb"
-                    />
+                    <span className="scene-thumb-media-wrap">
+                      <img
+                        src={scene.panoramaUrl}
+                        alt={scene.name || 'Scene preview'}
+                        className="scene-thumb"
+                      />
+                      <span className="scene-thumb-media-badge">360 Image</span>
+                    </span>
                   ) : (
                     <span className="scene-thumb scene-thumb-fallback" aria-hidden="true">
                       <span className="scene-thumb-glyph">360</span>
@@ -462,7 +544,7 @@ function Sidebar({
                     <span className="scene-name">{scene.name || 'Untitled Scene'}</span>
                     {isSelected ? <span className="active-badge">Active</span> : null}
                   </span>
-                  <span className="hotspot-meta">{scene.hotspots.length} zone(s)</span>
+                  <span className="hotspot-meta">360 image · {scene.hotspots.length} zone(s)</span>
                 </span>
               </button>
               <button
@@ -508,6 +590,49 @@ function Sidebar({
         <span>Scene Name</span>
         <input value={activeScene.name} onChange={onSceneNameChange} placeholder="Scene name" />
       </label>
+      <div className="scene-media-status-card" role="status" aria-live="polite">
+        <div className="scene-media-status-header">
+          <span className="scene-media-badge scene-media-badge-image">360 Image</span>
+          <strong>Current Scene Media</strong>
+        </div>
+        <p className="scene-media-status-copy">
+          This scene is currently using a 360 image panorama.
+        </p>
+        <p className="helper-note">Upload Panorama accepts standard equirectangular 360 images.</p>
+      </div>
+      <div className="generate-scene-card">
+        <div className="generate-scene-heading">
+          <strong>Generate 360 Scene</strong>
+          <p className="helper-note">AI-generated scene will replace the current active scene image.</p>
+        </div>
+        <form className="generate-scene-form" onSubmit={onGenerateSceneSubmit}>
+          <input
+            className="generate-scene-input"
+            type="text"
+            value={generateScenePrompt}
+            onChange={onGenerateScenePromptChange}
+            placeholder="Describe a 360 learning environment..."
+            disabled={isGeneratingScene}
+            aria-label="Describe a 360 learning environment"
+          />
+          <button
+            type="submit"
+            className="ui-button ui-button-primary mini-button generate-scene-button"
+            disabled={!canGenerateScene}
+          >
+            {isGeneratingScene ? 'Generating...' : 'Generate'}
+          </button>
+        </form>
+        {generateSceneStatus !== 'idle' && generateSceneMessage ? (
+          <p
+            className={`generate-scene-status generate-scene-status-${generateSceneStatus}`}
+            role="status"
+            aria-live="polite"
+          >
+            {generateSceneMessage}
+          </p>
+        ) : null}
+      </div>
       <div className="scene-source-actions">
         <button
           type="button"
@@ -541,7 +666,7 @@ function Sidebar({
         </button>
       </div>
       <p className="helper-note">
-        Upload replaces the active scene panorama. Capture New Scene opens the device camera when supported and falls back to image selection elsewhere, creating a new local scene in the current workflow.
+        Upload replaces the active scene panorama with a 360 image. Capture New Scene opens the device camera when supported and falls back to image selection elsewhere, creating a new local scene in the current workflow.
       </p>
     </section>
   );

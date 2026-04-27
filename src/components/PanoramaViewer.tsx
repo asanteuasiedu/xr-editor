@@ -49,7 +49,7 @@ function PanoramaViewer({
   onViewChange
 }: PanoramaViewerProps) {
   const trimmedPanoramaUrl = panoramaUrl.trim();
-  const hasPanorama = trimmedPanoramaUrl !== '';
+  const hasSceneMedia = trimmedPanoramaUrl !== '';
   const containerRef = useRef<HTMLDivElement | null>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const editorPopoverRef = useRef<HTMLDivElement | null>(null);
@@ -373,7 +373,7 @@ function PanoramaViewer({
     viewer.on('error', () => {
       clearAutoRotateResume();
       setIsPanoramaLoading(false);
-      setErrorMessage('Unable to load panorama image. Check the active scene panorama URL/path.');
+      setErrorMessage('Unable to load scene media.');
     });
 
     const handleContextMenu = (event: MouseEvent) => {
@@ -732,7 +732,7 @@ function PanoramaViewer({
         />
         {overlayContent ? <div className="panorama-overlay-slot">{overlayContent}</div> : null}
         {isPreviewMode && showPreviewEntryRipple ? (
-          <div className="preview-entry-ripple" aria-hidden="true">
+          <div className="preview-entry-ripple" aria-hidden="true" key={`preview-ripple-${previewEntryId}`}>
             <div className="preview-entry-ripple-core" />
             <div className="preview-entry-ripple-rings" />
             <div className="preview-entry-ripple-sheen" />
@@ -754,14 +754,14 @@ function PanoramaViewer({
             </div>
           </div>
         ) : null}
-        {!hasPanorama || errorMessage ? (
+        {!hasSceneMedia || errorMessage ? (
           <div className="viewer-fallback-overlay viewer-fallback-overlay-empty" role="status" aria-live="polite">
             <div className="viewer-empty-ripple" aria-hidden="true">
               <div className="viewer-empty-ripple-core" />
               <div className="viewer-empty-ripple-rings" />
               <div className="viewer-empty-ripple-sheen" />
             </div>
-            <p className="viewer-empty-message">Select or upload a scene</p>
+            <p className="viewer-empty-message">{errorMessage ?? 'Select or upload a scene'}</p>
           </div>
         ) : null}
         {!isPreviewMode && editorPopoverContent ? (

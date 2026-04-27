@@ -20,6 +20,7 @@ type PannellumConfig = {
   type: 'equirectangular';
   panorama: string;
   autoLoad?: boolean;
+  compass?: boolean;
   hotSpotDebug?: boolean;
   showZoomCtrl?: boolean;
   showFullscreenCtrl?: boolean;

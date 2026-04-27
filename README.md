@@ -19,10 +19,10 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 
 ## What Works Now
 - One in-memory project with multiple scenes
-- Editable project metadata (name, description, author / organization)
+- Editable project metadata (name, objective, subject / domain, target age / grade band, author / organization)
 - Active scene switching from sidebar
 - Scene CRUD: add, select, rename, update panorama URL/path, delete (minimum one scene enforced)
-- 360 panorama rendering via `pannellum` for the active scene
+- 360 image scene rendering via `pannellum` for the active scene
 - Hotspot CRUD scoped to the active scene only
 - Optional hotspot destination links (`targetSceneId`) for scene-to-scene navigation
 - Hotspot types: `info`, `sceneLink`, `externalLink`, `image`, `multipleChoice`
@@ -36,6 +36,26 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 - Global Edit Mode / Presentation Mode flow for polished immersive viewing
 - Guided onboarding card for first-time or blank-project flows
 - Starter templates: Blank Tour, Museum Exhibit, Lesson Module, Photo Story
+
+## AI-Operable Experience Schema
+- Projects now include structured educational metadata for `projectObjective`, `targetAgeOrGradeBand`, and `subjectOrDomain`, alongside the legacy description and author fields.
+- Insight zones preserve the existing working hotspot types while adding normalized metadata for AI-assisted learning design:
+  - `zoneType`
+  - `zoneIntent`
+  - `difficulty`
+  - `interactionType`
+  - `completionLogic`
+  - `feedbackRewardState`
+- Existing hotspot types map into this layer instead of being replaced. For example, `multipleChoice` maps to a question zone with answer-oriented intent, while `sceneLink` maps to a navigation zone.
+- Import validation fills safe defaults for older projects that do not yet include the new fields, so legacy image-scene projects continue to load.
+- The schema is intended to make future AI generation safer and more explicit: agents can draft projects, align scenes and zones to objectives, assign difficulty, choose interactions, and plan feedback without guessing from free text alone.
+
+## AI-Assisted 360 Scene Generation (Phase 1)
+- **Active Scene Details** includes a **Generate 360 Scene** prompt bar for creating a new panoramic learning environment from text.
+- The frontend sends prompts to `POST /api/generate-360-scene`; the OpenAI API key stays server-side in `OPENAI_API_KEY`.
+- The API route returns an image Data URL, and the editor replaces the current active scene image with that generated panorama.
+- This first phase only generates scene media. Hotspot placement, insight-zone editing, project storage, and image-scene behavior remain part of the existing editor workflow.
+- For local end-to-end generation, run the project through Vercel's dev/deployment environment so `/api/generate-360-scene` is available alongside the Vite app.
 
 ## UI Layout + Design System
 - Product-style layout with clear zones: header, left sidebar, viewer area, and bottom hotspot editor panel.
@@ -188,8 +208,9 @@ If a scene is deleted, any hotspot links pointing to that scene are cleared auto
 - The sidebar shows local save state: `Saved locally`, `Unsaved changes`, or `Restored local draft`.
 - `Reset Local Draft` remains available from `Project Inspector` and clears the local draft after confirmation.
 
-## Local Uploads (Panorama + Image Hotspots)
-- In **Active Scene Details**, use **Upload Panorama** to choose an image from your computer.
+## Local Uploads (360 Images + Image Hotspots)
+- In **Active Scene Details**, use **Upload Panorama** to choose a 360 image from your computer.
+- 360 video scenes are not enabled in this image-focused slice. Video can be revisited later once the rendering path is ready.
 - In **Active Scene Details**, use **Capture New Scene** to open the device camera when supported and fall back to image selection elsewhere, creating a brand-new scene inside the existing authoring flow.
 - On phone-sized devices, **Camera AR Preview** opens a lightweight live-camera mode with floating screen-space insight-zone markers over the feed.
 - For `image` hotspots, use **Upload Image** in the hotspot editor.
@@ -212,16 +233,26 @@ If a scene is deleted, any hotspot links pointing to that scene are cleared auto
 {
   "id": "project-tour",
   "name": "Simple Linked Tour",
+  "projectObjective": "Help learners navigate a simple two-scene gallery and notice key details.",
+  "targetAgeOrGradeBand": "General learners",
+  "subjectOrDomain": "Museum education",
   "activeSceneId": "scene-lobby",
   "scenes": [
     {
       "id": "scene-lobby",
       "name": "Lobby",
+      "mediaType": "image",
       "panoramaUrl": "/sample-panorama.jpg",
       "hotspots": [
         {
           "id": "h-lobby-1",
           "type": "sceneLink",
+          "zoneType": "navigation",
+          "zoneIntent": "navigate",
+          "difficulty": "introductory",
+          "interactionType": "navigateScene",
+          "completionLogic": "navigated",
+          "feedbackRewardState": { "rewardType": "none" },
           "title": "Go To Gallery",
           "body": "Move to the gallery scene.",
           "yaw": 15.2,
@@ -233,11 +264,18 @@ If a scene is deleted, any hotspot links pointing to that scene are cleared auto
     {
       "id": "scene-gallery",
       "name": "Gallery",
+      "mediaType": "image",
       "panoramaUrl": "/sample-panorama.jpg",
       "hotspots": [
         {
           "id": "h-gallery-1",
           "type": "sceneLink",
+          "zoneType": "navigation",
+          "zoneIntent": "navigate",
+          "difficulty": "introductory",
+          "interactionType": "navigateScene",
+          "completionLogic": "navigated",
+          "feedbackRewardState": { "rewardType": "none" },
           "title": "Back To Lobby",
           "body": "Return to lobby.",
           "yaw": -40.1,
@@ -247,6 +285,15 @@ If a scene is deleted, any hotspot links pointing to that scene are cleared auto
         {
           "id": "h-gallery-2",
           "type": "image",
+          "zoneType": "media",
+          "zoneIntent": "discover",
+          "difficulty": "introductory",
+          "interactionType": "viewImage",
+          "completionLogic": "viewed",
+          "feedbackRewardState": {
+            "rewardType": "acknowledgement",
+            "message": "Image insight viewed."
+          },
           "title": "Art Note",
           "body": "This one is info-only.",
           "yaw": 65.8,
@@ -261,6 +308,6 @@ If a scene is deleted, any hotspot links pointing to that scene are cleared auto
 
 ## Out of Scope in This Slice
 - Drag-and-drop/advanced placement UX
-- localStorage persistence
+- 360 video scene playback
 - Backend/auth/payments/AI integrations
-- Image/video/3D hotspot types
+- 3D hotspot types
