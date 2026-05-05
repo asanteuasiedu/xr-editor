@@ -189,6 +189,9 @@ function deriveSceneNameFromFile(file: File, fallbackName: string) {
 }
 
 async function requestGenerated360Scene(prompt: string): Promise<Generate360SceneResult> {
+  console.info('[generate-360-scene] request started', {
+    promptLength: prompt.trim().length
+  });
   const response = await fetch('/api/generate-360-scene', {
     method: 'POST',
     headers: {
@@ -198,16 +201,29 @@ async function requestGenerated360Scene(prompt: string): Promise<Generate360Scen
   });
 
   const data = (await response.json().catch(() => ({}))) as Generate360SceneApiResponse;
+  console.info('[generate-360-scene] response received', {
+    status: response.status,
+    ok: response.ok,
+    hasImageDataUrl: typeof data.imageDataUrl === 'string',
+    imageDataUrlPrefix: typeof data.imageDataUrl === 'string' ? data.imageDataUrl.slice(0, 30) : null
+  });
 
   if (!response.ok) {
     const fallbackMessage =
       response.status === 404
         ? 'Scene generation is not available in this environment yet.'
         : 'Scene generation could not finish. Try again.';
+    console.error('[generate-360-scene] request failed', {
+      status: response.status,
+      message: data.error ?? data.message ?? fallbackMessage
+    });
     throw new Error(data.error ?? data.message ?? fallbackMessage);
   }
 
   if (!data.imageDataUrl || !data.imageDataUrl.startsWith('data:image/')) {
+    console.error('[generate-360-scene] usable image missing from response', {
+      imageDataUrlPrefix: data.imageDataUrl?.slice(0, 30) ?? null
+    });
     throw new Error('Scene generation finished without a usable image. Try again.');
   }
 
@@ -1095,14 +1111,26 @@ function App() {
 
   const handleGenerateSceneFromPrompt = async (prompt: string) => {
     const targetSceneId = project.activeSceneId;
+    console.info('[generate-360-scene] applying generated scene to active scene', {
+      targetSceneId
+    });
     const result = await requestGenerated360Scene(prompt);
 
     setImportError(null);
+    setImagePreviewBroken(false);
     setProject((currentProject) => {
       const hasTargetScene = currentProject.scenes.some((scene) => scene.id === targetSceneId);
       if (!hasTargetScene) {
+        console.warn('[generate-360-scene] target scene no longer exists', {
+          targetSceneId
+        });
         return currentProject;
       }
+
+      console.info('[generate-360-scene] active scene panorama updated', {
+        targetSceneId,
+        panoramaUrlPrefix: result.imageDataUrl.slice(0, 30)
+      });
 
       return {
         ...currentProject,
