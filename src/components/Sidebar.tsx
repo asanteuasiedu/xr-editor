@@ -13,10 +13,10 @@ type GeneratedSceneResult = {
   revisedPrompt?: string;
 };
 
-export type EditSection = 'controls' | 'inspector' | 'scenes' | 'sceneDetails' | 'hotspots';
+export type EditSection = 'project' | 'scenes' | 'sceneDetails' | 'hotspots';
 
 type ControlActionIconName = 'present' | 'export' | 'tour' | 'scene' | 'uploadPanorama' | 'captureScene';
-type SectionHeadingIconName = 'controls' | 'project' | 'scenes' | 'sceneDetails' | 'hotspots';
+type SectionHeadingIconName = 'project' | 'scenes' | 'sceneDetails' | 'hotspots';
 
 type SidebarProps = {
   activeSection: EditSection;
@@ -185,19 +185,6 @@ function SectionHeadingIcon({ name }: { name: SectionHeadingIconName }) {
     strokeLinejoin: 'round' as const,
     className: 'section-heading-icon-svg'
   };
-
-  if (name === 'controls') {
-    return (
-      <svg {...commonProps}>
-        <line x1="5" y1="6" x2="19" y2="6" />
-        <line x1="5" y1="12" x2="19" y2="12" />
-        <line x1="5" y1="18" x2="19" y2="18" />
-        <circle cx="9" cy="6" r="2" />
-        <circle cx="15" cy="12" r="2" />
-        <circle cx="11" cy="18" r="2" />
-      </svg>
-    );
-  }
 
   if (name === 'project') {
     return (
@@ -382,55 +369,13 @@ function Sidebar({
     </div>
   );
 
-  const renderControls = () => (
-    <section className={sectionCardClass('controls')} data-walkthrough-id="controls">
+  const renderProject = () => (
+    <section className={sectionCardClass('project')} data-walkthrough-id="project">
       <div className="context-panel-heading">
-        {renderHeadingTitle('controls', 'Project Controls')}
-        <p>Guide the class, swap scenes, and prepare the experience for presentation.</p>
+        {renderHeadingTitle('project', 'Project')}
+        <p>Shape the learning context, manage the local draft, and launch project-level actions from one place.</p>
       </div>
       <p className={`save-state-indicator save-state-${saveStateTone}`}>{saveStateLabel}</p>
-      <div className="stacked-actions">
-        <button type="button" className="ui-button ui-button-secondary control-button" onClick={onStartWalkthrough}>
-          <span className="control-action-icon" aria-hidden="true">
-            <ControlActionIcon name="tour" />
-          </span>
-          <span className="control-action-label">Start Guided Tour</span>
-        </button>
-        <button type="button" className="ui-button ui-button-secondary control-button" onClick={onOpenScenePicker}>
-          <span className="control-action-icon" aria-hidden="true">
-            <ControlActionIcon name="scene" />
-          </span>
-          <span className="control-action-label">Select a Scene</span>
-        </button>
-        <button type="button" className="ui-button ui-button-secondary control-button" onClick={onExportProject}>
-          <span className="control-action-icon" aria-hidden="true">
-            <ControlActionIcon name="export" />
-          </span>
-          <span className="control-action-label">Export Project</span>
-        </button>
-        <button type="button" className="ui-button ui-button-primary control-button" onClick={onPresentProject}>
-          <span className="control-action-icon" aria-hidden="true">
-            <ControlActionIcon name="present" />
-          </span>
-          <span className="control-action-label">Present Project</span>
-        </button>
-        <button
-          type="button"
-          className="ui-button ui-button-secondary control-button mobile-ar-preview-button"
-          onClick={onEnterCameraPreview}
-        >
-          Camera AR Preview
-        </button>
-      </div>
-    </section>
-  );
-
-  const renderInspector = () => (
-    <section className={sectionCardClass('inspector')} data-walkthrough-id="inspector">
-      <div className="context-panel-heading">
-        {renderHeadingTitle('project', 'Project Overview')}
-        <p>Set the framing, learning context, and project-level actions for this experience.</p>
-      </div>
       <label className="editor-field compact-field">
         <span>Project Name</span>
         <input value={project.name} onChange={onProjectNameChange} placeholder="My XR Project" />
@@ -490,6 +435,42 @@ function Sidebar({
               <ProjectActionIcon />
             </span>
             <span className="control-action-label">Reset Local Draft</span>
+          </button>
+        </div>
+      </div>
+      <div className="sidebar-subsection project-panel-actions">
+        <p className="sidebar-subsection-title">Launch & Share</p>
+        <div className="stacked-actions project-action-tray">
+          <button type="button" className="ui-button ui-button-secondary control-button" onClick={onStartWalkthrough}>
+            <span className="control-action-icon" aria-hidden="true">
+              <ControlActionIcon name="tour" />
+            </span>
+            <span className="control-action-label">Start Guided Tour</span>
+          </button>
+          <button type="button" className="ui-button ui-button-secondary control-button" onClick={onOpenScenePicker}>
+            <span className="control-action-icon" aria-hidden="true">
+              <ControlActionIcon name="scene" />
+            </span>
+            <span className="control-action-label">Select a Scene</span>
+          </button>
+          <button type="button" className="ui-button ui-button-secondary control-button" onClick={onExportProject}>
+            <span className="control-action-icon" aria-hidden="true">
+              <ControlActionIcon name="export" />
+            </span>
+            <span className="control-action-label">Export Project</span>
+          </button>
+          <button type="button" className="ui-button ui-button-primary control-button" onClick={onPresentProject}>
+            <span className="control-action-icon" aria-hidden="true">
+              <ControlActionIcon name="present" />
+            </span>
+            <span className="control-action-label">Present Project</span>
+          </button>
+          <button
+            type="button"
+            className="ui-button ui-button-secondary control-button mobile-ar-preview-button"
+            onClick={onEnterCameraPreview}
+          >
+            Camera AR Preview
           </button>
         </div>
       </div>
@@ -753,12 +734,8 @@ function Sidebar({
     </section>
   );
 
-  if (activeSection === 'controls') {
-    return renderControls();
-  }
-
-  if (activeSection === 'inspector') {
-    return renderInspector();
+  if (activeSection === 'project') {
+    return renderProject();
   }
 
   if (activeSection === 'scenes') {

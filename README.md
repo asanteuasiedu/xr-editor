@@ -73,18 +73,18 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 
 ## Immersive Edit Mode
 - Edit Mode now keeps the panorama viewer dominant and moves authoring controls into frosted overlay panels.
-- The left side now works as a persistent navigation rail for `Controls`, `Project`, `Scenes`, `Details`, and `Insight Zones`, while the right side acts as the main contextual workspace.
+- The left side now works as a persistent navigation rail for `Project`, `Scenes`, `Details`, and `Insight Zones`, while the right side acts as the main contextual workspace.
 - On desktop and tablet, both navigation and contextual editing surfaces float over the 360 scene so the panorama remains the visual background canvas of the editor.
 - The header, scene title, viewer controls, and contextual surfaces now share a darker blurred-glass HUD treatment with higher-contrast light text so the editor chrome feels unified while staying secondary to the panorama.
 - This refactor is aimed at clearer authoring, stronger information hierarchy, and better classroom facilitation during localized learning activities.
 - The left overlay stack now sits lower so it stays clear of the `Your XR Media` heading and viewer zoom controls.
-- Overlay cards appear in this pilot-focused order: `Project Controls`, `Project Inspector`, `Scenes`, `Active Scene Details`, and `Insight Zones (Active Scene)`.
+- Overlay cards appear in this pilot-focused order: `Project`, `Scenes`, `Active Scene Details`, and `Insight Zones (Active Scene)`.
 - All overlay panels start closed by default for a cleaner first impression.
 - A first-time guided walkthrough now starts automatically in a deterministic sequence, highlights each overlay section step-by-step, and then opens the Scene Library as the next guided step.
 - The selected hotspot editor appears as an anchored frosted popover near the selected insight zone, with an in-view fallback placement on tighter layouts.
-- `Project Controls` is intentionally lightweight: local save state, `Present Project`, `Export Project`, `Start Guided Tour`, and `Select a Scene`.
-- On a fresh editor start, the walkthrough always appears first and the Scene Library opens only after that walkthrough completes.
-- During that first-run onboarding sequence, the starter panorama viewer stays visually behind the flow so the immersive loading overlay does not appear before the walkthrough and Scene Library.
+- `Project` now combines save state, project metadata, `Reset Local Draft`, and the primary project actions: `Start Guided Tour`, `Select a Scene`, `Export Project`, and `Present Project`.
+- On a fresh blank editor start, a creation-first onboarding layer appears before the walkthrough so users can generate a scene or open the Scene Library first.
+- After a scene is generated or selected, the editor reveals the immersive workspace and then starts the guided walkthrough automatically.
 - `Select a Scene` can always be used later to reopen that local scene library and apply a curated panorama to the active scene.
 - Panorama swaps show a lightweight immersive loading layer while the new scene media comes in.
 - The same immersive loading treatment is used across Edit Mode and Presentation Mode, with the message `Composing your immersive environment...`.
@@ -93,7 +93,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 ## Quick Editor Workflow
 1. Start with the starry-night starter scene or use **Select a Scene** for one of the predefined pilot environments.
 2. Add or select a scene in the sidebar.
-3. Fill in project metadata in **Project Inspector**.
+3. Fill in project metadata in **Project**.
 4. Set or upload the scene panorama in **Active Scene Details**.
 5. Click **Add Insight Zone**, then click in the panorama to place it visually.
 6. Select an insight zone to edit its title, body, type, and destination behavior.
@@ -112,7 +112,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 - Templates stay fully editable and work with autosave, uploads, preview mode, and JSON export/import.
 
 ## Edit Mode vs Presentation Mode
-- **Edit Mode** shows the full authoring interface: project inspector, scenes/hotspots controls, and hotspot editor.
+- **Edit Mode** shows the full authoring interface: the combined project panel, scenes/hotspots controls, and hotspot editor.
 - **Presentation Mode** acts like a lightweight immersive viewer with reduced editor chrome, a taller panorama surface for pilot demos, overlaid metadata and app controls, and a stronger cinematic first-entry reveal into the opening scene.
 - Presentation Mode is optimized for phone/tablet viewing with touch-friendly progress cards, readable learning-goal content, and mobile-sized overlays for info, image, and question interactions.
 - Use **Present Project** to enter presentation mode quickly, then **Return to Edit Mode** when done.
@@ -206,7 +206,7 @@ If a scene is deleted, any hotspot links pointing to that scene are cleared auto
 - On load, the app restores the most recent valid local draft automatically.
 - If local draft JSON is corrupted or invalid, it is ignored and the app falls back safely to the starter project.
 - The sidebar shows local save state: `Saved locally`, `Unsaved changes`, or `Restored local draft`.
-- `Reset Local Draft` remains available from `Project Inspector` and clears the local draft after confirmation.
+- `Reset Local Draft` remains available from `Project` and clears the local draft after confirmation.
 
 ## Local Uploads (360 Images + Image Hotspots)
 - In **Active Scene Details**, use **Upload Panorama** to choose a 360 image from your computer.

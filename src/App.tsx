@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ChangeEvent } from 'react';
 import Layout from './components/Layout';
+import CreationOnboarding from './components/CreationOnboarding';
 import Sidebar, { type EditSection } from './components/Sidebar';
 import HotspotEditor from './components/HotspotEditor';
 import PanoramaViewer from './components/PanoramaViewer';
@@ -45,14 +46,9 @@ const EDIT_WALKTHROUGH_DISMISSED_KEY = 'xr-editor.edit-walkthrough-dismissed.v1'
 
 const EDIT_WALKTHROUGH_STEPS = [
   {
-    id: 'controls',
-    title: 'Project Controls',
-    body: 'Start here to present the experience, export the project, replay the walkthrough, or swap in a curated pilot scene.'
-  },
-  {
-    id: 'inspector',
-    title: 'Project Inspector',
-    body: 'Start here to name the project and set the overall framing before you build scenes.'
+    id: 'project',
+    title: 'Project',
+    body: 'Start here to name the project, review save status, reset the local draft, and launch walkthrough, scene, export, or presentation actions.'
   },
   {
     id: 'scenes',
@@ -73,6 +69,14 @@ const EDIT_WALKTHROUGH_STEPS = [
 
 function createDefaultProject(): Project {
   return createProjectFromTemplate('blankTour');
+}
+
+function getActiveSceneFromProject(project: Project) {
+  return project.scenes.find((scene) => scene.id === project.activeSceneId) ?? project.scenes[0] ?? null;
+}
+
+function projectHasValidActiveScene(project: Project) {
+  return Boolean(getActiveSceneFromProject(project)?.panoramaUrl.trim());
 }
 
 function loadPreviewHintDismissed() {
@@ -102,20 +106,7 @@ function RailIcon({ section }: { section: EditSection }) {
     className: 'edit-rail-svg'
   };
 
-  if (section === 'controls') {
-    return (
-      <svg {...commonProps}>
-        <line x1="5" y1="6" x2="19" y2="6" />
-        <line x1="5" y1="12" x2="19" y2="12" />
-        <line x1="5" y1="18" x2="19" y2="18" />
-        <circle cx="9" cy="6" r="2" />
-        <circle cx="15" cy="12" r="2" />
-        <circle cx="11" cy="18" r="2" />
-      </svg>
-    );
-  }
-
-  if (section === 'inspector') {
+  if (section === 'project') {
     return (
       <svg {...commonProps}>
         <path d="M4.5 7.5a2 2 0 0 1 2-2h4.7l2 2H17.5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2z" />
@@ -247,9 +238,12 @@ function getScreenSpaceMarkerPosition(hotspot: Hotspot, index: number) {
 function App() {
   const initialLoad = useMemo(() => loadLocalDraft(), []);
   const initialWalkthroughDismissed = useMemo(() => loadEditWalkthroughDismissed(), []);
-  const shouldRunFirstStartFlow = !initialLoad.restored && !initialWalkthroughDismissed;
+  const initialProject = useMemo(
+    () => (initialLoad.restored ? initialLoad.project : createDefaultProject()),
+    [initialLoad]
+  );
   const [project, setProject] = useState<Project>(
-    initialLoad.restored ? initialLoad.project : createDefaultProject()
+    initialProject
   );
   const [selectedHotspotId, setSelectedHotspotId] = useState<string | null>(null);
   const [, setCurrentView] = useState({ yaw: 0, pitch: 0 });
@@ -266,17 +260,15 @@ function App() {
   const [questionResponses, setQuestionResponses] = useState<Record<string, QuestionResponse>>({});
   const [previewHintDismissed, setPreviewHintDismissed] = useState(loadPreviewHintDismissed);
   const [, setEditWalkthroughDismissed] = useState(initialWalkthroughDismissed);
-  // First-run startup is deterministic: walkthrough first, Scene Library second.
-  const [walkthroughStepIndex, setWalkthroughStepIndex] = useState<number | null>(
-    shouldRunFirstStartFlow ? 0 : null
-  );
+  const [walkthroughStepIndex, setWalkthroughStepIndex] = useState<number | null>(null);
   const [isScenePickerOpen, setIsScenePickerOpen] = useState(false);
-  const [openScenePickerAfterWalkthrough, setOpenScenePickerAfterWalkthrough] = useState(shouldRunFirstStartFlow);
+  const [showCreationOnboarding, setShowCreationOnboarding] = useState(() => !projectHasValidActiveScene(initialProject));
+  const [pendingWalkthroughAfterOnboarding, setPendingWalkthroughAfterOnboarding] = useState(false);
   const [previewEntryId, setPreviewEntryId] = useState(0);
   const [completionDismissed, setCompletionDismissed] = useState(false);
   const [showCompletionMessage, setShowCompletionMessage] = useState(false);
   const [completionPendingAfterOverlayClose, setCompletionPendingAfterOverlayClose] = useState(false);
-  const [activeEditSection, setActiveEditSection] = useState<EditSection>('controls');
+  const [activeEditSection, setActiveEditSection] = useState<EditSection>('project');
   const [isContextPanelOpen, setIsContextPanelOpen] = useState(true);
   const [areViewerOverlaysHidden, setAreViewerOverlaysHidden] = useState(false);
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'requesting' | 'ready' | 'error'>('idle');
@@ -340,6 +332,7 @@ function App() {
     () => project.scenes.find((scene) => scene.id === project.activeSceneId) ?? project.scenes[0],
     [project]
   );
+  const isCreationOnboardingActive = appMode === 'edit' && showCreationOnboarding;
   const activeWalkthroughStep = walkthroughStepIndex === null ? null : EDIT_WALKTHROUGH_STEPS[walkthroughStepIndex];
 
   useEffect(() => {
@@ -351,6 +344,28 @@ function App() {
     setIsContextPanelOpen(true);
     setSelectedHotspotId(null);
   }, [activeWalkthroughStep, appMode]);
+
+  useEffect(() => {
+    if (
+      !pendingWalkthroughAfterOnboarding ||
+      showCreationOnboarding ||
+      isScenePickerOpen ||
+      appMode !== 'edit' ||
+      !projectHasValidActiveScene(project)
+    ) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setActiveEditSection('project');
+      setIsContextPanelOpen(true);
+      setSelectedHotspotId(null);
+      setWalkthroughStepIndex(0);
+      setPendingWalkthroughAfterOnboarding(false);
+    }, 160);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [appMode, isScenePickerOpen, pendingWalkthroughAfterOnboarding, project, showCreationOnboarding]);
 
   const sceneNameById = useMemo(
     () => Object.fromEntries(project.scenes.map((scene) => [scene.id, scene.name || 'Untitled Scene'])),
@@ -1010,6 +1025,9 @@ function App() {
       setImportError(null);
       setNoticeMessage(null);
       setSaveState('unsaved');
+      setWalkthroughStepIndex(null);
+      setPendingWalkthroughAfterOnboarding(false);
+      setShowCreationOnboarding(!projectHasValidActiveScene(importedProject));
     } catch (error) {
       setImportError(error instanceof Error ? error.message : 'Import failed due to an unknown error.');
     }
@@ -1017,7 +1035,7 @@ function App() {
 
   const handleResetLocalDraft = () => {
     const shouldReset = window.confirm(
-      'Clear the local draft and reset to the starter project?\n\nThis will remove autosaved local changes.'
+      'Clear the local draft and reset to a blank project?\n\nThis will remove autosaved local changes.'
     );
     if (!shouldReset) {
       return;
@@ -1036,10 +1054,12 @@ function App() {
     setImportError(null);
     setNoticeMessage(null);
     setSaveState('unsaved');
-    // Reset returns the app to the same first-run sequence used on a fresh start.
-    setWalkthroughStepIndex(0);
+    setActiveEditSection('project');
+    setIsContextPanelOpen(true);
+    setWalkthroughStepIndex(null);
     setEditWalkthroughDismissed(false);
-    setOpenScenePickerAfterWalkthrough(true);
+    setShowCreationOnboarding(true);
+    setPendingWalkthroughAfterOnboarding(false);
     setIsScenePickerOpen(false);
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(EDIT_WALKTHROUGH_DISMISSED_KEY);
@@ -1170,6 +1190,17 @@ function App() {
     );
   };
 
+  const completeCreationOnboarding = useCallback(() => {
+    setShowCreationOnboarding(false);
+    setPendingWalkthroughAfterOnboarding(true);
+    setIsScenePickerOpen(false);
+  }, []);
+
+  const handleOnboardingGenerateScene = async (prompt: string) => {
+    await handleGenerateSceneFromPrompt(prompt);
+    completeCreationOnboarding();
+  };
+
   const handleUploadHotspotImage = async (hotspotId: string, file: File) => {
     const result = await imageFileToDataUrl(file);
     if (!result.ok) {
@@ -1183,8 +1214,6 @@ function App() {
   };
 
   const handleStartEditWalkthrough = () => {
-    // Manual replay should not re-trigger the first-run Scene Library handoff.
-    setOpenScenePickerAfterWalkthrough(false);
     setIsScenePickerOpen(false);
     setWalkthroughStepIndex(0);
   };
@@ -1192,7 +1221,6 @@ function App() {
   const handleDismissEditWalkthrough = () => {
     setWalkthroughStepIndex(null);
     setEditWalkthroughDismissed(true);
-    setOpenScenePickerAfterWalkthrough(false);
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(EDIT_WALKTHROUGH_DISMISSED_KEY, '1');
     }
@@ -1208,10 +1236,6 @@ function App() {
       setEditWalkthroughDismissed(true);
       if (typeof window !== 'undefined') {
         window.localStorage.setItem(EDIT_WALKTHROUGH_DISMISSED_KEY, '1');
-      }
-      if (openScenePickerAfterWalkthrough) {
-        setIsScenePickerOpen(true);
-        setOpenScenePickerAfterWalkthrough(false);
       }
       return;
     }
@@ -1259,7 +1283,6 @@ function App() {
 
   const handleCloseScenePicker = () => {
     setIsScenePickerOpen(false);
-    setOpenScenePickerAfterWalkthrough(false);
   };
 
   const handleApplySceneLibraryItem = (panoramaUrl: string, label: string) => {
@@ -1267,6 +1290,9 @@ function App() {
     setIsScenePickerOpen(false);
     setImportError(null);
     setNoticeMessage(`Applied "${label}" to ${activeScene.name || 'the active scene'}.`);
+    if (showCreationOnboarding) {
+      completeCreationOnboarding();
+    }
   };
 
   const saveStateLabel =
@@ -1290,11 +1316,6 @@ function App() {
         '--reveal-origin-y': `${previewRevealOrigin.y}px`
       } as CSSProperties)
     : undefined;
-  // On the first-run path, onboarding overlays take precedence over the starter panorama.
-  // Hold the viewer until the walkthrough / Scene Library handoff has completed.
-  const shouldHoldInitialViewer =
-    shouldRunFirstStartFlow && appMode === 'edit' && (activeWalkthroughStep !== null || isScenePickerOpen);
-
   useEffect(() => {
     if (appMode !== 'arPreview') {
       if (arStreamRef.current) {
@@ -1367,6 +1388,7 @@ function App() {
       subtitle="Local XR experience editor"
       mode={appMode === 'edit' ? 'edit' : 'preview'}
       overlaysHidden={appMode !== 'arPreview' && areViewerOverlaysHidden}
+      hideHeader={isCreationOnboardingActive}
       logoSrc="/branding/udeesa-logo.png"
       headerControls={
         <div className="header-mode-group">
@@ -1393,11 +1415,10 @@ function App() {
         </div>
       }
       sidebar={
-        appMode === 'edit' ? (
+        appMode === 'edit' && !isCreationOnboardingActive ? (
           <nav className="edit-nav-rail" aria-label="Editor sections">
             {[
-              ['controls', 'Controls'],
-              ['inspector', 'Project'],
+              ['project', 'Project'],
               ['scenes', 'Scenes'],
               ['sceneDetails', 'Details'],
               ['hotspots', 'Insight Zones']
@@ -1424,7 +1445,7 @@ function App() {
         ) : null
       }
       contextPanel={
-        appMode === 'edit' && isContextPanelOpen ? (
+        appMode === 'edit' && !isCreationOnboardingActive && isContextPanelOpen ? (
           <div className="context-panel-stack">
             <div className="context-panel-toolbar">
               <div className="context-panel-toolbar-actions">
@@ -1514,53 +1535,42 @@ function App() {
           />
           {appMode === 'edit' ? (
             <section className="edit-workspace">
-              {shouldHoldInitialViewer ? (
-                <section className="panel panorama-panel viewer-card">
-                  <h2 className="viewer-overlay-title">Your XR Media</h2>
-                  <div className="pannellum-shell viewer-clip-boundary">
-                    <div className="viewer-fallback-overlay" role="status" aria-live="polite">
-                      <p className="placeholder-note">
-                        Finish the guided setup, then choose a scene to begin your immersive environment.
-                      </p>
+              <PanoramaViewer
+                panoramaUrl={activeScene.panoramaUrl}
+                hotspots={activeScene.hotspots}
+                selectedHotspotId={selectedHotspotId}
+                isPreviewMode={false}
+                previewEntryId={0}
+                overlayContent={null}
+                editorPopoverContent={
+                  selectedHotspot ? (
+                    <div className="hotspot-popover-note">
+                      <p className="hotspot-popover-kicker">Selected Zone</p>
+                      <strong>{selectedHotspot.title || 'Untitled Insight Zone'}</strong>
+                      <span>Continue editing in the details panel.</span>
                     </div>
-                  </div>
-                </section>
-              ) : (
-                <PanoramaViewer
-                  panoramaUrl={activeScene.panoramaUrl}
-                  hotspots={activeScene.hotspots}
-                  selectedHotspotId={selectedHotspotId}
-                  isPreviewMode={false}
-                  previewEntryId={0}
-                  overlayContent={null}
-                  editorPopoverContent={
-                    selectedHotspot ? (
-                      <div className="hotspot-popover-note">
-                        <p className="hotspot-popover-kicker">Selected Zone</p>
-                        <strong>{selectedHotspot.title || 'Untitled Insight Zone'}</strong>
-                        <span>Continue editing in the details panel.</span>
-                      </div>
-                    ) : null
-                  }
-                  interactionMode={viewerInteractionMode}
-                  onActivateHotspot={handleActivateHotspot}
-                  onPanoramaClick={handlePanoramaClick}
-                  onQuickPlaceHotspot={handleCreateHotspotAtPosition}
-                  onToggleOverlays={handleToggleViewerOverlays}
-                  onViewChange={setCurrentView}
-                />
-              )}
-              <button
-                type="button"
-                className="floating-ar-utility"
-                onClick={handleEnterCameraPreview}
-                aria-label="Open camera AR preview"
-              >
-                AR
-              </button>
-              {importError ? <p className="panel error-banner edit-toast">{importError}</p> : null}
-              {noticeMessage ? <p className="panel info-banner edit-toast">{noticeMessage}</p> : null}
-              {activeWalkthroughStep ? (
+                  ) : null
+                }
+                interactionMode={viewerInteractionMode}
+                onActivateHotspot={handleActivateHotspot}
+                onPanoramaClick={handlePanoramaClick}
+                onQuickPlaceHotspot={handleCreateHotspotAtPosition}
+                onToggleOverlays={handleToggleViewerOverlays}
+                onViewChange={setCurrentView}
+              />
+              {!isCreationOnboardingActive ? (
+                <button
+                  type="button"
+                  className="floating-ar-utility"
+                  onClick={handleEnterCameraPreview}
+                  aria-label="Open camera AR preview"
+                >
+                  AR
+                </button>
+              ) : null}
+              {!isCreationOnboardingActive && importError ? <p className="panel error-banner edit-toast">{importError}</p> : null}
+              {!isCreationOnboardingActive && noticeMessage ? <p className="panel info-banner edit-toast">{noticeMessage}</p> : null}
+              {!isCreationOnboardingActive && activeWalkthroughStep ? (
                 <>
                   <div className="walkthrough-dim" />
                   <section className="walkthrough-card">
@@ -1634,6 +1644,12 @@ function App() {
                     </div>
                   </div>
                 </div>
+              ) : null}
+              {isCreationOnboardingActive ? (
+                <CreationOnboarding
+                  onGenerate={handleOnboardingGenerateScene}
+                  onOpenCatalog={handleOpenScenePicker}
+                />
               ) : null}
             </section>
           ) : null}

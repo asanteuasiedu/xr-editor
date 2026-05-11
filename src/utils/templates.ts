@@ -1,7 +1,5 @@
 import type { Hotspot, Project, Scene } from '../types/project';
 import { getDefaultZoneMetadata } from '../types/project';
-import { STARTER_SCENE_PANORAMA_URL } from './sceneLibrary';
-
 export type ProjectTemplateId = 'blankTour' | 'museumExhibit' | 'lessonModule' | 'photoStory';
 
 export type ProjectTemplateOption = {
@@ -194,11 +192,11 @@ export function createProjectFromTemplate(templateId: ProjectTemplateId): Projec
     };
   }
 
-  const blankScene = createScene('Scene 1', STARTER_SCENE_PANORAMA_URL);
+  const blankScene = createScene('Scene 1');
   return {
     id: makeId('project'),
     name: 'Blank Tour',
-    description: 'Start with a starry scene, then upload or swap in your own panorama.',
+    description: 'Start with an empty scene, then generate or choose a 360 learning environment.',
     authorOrOrganization: '',
     projectObjective: '',
     targetAgeOrGradeBand: '',
