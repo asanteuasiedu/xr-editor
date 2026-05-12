@@ -78,10 +78,14 @@ function getPromptFromBody(body: unknown) {
 
 function buildPanoramaPrompt(prompt: string) {
   return [
-    'Create a seamless 2:1 equirectangular panoramic environment for a 360-degree XR learning editor.',
-    'The image should feel immersive, wide, continuous, and suitable as the surrounding scene media for learner exploration.',
-    'Avoid framed composition, posters, close-up subjects, split panels, visible borders, or cropped single-object layouts.',
-    `User request: ${prompt}`
+    'Create a full seamless equirectangular 360-degree panoramic image for immersive XR viewing.',
+    'The image must be a continuous wraparound panorama with no visible seams, no borders, no split panels, no duplicated frame edges, and no cropped composition.',
+    'Render the environment in HD / high-detail quality with spatially coherent lighting, environmental continuity, and convincing depth across the full panorama.',
+    'The result must feel like an empty immersive environment ready for educational XR authoring and panoramic exploration.',
+    'Do not include people, humans, faces, crowds, bodies, silhouettes, characters, or portraits.',
+    'Do not include readable text, labels, captions, signs, logos, watermarks, UI elements, interface overlays, or branded graphics.',
+    'Avoid framed artwork, poster-like layouts, multi-panel compositions, inset views, fisheye framing, and any non-equirectangular composition cues.',
+    `User scene concept: ${prompt}`
   ].join('\n\n');
 }
 
@@ -111,6 +115,11 @@ export default async function handler(request: VercelRequest, response: VercelRe
   }
 
   try {
+    const wrappedPrompt = buildPanoramaPrompt(prompt);
+    console.info('[generate-360-scene] Wrapped prompt prepared', {
+      promptLength: wrappedPrompt.length
+    });
+
     const openAIResponse = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
       headers: {
@@ -119,7 +128,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
       },
       body: JSON.stringify({
         model: 'gpt-image-1',
-        prompt: buildPanoramaPrompt(prompt),
+        prompt: wrappedPrompt,
         n: 1,
         size: '1536x1024',
         quality: 'medium',

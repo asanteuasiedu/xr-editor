@@ -54,6 +54,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 - **Active Scene Details** includes a **Generate 360 Scene** prompt bar for creating a new panoramic learning environment from text.
 - The frontend sends prompts to `POST /api/generate-360-scene`; the OpenAI API key stays server-side in `OPENAI_API_KEY`.
 - The API route returns an image Data URL, and the editor replaces the current active scene image with that generated panorama.
+- Generated scenes are requested as seamless equirectangular 360 panoramas with high detail, no people, and no text, logos, or watermarks baked into the image.
 - This first phase only generates scene media. Hotspot placement, insight-zone editing, project storage, and image-scene behavior remain part of the existing editor workflow.
 - For local end-to-end generation, run the project through Vercel's dev/deployment environment so `/api/generate-360-scene` is available alongside the Vite app.
 
