@@ -50,6 +50,7 @@ type SidebarProps = {
   onRenameActiveScene: (name: string) => void;
   onUploadScenePanorama: (file: File) => void | Promise<void>;
   onGenerateSceneFromPrompt: (prompt: string) => Promise<GeneratedSceneResult>;
+  onImproveScenePanorama: () => Promise<void>;
   onCreateSceneFromImageFile: (file: File) => void | Promise<void>;
   onDeleteScene: (sceneId: string) => void;
   onAddHotspot: () => void;
@@ -249,6 +250,7 @@ function Sidebar({
   onRenameActiveScene,
   onUploadScenePanorama,
   onGenerateSceneFromPrompt,
+  onImproveScenePanorama,
   onCreateSceneFromImageFile,
   onDeleteScene,
   onAddHotspot,
@@ -263,8 +265,10 @@ function Sidebar({
   const [generateScenePrompt, setGenerateScenePrompt] = useState('');
   const [generateSceneStatus, setGenerateSceneStatus] = useState<GeneratedSceneStatus>('idle');
   const [generateSceneMessage, setGenerateSceneMessage] = useState<string | null>(null);
+  const [generateSceneAction, setGenerateSceneAction] = useState<'generate' | 'improve'>('generate');
   const isGeneratingScene = generateSceneStatus === 'loading';
   const canGenerateScene = generateScenePrompt.trim().length > 0 && !isGeneratingScene;
+  const hasStoredGenerationPrompt = Boolean(activeScene.generationPrompt?.trim());
 
   const onProjectNameChange = (event: ChangeEvent<HTMLInputElement>) => {
     onUpdateProjectMetadata({ name: event.target.value });
@@ -308,6 +312,7 @@ function Sidebar({
     }
 
     setGenerateScenePrompt(trimmedPrompt);
+    setGenerateSceneAction('generate');
     setGenerateSceneStatus('loading');
     setGenerateSceneMessage('Generating a panoramic learning scene...');
 
@@ -325,6 +330,29 @@ function Sidebar({
         error instanceof Error
           ? error.message
           : 'Scene generation could not finish. Try again.'
+      );
+    }
+  };
+
+  const onImproveSceneSubmit = async () => {
+    if (!hasStoredGenerationPrompt || isGeneratingScene) {
+      return;
+    }
+
+    setGenerateSceneAction('improve');
+    setGenerateSceneStatus('loading');
+    setGenerateSceneMessage('Improving panorama...');
+
+    try {
+      await onImproveScenePanorama();
+      setGenerateSceneStatus('success');
+      setGenerateSceneMessage('Panorama regenerated.');
+    } catch (error) {
+      setGenerateSceneStatus('error');
+      setGenerateSceneMessage(
+        error instanceof Error
+          ? error.message
+          : 'Could not generate the scene right now. Try again shortly.'
       );
     }
   };
@@ -577,9 +605,16 @@ function Sidebar({
           <strong>Current Scene Media</strong>
         </div>
         <p className="scene-media-status-copy">
-          This scene is currently using a 360 image panorama.
+          {activeScene.aiGenerated
+            ? 'This scene is currently using an AI-generated 360 image panorama.'
+            : 'This scene is currently using a 360 image panorama.'}
         </p>
-        <p className="helper-note">Upload Panorama accepts standard equirectangular 360 images.</p>
+        <p className="helper-note">
+          Upload Panorama accepts standard equirectangular 360 images.
+          {activeScene.generationAttemptCount
+            ? ` AI attempts on this scene: ${activeScene.generationAttemptCount}.`
+            : ''}
+        </p>
       </div>
       <div className="generate-scene-card">
         <div className="generate-scene-heading">
@@ -601,7 +636,7 @@ function Sidebar({
             className="ui-button ui-button-primary mini-button generate-scene-button"
             disabled={!canGenerateScene}
           >
-            {isGeneratingScene ? 'Generating...' : 'Generate'}
+            {isGeneratingScene && generateSceneAction === 'generate' ? 'Generating...' : 'Generate'}
           </button>
         </form>
         {generateSceneStatus !== 'idle' && generateSceneMessage ? (
@@ -612,6 +647,18 @@ function Sidebar({
           >
             {generateSceneMessage}
           </p>
+        ) : null}
+        {hasStoredGenerationPrompt ? (
+          <button
+            type="button"
+            className="ui-button ui-button-secondary mini-button"
+            onClick={onImproveSceneSubmit}
+            disabled={isGeneratingScene}
+          >
+            {isGeneratingScene && generateSceneAction === 'improve'
+              ? 'Improving panorama...'
+              : 'Regenerate / Improve Panorama'}
+          </button>
         ) : null}
       </div>
       <div className="scene-source-actions">

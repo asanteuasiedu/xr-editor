@@ -380,6 +380,27 @@ function validateScene(value: unknown, sceneIndex: number): ValidationResult<Sce
     return { ok: false, error: `Scene ${sceneIndex + 1}: mediaType must be image.` };
   }
 
+  if (value.aiGenerated !== undefined && typeof value.aiGenerated !== 'boolean') {
+    return { ok: false, error: `Scene ${sceneIndex + 1}: aiGenerated must be a boolean if provided.` };
+  }
+
+  if (!isOptionalString(value.generationPrompt)) {
+    return {
+      ok: false,
+      error: `Scene ${sceneIndex + 1}: generationPrompt must be a string if provided.`
+    };
+  }
+
+  if (
+    value.generationAttemptCount !== undefined &&
+    (!Number.isInteger(value.generationAttemptCount) || Number(value.generationAttemptCount) < 1)
+  ) {
+    return {
+      ok: false,
+      error: `Scene ${sceneIndex + 1}: generationAttemptCount must be a positive integer if provided.`
+    };
+  }
+
   if (!Array.isArray(value.hotspots)) {
     return { ok: false, error: `Scene ${sceneIndex + 1}: hotspots must be an array.` };
   }
@@ -400,6 +421,10 @@ function validateScene(value: unknown, sceneIndex: number): ValidationResult<Sce
       name: value.name,
       mediaType: 'image',
       panoramaUrl: value.panoramaUrl,
+      aiGenerated: typeof value.aiGenerated === 'boolean' ? value.aiGenerated : undefined,
+      generationPrompt: typeof value.generationPrompt === 'string' ? value.generationPrompt : undefined,
+      generationAttemptCount:
+        typeof value.generationAttemptCount === 'number' ? value.generationAttemptCount : undefined,
       hotspots
     }
   };

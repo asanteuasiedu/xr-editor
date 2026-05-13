@@ -80,6 +80,8 @@ type PanoramaValidationResult = {
   accepted: boolean;
 };
 
+type GenerationRequestMode = 'default' | 'improve';
+
 function getGlobalBuffer() {
   const globalBuffer = (globalThis as unknown as {
     Buffer?: {
@@ -135,8 +137,41 @@ function getPromptFromBody(body: unknown) {
   return typeof prompt === 'string' ? prompt.trim() : '';
 }
 
-function buildPanoramaPrompt(prompt: string) {
-  return [
+function getGenerationModeFromBody(body: unknown): GenerationRequestMode {
+  if (typeof body === 'string') {
+    try {
+      return getGenerationModeFromBody(JSON.parse(body));
+    } catch {
+      return 'default';
+    }
+  }
+
+  if (!body || typeof body !== 'object' || !('mode' in body)) {
+    return 'default';
+  }
+
+  return (body as { mode?: unknown }).mode === 'improve' ? 'improve' : 'default';
+}
+
+function getPreviousIssueFromBody(body: unknown) {
+  if (typeof body === 'string') {
+    try {
+      return getPreviousIssueFromBody(JSON.parse(body));
+    } catch {
+      return '';
+    }
+  }
+
+  if (!body || typeof body !== 'object' || !('previousIssue' in body)) {
+    return '';
+  }
+
+  const previousIssue = (body as { previousIssue?: unknown }).previousIssue;
+  return typeof previousIssue === 'string' ? previousIssue.trim() : '';
+}
+
+function buildPanoramaPrompt(prompt: string, mode: GenerationRequestMode, previousIssue: string) {
+  const instructionBlocks = [
     'Create a true full 360-degree equirectangular panoramic image intended for immersive XR viewing.',
     'The output must be a seamless wraparound panorama with exact 2:1 composition and natural left-to-right edge continuity.',
     'It must behave like a proper equirectangular projection: when viewed flat it may appear stretched or distorted, but when displayed in a 360-degree panorama viewer it should look spatially correct.',
@@ -146,18 +181,33 @@ function buildPanoramaPrompt(prompt: string) {
     'The result should feel like an empty immersive environment ready for educational XR authoring and panoramic exploration.',
     'Do not include people, humans, faces, crowds, bodies, silhouettes, characters, or portraits.',
     'Do not include readable text, labels, captions, signs, logos, watermarks, UI elements, interface overlays, or branded graphics.',
-    'Avoid framed artwork, poster-like layouts, multi-panel compositions, inset views, fisheye framing, and any non-equirectangular composition cues.',
-    `User prompt: ${prompt}`
-  ].join('\n\n');
+    'Avoid framed artwork, poster-like layouts, multi-panel compositions, inset views, fisheye framing, and any non-equirectangular composition cues.'
+  ];
+
+  if (mode === 'improve') {
+    instructionBlocks.push(
+      previousIssue
+        ? `Regenerate this panorama because the previous attempt may have had weak 360 continuity or a visible seam. Focus on correcting this issue: ${previousIssue}.`
+        : 'Regenerate this panorama because the previous attempt may have had weak 360 continuity or a visible seam. Create a stronger true equirectangular 360-degree panorama with exact 2:1 aspect ratio and seamless left-to-right wraparound continuity.'
+    );
+  }
+
+  instructionBlocks.push(`User prompt: ${prompt}`);
+  return instructionBlocks.join('\n\n');
 }
 
-function buildAttemptPrompt(prompt: string, attemptNumber: number) {
+function buildAttemptPrompt(
+  prompt: string,
+  attemptNumber: number,
+  mode: GenerationRequestMode,
+  previousIssue: string
+) {
   if (attemptNumber <= 1) {
-    return buildPanoramaPrompt(prompt);
+    return buildPanoramaPrompt(prompt, mode, previousIssue);
   }
 
   return [
-    buildPanoramaPrompt(prompt),
+    buildPanoramaPrompt(prompt, mode, previousIssue),
     'Important correction: the previous image did not read as a proper continuous equirectangular panorama. Regenerate it as a true 360-degree equirectangular environment with exact 2:1 aspect ratio, visible flat-view equirectangular distortion, and seamless wraparound continuity from the left edge to the right edge.'
   ].join('\n\n');
 }
@@ -804,9 +854,13 @@ export default async function handler(request: VercelRequest, response: VercelRe
   }
 
   const prompt = getPromptFromBody(request.body);
+  const mode = getGenerationModeFromBody(request.body);
+  const previousIssue = getPreviousIssueFromBody(request.body);
   console.info('[generate-360-scene] Prompt received', {
     promptLength: prompt.length,
-    promptPreview: prompt.slice(0, 120)
+    promptPreview: prompt.slice(0, 120),
+    mode,
+    previousIssue
   });
   if (!prompt) {
     return response.status(400).json({ error: 'Describe the scene you want to generate first.' });
@@ -823,10 +877,11 @@ export default async function handler(request: VercelRequest, response: VercelRe
     let bestCandidate: GeneratedPanoramaCandidate | null = null;
 
     for (let attemptNumber = 1; attemptNumber <= MAX_GENERATION_ATTEMPTS; attemptNumber += 1) {
-      const wrappedPrompt = buildAttemptPrompt(prompt, attemptNumber);
+      const wrappedPrompt = buildAttemptPrompt(prompt, attemptNumber, mode, previousIssue);
       console.info('[generate-360-scene] Wrapped prompt prepared', {
         attemptNumber,
-        promptLength: wrappedPrompt.length
+        promptLength: wrappedPrompt.length,
+        mode
       });
 
       try {

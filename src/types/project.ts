@@ -43,6 +43,9 @@ export type Scene = {
   name: string;
   mediaType: SceneMediaType;
   panoramaUrl: string;
+  aiGenerated?: boolean;
+  generationPrompt?: string;
+  generationAttemptCount?: number;
   hotspots: Hotspot[];
 };
 

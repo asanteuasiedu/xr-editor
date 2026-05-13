@@ -37,6 +37,10 @@ type Generate360SceneApiResponse = {
   error?: string;
   message?: string;
 };
+type Generate360SceneRequestOptions = {
+  mode?: 'improve';
+  previousIssue?: string;
+};
 type Generate360SceneResult = {
   imageDataUrl: string;
   revisedPrompt?: string;
@@ -179,16 +183,24 @@ function deriveSceneNameFromFile(file: File, fallbackName: string) {
   return trimmedName || fallbackName;
 }
 
-async function requestGenerated360Scene(prompt: string): Promise<Generate360SceneResult> {
+async function requestGenerated360Scene(
+  prompt: string,
+  options?: Generate360SceneRequestOptions
+): Promise<Generate360SceneResult> {
   console.info('[generate-360-scene] request started', {
-    promptLength: prompt.trim().length
+    promptLength: prompt.trim().length,
+    mode: options?.mode ?? 'default'
   });
   const response = await fetch('/api/generate-360-scene', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ prompt })
+    body: JSON.stringify({
+      prompt,
+      ...(options?.mode ? { mode: options.mode } : {}),
+      ...(options?.previousIssue ? { previousIssue: options.previousIssue } : {})
+    })
   });
 
   const data = (await response.json().catch(() => ({}))) as Generate360SceneApiResponse;
@@ -601,7 +613,10 @@ function App() {
           ? {
               ...scene,
               mediaType: 'image',
-              panoramaUrl
+              panoramaUrl,
+              aiGenerated: undefined,
+              generationPrompt: undefined,
+              generationAttemptCount: undefined
             }
           : scene
       )
@@ -624,6 +639,9 @@ function App() {
           name: sceneName?.trim() || fallbackSceneName,
           mediaType: 'image',
           panoramaUrl,
+          aiGenerated: undefined,
+          generationPrompt: undefined,
+          generationAttemptCount: undefined,
           hotspots: []
         }
       ]
@@ -1129,18 +1147,23 @@ function App() {
     handleUpdateActiveSceneMedia(result.dataUrl);
   };
 
-  const handleGenerateSceneFromPrompt = async (prompt: string) => {
+  const handleGenerateSceneFromPrompt = async (
+    prompt: string,
+    options?: Generate360SceneRequestOptions
+  ) => {
     const targetSceneId = project.activeSceneId;
     console.info('[generate-360-scene] applying generated scene to active scene', {
-      targetSceneId
+      targetSceneId,
+      mode: options?.mode ?? 'default'
     });
-    const result = await requestGenerated360Scene(prompt);
+    const trimmedPrompt = prompt.trim();
+    const result = await requestGenerated360Scene(trimmedPrompt, options);
 
     setImportError(null);
     setImagePreviewBroken(false);
     setProject((currentProject) => {
-      const hasTargetScene = currentProject.scenes.some((scene) => scene.id === targetSceneId);
-      if (!hasTargetScene) {
+      const targetScene = currentProject.scenes.find((scene) => scene.id === targetSceneId);
+      if (!targetScene) {
         console.warn('[generate-360-scene] target scene no longer exists', {
           targetSceneId
         });
@@ -1160,7 +1183,13 @@ function App() {
             ? {
                 ...scene,
                 mediaType: 'image',
-                panoramaUrl: result.imageDataUrl
+                panoramaUrl: result.imageDataUrl,
+                aiGenerated: true,
+                generationPrompt: trimmedPrompt,
+                generationAttemptCount:
+                  options?.mode === 'improve'
+                    ? Math.max(1, targetScene.generationAttemptCount ?? 1) + 1
+                    : 1
               }
             : scene
         )
@@ -1168,11 +1197,23 @@ function App() {
     });
     setActiveEditSection('sceneDetails');
     setIsContextPanelOpen(true);
-    showTemporaryNotice('360 scene generated');
+    showTemporaryNotice(options?.mode === 'improve' ? 'Panorama regenerated' : '360 scene generated');
 
     return {
       revisedPrompt: result.revisedPrompt
     };
+  };
+
+  const handleImproveActiveScenePanorama = async () => {
+    const storedPrompt = activeScene.generationPrompt?.trim();
+    if (!storedPrompt) {
+      throw new Error('This scene does not have a saved generation prompt yet.');
+    }
+
+    await handleGenerateSceneFromPrompt(storedPrompt, {
+      mode: 'improve',
+      previousIssue: 'visible seam or weak panorama continuity'
+    });
   };
 
   const handleCreateSceneFromImageFile = async (file: File) => {
@@ -1512,6 +1553,7 @@ function App() {
               onRenameActiveScene={handleRenameActiveScene}
               onUploadScenePanorama={handleUploadSceneMedia}
               onGenerateSceneFromPrompt={handleGenerateSceneFromPrompt}
+              onImproveScenePanorama={handleImproveActiveScenePanorama}
               onCreateSceneFromImageFile={handleCreateSceneFromImageFile}
               onDeleteScene={handleDeleteScene}
               onAddHotspot={handleStartPlacingHotspot}
