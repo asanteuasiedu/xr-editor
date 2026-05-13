@@ -25,14 +25,25 @@ const USER_FACING_GENERATION_ERROR =
   'Could not generate the scene right now. Try another prompt or try again shortly.';
 const MAX_GENERATION_ATTEMPTS = 3;
 const ACCEPTABLE_SEAM_SCORE = 12;
+const MAX_FALLBACK_SEAM_SCORE = 18;
+const MAX_ACCEPTABLE_SPLIT_TRANSITION_RATIO = 3.35;
+const MAX_ACCEPTABLE_CENTER_TRANSITION_DIFFERENCE = 22;
+const MAX_FALLBACK_SPLIT_TRANSITION_RATIO = 4.5;
+const MAX_FALLBACK_CENTER_TRANSITION_DIFFERENCE = 30;
 const MIN_EDGE_STRIP_WIDTH = 12;
 const MAX_EDGE_STRIP_WIDTH = 24;
 
 type GeneratedPanoramaCandidate = {
   imageDataUrl: string;
   revisedPrompt?: string;
-  seamScore: number | null;
+  validation: PanoramaValidationResult;
   attemptNumber: number;
+};
+
+type DecodedPngImage = {
+  width: number;
+  height: number;
+  pixels: Uint8Array;
 };
 
 type PanoramaContinuityEvaluation = {
@@ -40,6 +51,33 @@ type PanoramaContinuityEvaluation = {
   stripWidth: number;
   width: number;
   height: number;
+};
+
+type PanoramaSuitabilityEvaluation = {
+  bucketCount: number;
+  meanTransitionDifference: number;
+  maxTransitionDifference: number;
+  maxTransitionIndex: number;
+  centerTransitionDifference: number;
+  splitTransitionRatio: number;
+};
+
+type PanoramaValidationResult = {
+  imageDataUrl: string;
+  width: number;
+  height: number;
+  aspectRatioPassed: boolean;
+  wasAspectAdjusted: boolean;
+  seamScore: number;
+  stripWidth: number;
+  meanTransitionDifference: number;
+  maxTransitionDifference: number;
+  maxTransitionIndex: number;
+  centerTransitionDifference: number;
+  splitTransitionRatio: number;
+  panoramaSuitabilityPassed: boolean;
+  minimumRequirementsPassed: boolean;
+  accepted: boolean;
 };
 
 function getGlobalBuffer() {
@@ -99,16 +137,17 @@ function getPromptFromBody(body: unknown) {
 
 function buildPanoramaPrompt(prompt: string) {
   return [
-    'Create a seamless 360-degree immersive panoramic environment intended for XR viewing.',
-    'The result must be a full equirectangular-style wraparound panorama with natural left-to-right edge continuity and no visible seam.',
-    'The far left and far right edges must connect naturally as one continuous environment with matching horizon, lighting, architecture, landscape, vegetation, sky, and perspective.',
-    'Avoid split compositions, collage-like layouts, mismatched halves, duplicated structures at the seam, abrupt perspective breaks, cropped framing, borders, or sudden changes in lighting, architecture, trees, buildings, terrain, or skyline across the wrap boundary.',
+    'Create a true full 360-degree equirectangular panoramic image intended for immersive XR viewing.',
+    'The output must be a seamless wraparound panorama with exact 2:1 composition and natural left-to-right edge continuity.',
+    'It must behave like a proper equirectangular projection: when viewed flat it may appear stretched or distorted, but when displayed in a 360-degree panorama viewer it should look spatially correct.',
+    'The far left and far right edges must connect naturally as one continuous environment with matching horizon, lighting, architecture, landscape, vegetation, sky, and perspective, with no visible seam, break, or abrupt transition.',
+    'Do not create a standard flat composition, split scene, collage, poster layout, two-part image, inset composition, or duplicated edge structures. Avoid abrupt changes in architecture, buildings, trees, terrain, skyline, or lighting across the wrap boundary.',
     'Render the environment in HD / high-detail quality with spatially coherent lighting, environmental continuity, and convincing depth across the full panorama.',
     'The result should feel like an empty immersive environment ready for educational XR authoring and panoramic exploration.',
     'Do not include people, humans, faces, crowds, bodies, silhouettes, characters, or portraits.',
     'Do not include readable text, labels, captions, signs, logos, watermarks, UI elements, interface overlays, or branded graphics.',
     'Avoid framed artwork, poster-like layouts, multi-panel compositions, inset views, fisheye framing, and any non-equirectangular composition cues.',
-    `User scene concept: ${prompt}`
+    `User prompt: ${prompt}`
   ].join('\n\n');
 }
 
@@ -119,7 +158,7 @@ function buildAttemptPrompt(prompt: string, attemptNumber: number) {
 
   return [
     buildPanoramaPrompt(prompt),
-    'Important correction: the previous attempt had a visible wrap seam. Regenerate this as a more continuous panoramic environment where the left and right image edges connect naturally with no abrupt break, duplicated structures, perspective jump, or lighting shift at the seam.'
+    'Important correction: the previous image did not read as a proper continuous equirectangular panorama. Regenerate it as a true 360-degree equirectangular environment with exact 2:1 aspect ratio, visible flat-view equirectangular distortion, and seamless wraparound continuity from the left edge to the right edge.'
   ].join('\n\n');
 }
 
@@ -173,6 +212,26 @@ async function inflateCompressedPngData(input: Uint8Array) {
   return inflateSync(input);
 }
 
+let deflateSyncPromise:
+  | Promise<(input: Uint8Array) => Uint8Array>
+  | null = null;
+
+async function deflatePngData(input: Uint8Array) {
+  if (!deflateSyncPromise) {
+    const loadZlibModule = new Function('return import("node:zlib")') as () => Promise<unknown>;
+    deflateSyncPromise = loadZlibModule().then((module) => {
+      const deflateSync = (module as {
+        deflateSync: (value: Uint8Array) => Uint8Array;
+      }).deflateSync;
+
+      return (value: Uint8Array) => new Uint8Array(deflateSync(value));
+    });
+  }
+
+  const deflateSync = await deflateSyncPromise;
+  return deflateSync(input);
+}
+
 function decodeDataUrlToBytes(dataUrl: string) {
   const base64Payload = dataUrl.match(/^data:[^;]+;base64,(.+)$/)?.[1];
   if (!base64Payload) {
@@ -187,7 +246,7 @@ function decodeDataUrlToBytes(dataUrl: string) {
   return new Uint8Array(globalBuffer.from(base64Payload, 'base64'));
 }
 
-async function decodePngDataUrl(dataUrl: string) {
+async function decodePngDataUrl(dataUrl: string): Promise<DecodedPngImage> {
   const bytes = decodeDataUrlToBytes(dataUrl);
   const pngSignature = [137, 80, 78, 71, 13, 10, 26, 10];
 
@@ -347,18 +406,163 @@ async function decodePngDataUrl(dataUrl: string) {
     previousRow.set(reconstructedRow);
   }
 
+  return { width, height, pixels };
+}
+
+function createCrc32Table() {
+  const table = new Uint32Array(256);
+
+  for (let index = 0; index < 256; index += 1) {
+    let value = index;
+
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = (value & 1) === 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+    }
+
+    table[index] = value >>> 0;
+  }
+
+  return table;
+}
+
+const CRC32_TABLE = createCrc32Table();
+
+function calculateCrc32(bytes: Uint8Array) {
+  let crc = 0xffffffff;
+
+  for (let index = 0; index < bytes.length; index += 1) {
+    crc = CRC32_TABLE[(crc ^ bytes[index]) & 0xff] ^ (crc >>> 8);
+  }
+
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function createPngChunk(type: string, data: Uint8Array) {
+  const typeBytes = new Uint8Array([
+    type.charCodeAt(0),
+    type.charCodeAt(1),
+    type.charCodeAt(2),
+    type.charCodeAt(3)
+  ]);
+  const chunk = new Uint8Array(12 + data.length);
+  const view = new DataView(chunk.buffer);
+  view.setUint32(0, data.length);
+  chunk.set(typeBytes, 4);
+  chunk.set(data, 8);
+
+  const crcInput = new Uint8Array(typeBytes.length + data.length);
+  crcInput.set(typeBytes, 0);
+  crcInput.set(data, typeBytes.length);
+  view.setUint32(8 + data.length, calculateCrc32(crcInput));
+
+  return chunk;
+}
+
+function concatenateByteArrays(chunks: Uint8Array[]) {
+  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const combined = new Uint8Array(totalLength);
+  let offset = 0;
+
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.length;
+  }
+
+  return combined;
+}
+
+function encodePngBytesSync(image: DecodedPngImage) {
+  const rowLength = image.width * 4;
+  const rawRows = new Uint8Array(image.height * (rowLength + 1));
+  let rawOffset = 0;
+
+  for (let y = 0; y < image.height; y += 1) {
+    rawRows[rawOffset] = 0;
+    rawOffset += 1;
+    const sourceOffset = y * rowLength;
+    rawRows.set(image.pixels.subarray(sourceOffset, sourceOffset + rowLength), rawOffset);
+    rawOffset += rowLength;
+  }
+
+  return rawRows;
+}
+
+async function encodePngDataUrl(image: DecodedPngImage) {
+  const rawRows = encodePngBytesSync(image);
+  const compressed = await deflatePngData(rawRows);
+  const pngSignature = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+  const ihdr = new Uint8Array(13);
+  const ihdrView = new DataView(ihdr.buffer);
+  ihdrView.setUint32(0, image.width);
+  ihdrView.setUint32(4, image.height);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  ihdr[10] = 0;
+  ihdr[11] = 0;
+  ihdr[12] = 0;
+
+  const pngBytes = concatenateByteArrays([
+    pngSignature,
+    createPngChunk('IHDR', ihdr),
+    createPngChunk('IDAT', compressed),
+    createPngChunk('IEND', new Uint8Array(0))
+  ]);
+  const globalBuffer = getGlobalBuffer();
+  if (!globalBuffer) {
+    throw new Error('Buffer is not available in this runtime.');
+  }
+
+  return `data:image/png;base64,${globalBuffer.from(pngBytes.buffer).toString('base64')}`;
+}
+
+function enforceTwoToOneAspectRatio(image: DecodedPngImage) {
+  const exactAspect = image.width === image.height * 2;
+  if (exactAspect) {
+    return {
+      image,
+      wasAdjusted: false
+    };
+  }
+
+  let targetHeight = image.height;
+  let targetWidth = image.height * 2;
+
+  if (targetWidth > image.width) {
+    targetWidth = image.width - (image.width % 2);
+    targetHeight = Math.floor(targetWidth / 2);
+  }
+
+  if (targetHeight <= 0 || targetWidth <= 0) {
+    throw new Error('Generated image could not be cropped to a valid 2:1 panorama.');
+  }
+
+  const cropX = Math.max(0, Math.floor((image.width - targetWidth) / 2));
+  const cropY = Math.max(0, Math.floor((image.height - targetHeight) / 2));
+  const croppedPixels = new Uint8Array(targetWidth * targetHeight * 4);
+
+  for (let y = 0; y < targetHeight; y += 1) {
+    const sourceOffset = ((cropY + y) * image.width + cropX) * 4;
+    const targetOffset = y * targetWidth * 4;
+    croppedPixels.set(
+      image.pixels.subarray(sourceOffset, sourceOffset + targetWidth * 4),
+      targetOffset
+    );
+  }
+
   return {
-    width,
-    height,
-    pixels
+    image: {
+      width: targetWidth,
+      height: targetHeight,
+      pixels: croppedPixels
+    },
+    wasAdjusted: true
   };
 }
 
-async function evaluatePanoramaContinuity(imageDataUrl: string): Promise<PanoramaContinuityEvaluation> {
-  const decodedImage = await decodePngDataUrl(imageDataUrl);
+function evaluatePanoramaContinuity(decodedImage: DecodedPngImage): PanoramaContinuityEvaluation {
   const stripWidth = Math.min(
     MAX_EDGE_STRIP_WIDTH,
-    Math.max(MIN_EDGE_STRIP_WIDTH, Math.round(decodedImage.width * 0.012))
+    Math.max(1, Math.min(Math.floor(decodedImage.width / 4), Math.max(MIN_EDGE_STRIP_WIDTH, Math.round(decodedImage.width * 0.012))))
   );
   let meanColorDifference = 0;
   let meanLumaDifference = 0;
@@ -432,6 +636,110 @@ async function evaluatePanoramaContinuity(imageDataUrl: string): Promise<Panoram
   };
 }
 
+function evaluatePanoramaSuitability(decodedImage: DecodedPngImage): PanoramaSuitabilityEvaluation {
+  const bucketCount = Math.max(16, Math.min(64, Math.floor(decodedImage.width / 24)));
+  const bucketSums = Array.from({ length: bucketCount }, () => ({
+    red: 0,
+    green: 0,
+    blue: 0,
+    count: 0
+  }));
+
+  for (let y = 0; y < decodedImage.height; y += 1) {
+    for (let x = 0; x < decodedImage.width; x += 1) {
+      const bucketIndex = Math.min(bucketCount - 1, Math.floor((x / decodedImage.width) * bucketCount));
+      const pixelOffset = (y * decodedImage.width + x) * 4;
+      const bucket = bucketSums[bucketIndex];
+
+      bucket.red += decodedImage.pixels[pixelOffset];
+      bucket.green += decodedImage.pixels[pixelOffset + 1];
+      bucket.blue += decodedImage.pixels[pixelOffset + 2];
+      bucket.count += 1;
+    }
+  }
+
+  const bucketAverages = bucketSums.map((bucket) => ({
+    red: bucket.red / Math.max(1, bucket.count),
+    green: bucket.green / Math.max(1, bucket.count),
+    blue: bucket.blue / Math.max(1, bucket.count)
+  }));
+  const transitions = bucketAverages.slice(1).map((bucket, index) => {
+    const previousBucket = bucketAverages[index];
+    return (
+      (Math.abs(bucket.red - previousBucket.red) +
+        Math.abs(bucket.green - previousBucket.green) +
+        Math.abs(bucket.blue - previousBucket.blue)) /
+      3
+    );
+  });
+  const meanTransitionDifference =
+    transitions.reduce((sum, difference) => sum + difference, 0) / Math.max(1, transitions.length);
+  let maxTransitionDifference = 0;
+  let maxTransitionIndex = 0;
+
+  transitions.forEach((difference, index) => {
+    if (difference > maxTransitionDifference) {
+      maxTransitionDifference = difference;
+      maxTransitionIndex = index;
+    }
+  });
+
+  const centerTransitionDifference = transitions[Math.floor(transitions.length / 2)] ?? 0;
+  const splitTransitionRatio = Math.round(
+    (maxTransitionDifference / Math.max(1, meanTransitionDifference)) * 100
+  ) / 100;
+
+  return {
+    bucketCount,
+    meanTransitionDifference: Math.round(meanTransitionDifference * 100) / 100,
+    maxTransitionDifference: Math.round(maxTransitionDifference * 100) / 100,
+    maxTransitionIndex,
+    centerTransitionDifference: Math.round(centerTransitionDifference * 100) / 100,
+    splitTransitionRatio
+  };
+}
+
+async function validateGeneratedPanorama(imageDataUrl: string): Promise<PanoramaValidationResult> {
+  const decodedImage = await decodePngDataUrl(imageDataUrl);
+  const aspectAdjustedImage = enforceTwoToOneAspectRatio(decodedImage);
+  const continuity = evaluatePanoramaContinuity(aspectAdjustedImage.image);
+  const suitability = evaluatePanoramaSuitability(aspectAdjustedImage.image);
+  const aspectRatioPassed = aspectAdjustedImage.image.width === aspectAdjustedImage.image.height * 2;
+  const panoramaSuitabilityPassed =
+    suitability.splitTransitionRatio <= MAX_ACCEPTABLE_SPLIT_TRANSITION_RATIO &&
+    suitability.centerTransitionDifference <= MAX_ACCEPTABLE_CENTER_TRANSITION_DIFFERENCE;
+  const accepted =
+    aspectRatioPassed &&
+    continuity.seamScore <= ACCEPTABLE_SEAM_SCORE &&
+    panoramaSuitabilityPassed;
+  const minimumRequirementsPassed =
+    aspectRatioPassed &&
+    continuity.seamScore <= MAX_FALLBACK_SEAM_SCORE &&
+    suitability.splitTransitionRatio <= MAX_FALLBACK_SPLIT_TRANSITION_RATIO &&
+    suitability.centerTransitionDifference <= MAX_FALLBACK_CENTER_TRANSITION_DIFFERENCE;
+  const finalImageDataUrl = aspectAdjustedImage.wasAdjusted
+    ? await encodePngDataUrl(aspectAdjustedImage.image)
+    : imageDataUrl;
+
+  return {
+    imageDataUrl: finalImageDataUrl,
+    width: aspectAdjustedImage.image.width,
+    height: aspectAdjustedImage.image.height,
+    aspectRatioPassed,
+    wasAspectAdjusted: aspectAdjustedImage.wasAdjusted,
+    seamScore: continuity.seamScore,
+    stripWidth: continuity.stripWidth,
+    meanTransitionDifference: suitability.meanTransitionDifference,
+    maxTransitionDifference: suitability.maxTransitionDifference,
+    maxTransitionIndex: suitability.maxTransitionIndex,
+    centerTransitionDifference: suitability.centerTransitionDifference,
+    splitTransitionRatio: suitability.splitTransitionRatio,
+    panoramaSuitabilityPassed,
+    minimumRequirementsPassed,
+    accepted
+  };
+}
+
 async function normalizeGeneratedImagePayload(data: OpenAIImageGenerationResponse) {
   const generatedImage = data.data?.[0];
   let imageDataUrl: string | null = null;
@@ -467,15 +775,22 @@ function isBetterCandidate(
     return true;
   }
 
-  if (candidate.seamScore === null) {
-    return currentBest.seamScore === null && candidate.attemptNumber < currentBest.attemptNumber;
+  const candidatePenalty =
+    (candidate.validation.aspectRatioPassed ? 0 : 100) +
+    candidate.validation.seamScore +
+    Math.max(0, candidate.validation.splitTransitionRatio - MAX_ACCEPTABLE_SPLIT_TRANSITION_RATIO) * 10 +
+    Math.max(0, candidate.validation.centerTransitionDifference - MAX_ACCEPTABLE_CENTER_TRANSITION_DIFFERENCE);
+  const currentPenalty =
+    (currentBest.validation.aspectRatioPassed ? 0 : 100) +
+    currentBest.validation.seamScore +
+    Math.max(0, currentBest.validation.splitTransitionRatio - MAX_ACCEPTABLE_SPLIT_TRANSITION_RATIO) * 10 +
+    Math.max(0, currentBest.validation.centerTransitionDifference - MAX_ACCEPTABLE_CENTER_TRANSITION_DIFFERENCE);
+
+  if (candidatePenalty !== currentPenalty) {
+    return candidatePenalty < currentPenalty;
   }
 
-  if (currentBest.seamScore === null) {
-    return true;
-  }
-
-  return candidate.seamScore < currentBest.seamScore;
+  return candidate.attemptNumber < currentBest.attemptNumber;
 }
 
 export default async function handler(request: VercelRequest, response: VercelResponse) {
@@ -490,7 +805,8 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
   const prompt = getPromptFromBody(request.body);
   console.info('[generate-360-scene] Prompt received', {
-    promptLength: prompt.length
+    promptLength: prompt.length,
+    promptPreview: prompt.slice(0, 120)
   });
   if (!prompt) {
     return response.status(400).json({ error: 'Describe the scene you want to generate first.' });
@@ -547,22 +863,12 @@ export default async function handler(request: VercelRequest, response: VercelRe
         }
 
         const normalizedImage = await normalizeGeneratedImagePayload(data);
-        let seamEvaluation: PanoramaContinuityEvaluation | null = null;
-
-        try {
-          seamEvaluation = await evaluatePanoramaContinuity(normalizedImage.imageDataUrl);
-        } catch (continuityError) {
-          console.warn('[generate-360-scene] Continuity scoring skipped', {
-            attemptNumber,
-            message:
-              continuityError instanceof Error ? continuityError.message : 'Unknown continuity error'
-          });
-        }
+        const validation = await validateGeneratedPanorama(normalizedImage.imageDataUrl);
 
         const candidate: GeneratedPanoramaCandidate = {
-          imageDataUrl: normalizedImage.imageDataUrl,
+          imageDataUrl: validation.imageDataUrl,
           revisedPrompt: normalizedImage.revisedPrompt,
-          seamScore: seamEvaluation?.seamScore ?? null,
+          validation,
           attemptNumber
         };
 
@@ -570,18 +876,24 @@ export default async function handler(request: VercelRequest, response: VercelRe
           bestCandidate = candidate;
         }
 
-        const accepted = candidate.seamScore === null || candidate.seamScore <= ACCEPTABLE_SEAM_SCORE;
         console.info('[generate-360-scene] Continuity evaluation complete', {
           attemptNumber,
-          seamScore: candidate.seamScore,
-          stripWidth: seamEvaluation?.stripWidth ?? null,
-          width: seamEvaluation?.width ?? null,
-          height: seamEvaluation?.height ?? null,
-          accepted,
-          willRetry: !accepted && attemptNumber < MAX_GENERATION_ATTEMPTS
+          width: validation.width,
+          height: validation.height,
+          aspectRatioPassed: validation.aspectRatioPassed,
+          wasAspectAdjusted: validation.wasAspectAdjusted,
+          seamScore: validation.seamScore,
+          stripWidth: validation.stripWidth,
+          splitTransitionRatio: validation.splitTransitionRatio,
+          centerTransitionDifference: validation.centerTransitionDifference,
+          maxTransitionDifference: validation.maxTransitionDifference,
+          panoramaSuitabilityPassed: validation.panoramaSuitabilityPassed,
+          accepted: validation.accepted,
+          minimumRequirementsPassed: validation.minimumRequirementsPassed,
+          willRetry: !validation.accepted && attemptNumber < MAX_GENERATION_ATTEMPTS
         });
 
-        if (accepted) {
+        if (validation.accepted) {
           return response.status(200).json({
             imageDataUrl: candidate.imageDataUrl,
             revisedPrompt: candidate.revisedPrompt
@@ -610,8 +922,18 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
     console.info('[generate-360-scene] Returning best available panorama candidate', {
       attemptNumber: bestCandidate.attemptNumber,
-      seamScore: bestCandidate.seamScore
+      width: bestCandidate.validation.width,
+      height: bestCandidate.validation.height,
+      seamScore: bestCandidate.validation.seamScore,
+      splitTransitionRatio: bestCandidate.validation.splitTransitionRatio,
+      minimumRequirementsPassed: bestCandidate.validation.minimumRequirementsPassed
     });
+
+    if (!bestCandidate.validation.minimumRequirementsPassed) {
+      return response.status(502).json({
+        error: USER_FACING_GENERATION_ERROR
+      });
+    }
 
     return response.status(200).json({
       imageDataUrl: bestCandidate.imageDataUrl,
