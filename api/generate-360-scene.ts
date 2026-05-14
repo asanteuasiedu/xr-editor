@@ -23,6 +23,20 @@ type OpenAIImageGenerationResponse = {
   };
 };
 
+type OpenAIResponsesTextResponse = {
+  output_text?: string;
+  output?: Array<{
+    type?: string;
+    content?: Array<{
+      type?: string;
+      text?: string;
+    }>;
+  }>;
+  error?: {
+    message?: string;
+  };
+};
+
 type GenerationRequestMode = 'generate' | 'improve';
 
 type GeneratedPanoramaAttempt = {
@@ -44,7 +58,8 @@ type GeneratedPanoramaAttempt = {
 
 const USER_FACING_GENERATION_ERROR =
   'Could not generate the scene right now. Try another prompt or try again shortly.';
-const IMAGE_MODEL = 'gpt-image-1';
+const PLANNER_MODEL = getEnvValue('OPENAI_PANORAMA_PLANNER_MODEL') || 'gpt-4.1-mini';
+const IMAGE_MODEL = getEnvValue('OPENAI_IMAGE_MODEL') || 'gpt-image-1';
 const IMAGE_SIZE = '1536x1024';
 const IMAGE_QUALITY = 'medium';
 const IMAGE_OUTPUT_FORMAT = 'png';
@@ -154,21 +169,102 @@ function buildPanoramaGenerationPrompt(
 }
 
 function buildAttemptPrompt(
-  userPrompt: string,
-  mode: GenerationRequestMode,
-  previousIssue: string,
+  panoramaBrief: string,
   attemptNumber: number
 ) {
-  const basePrompt = buildPanoramaGenerationPrompt(userPrompt, mode, previousIssue);
   if (attemptNumber <= 1) {
-    return basePrompt;
+    return panoramaBrief;
   }
 
   return [
-    basePrompt,
+    panoramaBrief,
     'Important correction for this attempt:',
     'The previous generated panorama did not pass seam-continuity validation. Regenerate the scene as a stronger true equirectangular 360 panorama with natural left-right edge continuity. Make the left and right edges visually match as one continuous environment. Avoid center pinch, radial collapse, split scenes, little-planet projection, and abrupt edge transitions.'
   ].join('\n\n');
+}
+
+function extractResponsesOutputText(response: OpenAIResponsesTextResponse) {
+  if (typeof response.output_text === 'string' && response.output_text.trim()) {
+    return response.output_text.trim();
+  }
+
+  const nestedText = response.output
+    ?.flatMap((item) => item.content ?? [])
+    .map((content) => content.text?.trim() ?? '')
+    .filter(Boolean)
+    .join('\n')
+    .trim();
+
+  return nestedText || '';
+}
+
+async function createPanoramaGenerationBrief(params: {
+  userPrompt: string;
+  mode?: GenerationRequestMode;
+  previousIssue?: string;
+  apiKey: string;
+}) {
+  const { userPrompt, mode = 'generate', previousIssue = '', apiKey } = params;
+  const fallbackPrompt = buildPanoramaGenerationPrompt(userPrompt, mode, previousIssue);
+  const plannerInput = [
+    'You are an expert panorama prompt planner for XR scene generation.',
+    'Rewrite the user prompt into a concise but detailed production brief for an image generation model.',
+    'Return only the final image prompt text. Do not return JSON, markdown, headings, bullets, explanations, or surrounding commentary.',
+    'The brief must strongly enforce all of the following:',
+    '- TRUE full 360-degree equirectangular panorama',
+    '- exact 2:1 panorama intent',
+    '- continuous immersive XR viewer compatibility',
+    '- strong left/right edge continuity',
+    '- stable horizon',
+    '- human eye-level perspective unless the prompt clearly requires otherwise',
+    '- continuous environment across the full horizontal frame',
+    '- consistent sky and horizon across the wrap boundary',
+    '- edge content that remains visually compatible across the left and right boundaries',
+    '- wide equirectangular projection that may look stretched flat but should feel correct in a 360 viewer',
+    '- no people, humans, faces, bodies, silhouettes, or crowds',
+    '- no readable text, labels, logos, UI, captions, watermarks, or readable signage',
+    '- no little-planet projection, fisheye circle, center pinch, vortex, tunnel, spiral, split composition, collage, two-scene image, or ordinary flat landscape photo'
+  ];
+
+  if (mode === 'improve') {
+    plannerInput.push(
+      'This is a regeneration request because the previous panorama may have had a visible seam, weak left-right continuity, warped little-planet behavior, fisheye failure, or unstable viewer structure.',
+      previousIssue
+        ? `Pay special attention to this previous issue: ${previousIssue}.`
+        : 'Prioritize viewer-safe panorama structure over artistic drama.'
+    );
+  }
+
+  plannerInput.push(`User prompt:\n${userPrompt}`);
+
+  const plannerResponse = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: PLANNER_MODEL,
+      input: plannerInput.join('\n\n'),
+      max_output_tokens: 450
+    })
+  });
+
+  const plannerData = (await plannerResponse.json().catch(() => ({}))) as OpenAIResponsesTextResponse;
+  const plannedPrompt = extractResponsesOutputText(plannerData);
+
+  if (!plannerResponse.ok) {
+    throw new Error(plannerData.error?.message ?? plannerResponse.statusText);
+  }
+
+  if (!plannedPrompt) {
+    throw new Error('Planner returned an empty panorama brief.');
+  }
+
+  return {
+    plannedPrompt,
+    fallbackPrompt
+  };
 }
 
 function bytesToDataUrl(bytes: Uint8Array, mimeType: string) {
@@ -501,12 +597,41 @@ export default async function handler(request: VercelRequest, response: VercelRe
   let bestAttempt: GeneratedPanoramaAttempt | null = null;
 
   try {
+    let basePrompt = buildPanoramaGenerationPrompt(prompt, mode, previousIssue);
+    let planningSucceeded = false;
+
+    try {
+      const plannerResult = await createPanoramaGenerationBrief({
+        userPrompt: prompt,
+        mode,
+        previousIssue,
+        apiKey
+      });
+      basePrompt = plannerResult.plannedPrompt;
+      planningSucceeded = true;
+      console.info('[generate-360-scene] Panorama planning succeeded', {
+        mode,
+        plannerModel: PLANNER_MODEL,
+        plannedPromptLength: basePrompt.length,
+        plannedPromptPreview: basePrompt.slice(0, 200)
+      });
+    } catch (plannerError) {
+      console.warn('[generate-360-scene] Panorama planning failed, using fallback prompt', {
+        mode,
+        plannerModel: PLANNER_MODEL,
+        message: plannerError instanceof Error ? plannerError.message : 'Unknown planner error',
+        fallbackPromptLength: basePrompt.length
+      });
+    }
+
     for (let attemptNumber = 1; attemptNumber <= MAX_GENERATION_ATTEMPTS; attemptNumber += 1) {
-      const wrappedPrompt = buildAttemptPrompt(prompt, mode, previousIssue, attemptNumber);
+      const wrappedPrompt = buildAttemptPrompt(basePrompt, attemptNumber);
       console.info('[generate-360-scene] Wrapped prompt prepared', {
         mode,
         attemptNumber,
         promptLength: wrappedPrompt.length,
+        planningSucceeded,
+        plannerModel: planningSucceeded ? PLANNER_MODEL : null,
         model: IMAGE_MODEL,
         size: IMAGE_SIZE
       });
@@ -609,7 +734,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
         return response.status(200).json({
           imageDataUrl: processedAttempt.imageDataUrl,
-          revisedPrompt: processedAttempt.revisedPrompt
+          revisedPrompt: processedAttempt.revisedPrompt ?? basePrompt
         });
       }
     }
@@ -635,7 +760,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
     return response.status(200).json({
       imageDataUrl: bestAttempt.imageDataUrl,
-      revisedPrompt: bestAttempt.revisedPrompt
+      revisedPrompt: bestAttempt.revisedPrompt ?? basePrompt
     });
   } catch (error) {
     console.error('[generate-360-scene] Scene generation route failed', {
