@@ -59,8 +59,8 @@ type GenerationDebugMetadata = {
   imageModel: string;
   attempts: number;
   attemptSeamScores: number[];
-  finalSeamScore: number;
-  selectedAttempt: number;
+  finalSeamScore: number | null;
+  selectedAttempt: number | null;
   repairApplied: boolean;
 };
 
@@ -84,11 +84,15 @@ type GeneratedPanoramaAttempt = {
 const USER_FACING_GENERATION_ERROR =
   'Could not generate the scene right now. Try another prompt or try again shortly.';
 const PLANNER_MODEL = getEnvValue('OPENAI_PANORAMA_PLANNER_MODEL') || 'gpt-4.1-mini';
+const ENABLE_PANORAMA_PLANNER = getEnvValue('ENABLE_PANORAMA_PLANNER') !== 'false';
 const IMAGE_MODEL = getEnvValue('OPENAI_IMAGE_MODEL') || 'gpt-image-1';
 const IMAGE_SIZE = '1536x1024';
 const IMAGE_QUALITY = 'medium';
 const IMAGE_OUTPUT_FORMAT = 'png';
-const MAX_GENERATION_ATTEMPTS = 3;
+const NORMAL_MAX_ATTEMPTS = 1;
+const IMPROVE_MAX_ATTEMPTS = 1;
+const DEBUG_MAX_ATTEMPTS = 2;
+const MAX_ROUTE_MS = 25_000;
 const NORMALIZED_WIDTH = 1536;
 const NORMALIZED_HEIGHT = 768;
 const ANALYSIS_WIDTH = 512;
@@ -209,6 +213,14 @@ function buildPanoramaGenerationPrompt(
   promptSections.push(`User scene concept:\n${userPrompt}`);
 
   return promptSections.join('\n\n');
+}
+
+function hasTimeForAnotherExpensiveStep(startedAt: number, budgetMs = MAX_ROUTE_MS) {
+  return Date.now() - startedAt < budgetMs;
+}
+
+function getRouteDurationMs(startedAt: number) {
+  return Date.now() - startedAt;
 }
 
 function buildAttemptPrompt(
@@ -535,12 +547,17 @@ async function normalizeGeneratedImagePayload(data: OpenAIImageGenerationRespons
 async function processGeneratedImage(
   imageBytes: Uint8Array,
   revisedPrompt: string | undefined,
-  attemptNumber: number
+  attemptNumber: number,
+  options: {
+    runQualityControl: boolean;
+    allowRepair: boolean;
+    startedAt: number;
+  }
 ): Promise<GeneratedPanoramaAttempt> {
   const originalMetadata = await getImageMetadata(imageBytes);
   const normalizedBytes = await normalizePanoramaToTwoToOne(imageBytes);
   const normalizedMetadata = await getImageMetadata(normalizedBytes);
-  const seamScoreBeforeRepair = await calculateSeamScore(normalizedBytes);
+  const seamScoreBeforeRepair = options.runQualityControl ? await calculateSeamScore(normalizedBytes) : 0;
   let finalBytes = normalizedBytes;
   let seamScore = seamScoreBeforeRepair;
   let seamScoreAfterRepair: number | null = null;
@@ -548,7 +565,12 @@ async function processGeneratedImage(
   let repairedSelected = false;
   let blendHalfWidth: number | null = null;
 
-  if (seamScoreBeforeRepair > ACCEPTABLE_SEAM_SCORE) {
+  if (
+    options.runQualityControl &&
+    options.allowRepair &&
+    seamScoreBeforeRepair > ACCEPTABLE_SEAM_SCORE &&
+    hasTimeForAnotherExpensiveStep(options.startedAt)
+  ) {
     repairAttempted = true;
 
     try {
@@ -626,7 +648,7 @@ function buildDebugMetadata(params: {
   plannedPromptLength: number;
   mode: GenerationRequestMode;
   attemptDiagnostics: AttemptDiagnostic[];
-  selectedAttempt: GeneratedPanoramaAttempt;
+  selectedAttempt: GeneratedPanoramaAttempt | null;
 }): GenerationDebugMetadata {
   const {
     plannerMode,
@@ -645,15 +667,17 @@ function buildDebugMetadata(params: {
     imageModel: IMAGE_MODEL,
     attempts: attemptDiagnostics.length,
     attemptSeamScores: attemptDiagnostics.map((attempt) => attempt.seamScore),
-    finalSeamScore: selectedAttempt.seamScore,
-    selectedAttempt: selectedAttempt.attemptNumber,
-    repairApplied: selectedAttempt.repairedSelected
+    finalSeamScore: selectedAttempt?.seamScore ?? null,
+    selectedAttempt: selectedAttempt?.attemptNumber ?? null,
+    repairApplied: selectedAttempt?.repairedSelected ?? false
   };
 }
 
 export default async function handler(request: VercelRequest, response: VercelResponse) {
+  const startedAt = Date.now();
   console.info('[generate-360-scene] Route hit', {
-    method: request.method
+    method: request.method,
+    maxRouteMs: MAX_ROUTE_MS
   });
 
   if (request.method !== 'POST') {
@@ -666,11 +690,24 @@ export default async function handler(request: VercelRequest, response: VercelRe
   const previousIssue = getPreviousIssueFromBody(request.body);
   const debug = getDebugFlagFromBody(request.body);
   const plannerMode = getPlannerModeFromBody(request.body);
+  const shouldUseFastPath = mode === 'generate' && !debug;
+  const maxAttempts = debug ? DEBUG_MAX_ATTEMPTS : mode === 'improve' ? IMPROVE_MAX_ATTEMPTS : NORMAL_MAX_ATTEMPTS;
+  const shouldRunQualityControl = !shouldUseFastPath;
+  const shouldAllowDeterministicRepair = !shouldUseFastPath;
+  const shouldRunPlanner =
+    plannerMode === 'planner' &&
+    !shouldUseFastPath &&
+    ENABLE_PANORAMA_PLANNER &&
+    hasTimeForAnotherExpensiveStep(startedAt);
   console.info('[generate-360-scene] Prompt received', {
     promptLength: prompt.length,
     mode,
     debug,
-    plannerMode
+    plannerMode,
+    plannerEnabled: shouldRunPlanner,
+    plannerAllowedByEnv: ENABLE_PANORAMA_PLANNER,
+    maxAttempts,
+    qualityControlEnabled: shouldRunQualityControl
   });
 
   if (!prompt) {
@@ -686,12 +723,14 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
   let bestAttempt: GeneratedPanoramaAttempt | null = null;
   const attemptDiagnostics: AttemptDiagnostic[] = [];
+  let failurePhase = 'setup';
 
   try {
     let basePrompt = buildPanoramaGenerationPrompt(prompt, mode, previousIssue);
     let planningSucceeded = false;
 
-    if (plannerMode === 'planner') {
+    if (shouldRunPlanner) {
+      failurePhase = 'planner';
       try {
         const plannerResult = await createPanoramaGenerationBrief({
           userPrompt: prompt,
@@ -721,11 +760,25 @@ export default async function handler(request: VercelRequest, response: VercelRe
       console.info('[generate-360-scene] Static panorama prompt selected', {
         mode,
         plannerMode,
+        plannerEnabled: false,
         fallbackPromptLength: basePrompt.length
       });
     }
 
-    for (let attemptNumber = 1; attemptNumber <= MAX_GENERATION_ATTEMPTS; attemptNumber += 1) {
+    for (let attemptNumber = 1; attemptNumber <= maxAttempts; attemptNumber += 1) {
+      if (!hasTimeForAnotherExpensiveStep(startedAt)) {
+        console.warn('[generate-360-scene] Skipping additional expensive work due to route time budget', {
+          mode,
+          debug,
+          plannerMode,
+          attemptNumber,
+          elapsedMs: getRouteDurationMs(startedAt),
+          bestAttemptAvailable: Boolean(bestAttempt)
+        });
+        break;
+      }
+
+      failurePhase = `attempt-${attemptNumber}-prompt`;
       const wrappedPrompt = buildAttemptPrompt(basePrompt, attemptNumber);
       console.info('[generate-360-scene] Wrapped prompt prepared', {
         mode,
@@ -735,9 +788,11 @@ export default async function handler(request: VercelRequest, response: VercelRe
         planningSucceeded,
         plannerModel: planningSucceeded ? PLANNER_MODEL : null,
         model: IMAGE_MODEL,
-        size: IMAGE_SIZE
+        size: IMAGE_SIZE,
+        elapsedMs: getRouteDurationMs(startedAt)
       });
 
+      failurePhase = `attempt-${attemptNumber}-image-generation`;
       const openAIResponse = await fetch('https://api.openai.com/v1/images/generations', {
         method: 'POST',
         headers: {
@@ -783,11 +838,18 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
       let processedAttempt: GeneratedPanoramaAttempt | null = null;
       try {
+        failurePhase = `attempt-${attemptNumber}-normalization`;
         const normalizedImage = await normalizeGeneratedImagePayload(data);
+        failurePhase = `attempt-${attemptNumber}-processing`;
         processedAttempt = await processGeneratedImage(
           normalizedImage.imageBytes,
           normalizedImage.revisedPrompt,
-          attemptNumber
+          attemptNumber,
+          {
+            runQualityControl: shouldRunQualityControl,
+            allowRepair: shouldAllowDeterministicRepair,
+            startedAt
+          }
         );
       } catch (processingError) {
         console.error('[generate-360-scene] Image normalization failed', {
@@ -809,7 +871,8 @@ export default async function handler(request: VercelRequest, response: VercelRe
       }
 
       const passedThreshold =
-        processedAttempt.aspectRatioPassed && processedAttempt.seamScore <= ACCEPTABLE_SEAM_SCORE;
+        processedAttempt.aspectRatioPassed &&
+        (!shouldRunQualityControl || processedAttempt.seamScore <= ACCEPTABLE_SEAM_SCORE);
 
       console.info('[generate-360-scene] Attempt analyzed', {
         mode,
@@ -827,14 +890,16 @@ export default async function handler(request: VercelRequest, response: VercelRe
         blendHalfWidth: processedAttempt.blendHalfWidth,
         seamScore: processedAttempt.seamScore,
         passedThreshold,
-        retryTriggered: !passedThreshold && attemptNumber < MAX_GENERATION_ATTEMPTS
+        retryTriggered: !passedThreshold && attemptNumber < maxAttempts && hasTimeForAnotherExpensiveStep(startedAt),
+        elapsedMs: getRouteDurationMs(startedAt)
       });
 
       if (passedThreshold) {
+        failurePhase = `attempt-${attemptNumber}-response-assembly`;
         const debugMetadata = debug
           ? buildDebugMetadata({
               plannerMode,
-              plannerSucceeded,
+              plannerSucceeded: planningSucceeded,
               plannedPromptLength: basePrompt.length,
               mode,
               attemptDiagnostics,
@@ -845,7 +910,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
         console.info('[generate-360-scene] Returning accepted panorama attempt', {
           mode,
           plannerMode,
-          plannerSucceeded,
+          plannerSucceeded: planningSucceeded,
           imageModel: IMAGE_MODEL,
           attempts: attemptDiagnostics.length,
           returnedAttempt: processedAttempt.attemptNumber,
@@ -853,7 +918,8 @@ export default async function handler(request: VercelRequest, response: VercelRe
           seamScoreBeforeRepair: processedAttempt.seamScoreBeforeRepair,
           seamScoreAfterRepair: processedAttempt.seamScoreAfterRepair,
           repairedSelected: processedAttempt.repairedSelected,
-          seamScore: processedAttempt.seamScore
+          seamScore: processedAttempt.seamScore,
+          routeDurationMs: getRouteDurationMs(startedAt)
         });
 
         return response.status(200).json({
@@ -870,10 +936,11 @@ export default async function handler(request: VercelRequest, response: VercelRe
       });
     }
 
+    failurePhase = 'best-attempt-response-assembly';
     console.info('[generate-360-scene] Returning best available panorama attempt', {
       mode,
       plannerMode,
-      plannerSucceeded,
+      plannerSucceeded: planningSucceeded,
       imageModel: IMAGE_MODEL,
       attempts: attemptDiagnostics.length,
       returnedAttempt: bestAttempt.attemptNumber,
@@ -885,13 +952,14 @@ export default async function handler(request: VercelRequest, response: VercelRe
       seamScoreBeforeRepair: bestAttempt.seamScoreBeforeRepair,
       seamScoreAfterRepair: bestAttempt.seamScoreAfterRepair,
       repairedSelected: bestAttempt.repairedSelected,
-      seamScore: bestAttempt.seamScore
+      seamScore: bestAttempt.seamScore,
+      routeDurationMs: getRouteDurationMs(startedAt)
     });
 
     const debugMetadata = debug
       ? buildDebugMetadata({
           plannerMode,
-          plannerSucceeded,
+          plannerSucceeded: planningSucceeded,
           plannedPromptLength: basePrompt.length,
           mode,
           attemptDiagnostics,
@@ -905,10 +973,20 @@ export default async function handler(request: VercelRequest, response: VercelRe
       ...(debugMetadata ? { debug: debugMetadata } : {})
     });
   } catch (error) {
+    const stackPreview =
+      error instanceof Error && typeof error.stack === 'string'
+        ? error.stack.split('\n').slice(0, 4).join('\n')
+        : undefined;
+
     console.error('[generate-360-scene] Scene generation route failed', {
       mode,
       plannerMode,
-      message: error instanceof Error ? error.message : 'Unknown error'
+      debug,
+      failurePhase,
+      routeDurationMs: getRouteDurationMs(startedAt),
+      errorName: error instanceof Error ? error.name : 'UnknownError',
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stackPreview
     });
     return response.status(502).json({
       error: USER_FACING_GENERATION_ERROR
