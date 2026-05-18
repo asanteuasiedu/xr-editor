@@ -5,7 +5,7 @@ import CreationOnboarding from './components/CreationOnboarding';
 import Sidebar, { type EditSection } from './components/Sidebar';
 import HotspotEditor from './components/HotspotEditor';
 import PanoramaViewer from './components/PanoramaViewer';
-import type { Hotspot, Project } from './types/project';
+import type { Hotspot, HotspotPolygonPoint, Project } from './types/project';
 import { getDefaultZoneMetadata } from './types/project';
 import { exportProjectToJson, importProjectFromFile } from './utils/exportImport';
 import { imageFileToDataUrl } from './utils/fileAssets';
@@ -18,7 +18,8 @@ const DEFAULT_PANORAMA_URL = STARTER_SCENE_PANORAMA_URL;
 type PlacementMode =
   | { type: 'idle' }
   | { type: 'placingNewHotspot' }
-  | { type: 'movingExistingHotspot'; hotspotId: string };
+  | { type: 'movingExistingHotspot'; hotspotId: string }
+  | { type: 'drawingPolygon'; points: HotspotPolygonPoint[] };
 
 type SaveState = 'saved' | 'unsaved' | 'restored';
 type AppMode = 'edit' | 'preview' | 'arPreview';
@@ -181,6 +182,29 @@ function getMultipleChoiceConfig(hotspot: Hotspot) {
 function deriveSceneNameFromFile(file: File, fallbackName: string) {
   const trimmedName = file.name.replace(/\.[^.]+$/, '').trim();
   return trimmedName || fallbackName;
+}
+
+function getHotspotShape(hotspot: Hotspot) {
+  return hotspot.shape === 'polygon' ? 'polygon' : 'point';
+}
+
+function getPolygonAnchorPosition(points: HotspotPolygonPoint[]) {
+  const yaw = points.reduce((sum, point) => sum + point.yaw, 0) / points.length;
+  const pitch = points.reduce((sum, point) => sum + point.pitch, 0) / points.length;
+
+  return {
+    yaw: Number(yaw.toFixed(2)),
+    pitch: Number(pitch.toFixed(2))
+  };
+}
+
+function polygonCrossesPanoramaSeam(points: HotspotPolygonPoint[]) {
+  if (points.length < 3) {
+    return false;
+  }
+
+  const yaws = points.map((point) => point.yaw);
+  return Math.max(...yaws) - Math.min(...yaws) > 180;
 }
 
 async function requestGenerated360Scene(
@@ -718,6 +742,17 @@ function App() {
     setPlacementMode({ type: 'placingNewHotspot' });
   };
 
+  const handleStartDrawingPolygonHotspot = () => {
+    setImportError(null);
+    setNoticeMessage(null);
+    setImagePreview(null);
+    setInfoPreview(null);
+    setQuestionPreviewHotspotId(null);
+    setActiveEditSection('hotspots');
+    setIsContextPanelOpen(true);
+    setPlacementMode({ type: 'drawingPolygon', points: [] });
+  };
+
   const openHotspotDetails = useCallback((hotspotId: string) => {
     setSelectedHotspotId(hotspotId);
     setActiveEditSection('hotspots');
@@ -729,6 +764,7 @@ function App() {
       const hotspotId = `hotspot-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       const nextHotspot: Hotspot = {
         id: hotspotId,
+        shape: 'point',
         type: 'info',
         ...getDefaultZoneMetadata('info'),
         title: 'New Insight Zone',
@@ -745,8 +781,59 @@ function App() {
     [openHotspotDetails, showTemporaryNotice, updateHotspots]
   );
 
+  const handleUndoPolygonPoint = useCallback(() => {
+    setPlacementMode((currentMode) => {
+      if (currentMode.type !== 'drawingPolygon' || currentMode.points.length === 0) {
+        return currentMode;
+      }
+
+      return {
+        type: 'drawingPolygon',
+        points: currentMode.points.slice(0, -1)
+      };
+    });
+  }, []);
+
+  const handleFinishPolygonHotspot = useCallback(() => {
+    if (placementMode.type !== 'drawingPolygon') {
+      return;
+    }
+
+    if (placementMode.points.length < 3) {
+      showTemporaryNotice('Add at least 3 points to finish the polygon');
+      return;
+    }
+
+    if (polygonCrossesPanoramaSeam(placementMode.points)) {
+      setImportError('Polygon zones that cross the panorama seam are not supported yet.');
+      return;
+    }
+
+    const hotspotId = `hotspot-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const anchor = getPolygonAnchorPosition(placementMode.points);
+    const nextHotspot: Hotspot = {
+      id: hotspotId,
+      shape: 'polygon',
+      type: 'info',
+      ...getDefaultZoneMetadata('info'),
+      title: 'New Polygon Zone',
+      body: 'Add description here',
+      yaw: anchor.yaw,
+      pitch: anchor.pitch,
+      polygonPoints: placementMode.points.map((point) => ({
+        yaw: Number(point.yaw.toFixed(2)),
+        pitch: Number(point.pitch.toFixed(2))
+      }))
+    };
+
+    updateHotspots((current) => [...current, nextHotspot]);
+    openHotspotDetails(hotspotId);
+    setPlacementMode({ type: 'idle' });
+    showTemporaryNotice('Polygon zone created');
+  }, [openHotspotDetails, placementMode, showTemporaryNotice, updateHotspots]);
+
   const handleStartMovingSelectedHotspot = () => {
-    if (!selectedHotspotId) {
+    if (!selectedHotspotId || !selectedHotspot || getHotspotShape(selectedHotspot) === 'polygon') {
       return;
     }
 
@@ -959,6 +1046,24 @@ function App() {
 
       if (placementMode.type === 'placingNewHotspot') {
         handleCreateHotspotAtPosition({ yaw, pitch });
+        return;
+      }
+
+      if (placementMode.type === 'drawingPolygon') {
+        setPlacementMode((currentMode) =>
+          currentMode.type === 'drawingPolygon'
+            ? {
+                type: 'drawingPolygon',
+                points: [
+                  ...currentMode.points,
+                  {
+                    yaw: Number(yaw.toFixed(2)),
+                    pitch: Number(pitch.toFixed(2))
+                  }
+                ]
+              }
+            : currentMode
+        );
         return;
       }
 
@@ -1346,6 +1451,8 @@ function App() {
   const modeMessage =
     appMode === 'edit' && placementMode.type === 'placingNewHotspot'
       ? 'Click in the panorama to place a new insight zone.'
+      : appMode === 'edit' && placementMode.type === 'drawingPolygon'
+        ? 'Click points around the area. Use Finish Polygon when you have at least 3 points.'
       : appMode === 'edit' && placementMode.type === 'movingExistingHotspot'
         ? 'Click in the panorama to move the selected insight zone.'
         : null;
@@ -1540,6 +1647,7 @@ function App() {
               selectedHotspotId={selectedHotspotId}
               modeMessage={modeMessage}
               isPlacementModeActive={placementMode.type !== 'idle'}
+              placementModeType={placementMode.type}
               saveStateLabel={saveStateLabel}
               saveStateTone={saveState}
               walkthroughSectionId={activeWalkthroughStep?.id ?? null}
@@ -1557,11 +1665,15 @@ function App() {
               onCreateSceneFromImageFile={handleCreateSceneFromImageFile}
               onDeleteScene={handleDeleteScene}
               onAddHotspot={handleStartPlacingHotspot}
+              onStartDrawingPolygonHotspot={handleStartDrawingPolygonHotspot}
+              onFinishPolygonHotspot={handleFinishPolygonHotspot}
+              onUndoPolygonPoint={handleUndoPolygonPoint}
               onCancelPlacement={handleCancelPlacement}
               onExportProject={handleExportProject}
               onResetLocalDraft={handleResetLocalDraft}
               onSelectHotspot={handleSelectHotspot}
               onDeleteHotspot={handleDeleteHotspot}
+              polygonPointCount={placementMode.type === 'drawingPolygon' ? placementMode.points.length : 0}
             />
           </div>
         ) : null
@@ -1594,6 +1706,7 @@ function App() {
                   ) : null
                 }
                 interactionMode={viewerInteractionMode}
+                drawingPolygonPoints={placementMode.type === 'drawingPolygon' ? placementMode.points : []}
                 onActivateHotspot={handleActivateHotspot}
                 onPanoramaClick={handlePanoramaClick}
                 onQuickPlaceHotspot={handleCreateHotspotAtPosition}
@@ -1866,6 +1979,7 @@ function App() {
                 </>
               }
               interactionMode={viewerInteractionMode}
+              drawingPolygonPoints={[]}
               onActivateHotspot={handleActivateHotspot}
               onPanoramaClick={handlePanoramaClick}
               onQuickPlaceHotspot={undefined}

@@ -1,5 +1,10 @@
 export type HotspotType = 'info' | 'sceneLink' | 'externalLink' | 'image' | 'multipleChoice';
 export type SceneMediaType = 'image';
+export type HotspotShape = 'point' | 'polygon';
+export type HotspotPolygonPoint = {
+  yaw: number;
+  pitch: number;
+};
 
 export type ZoneType = 'information' | 'media' | 'question' | 'navigation' | 'externalResource';
 export type ZoneIntent = 'observe' | 'reflect' | 'identify' | 'compare' | 'answer' | 'discover' | 'navigate';
@@ -24,11 +29,13 @@ export type HotspotLearningMetadata = {
 
 export type Hotspot = HotspotLearningMetadata & {
   id: string;
+  shape?: HotspotShape;
   type: HotspotType;
   title: string;
   body: string;
   yaw: number;
   pitch: number;
+  polygonPoints?: HotspotPolygonPoint[];
   targetSceneId?: string;
   url?: string;
   imageUrl?: string;

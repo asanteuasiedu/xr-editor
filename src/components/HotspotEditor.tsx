@@ -132,6 +132,8 @@ function HotspotEditor({
         : ['Option 1', 'Option 2']
       : [];
   const hotspotImageSrc = hotspot.type === 'image' ? hotspot.imageUrl?.trim() ?? '' : '';
+  const hotspotShape = hotspot.shape === 'polygon' ? 'polygon' : 'point';
+  const isPolygonZone = hotspotShape === 'polygon';
 
   const handleAnswerOptionChange = (index: number) => (event: ChangeEvent<HTMLInputElement>) => {
     const nextOptions = [...answerOptions];
@@ -175,6 +177,12 @@ function HotspotEditor({
       <p className="editor-selection-note">
         Editing: <strong>{hotspot.title || 'Untitled Insight Zone'}</strong>
       </p>
+      <div className="editor-zone-shape-summary">
+        <span className="editor-zone-shape-chip">{isPolygonZone ? 'Polygon Zone' : 'Point Zone'}</span>
+        {isPolygonZone ? (
+          <span className="editor-zone-shape-detail">{hotspot.polygonPoints?.length ?? 0} traced point(s)</span>
+        ) : null}
+      </div>
       <div className="editor-grid">
         <label className="editor-field">
           <span>Type</span>
@@ -329,13 +337,14 @@ function HotspotEditor({
             type="button"
             className="ui-button ui-button-secondary secondary-button hotspot-action-button"
             onClick={onStartMovingHotspot}
-            disabled={isPlacementModeActive}
+            disabled={isPlacementModeActive || isPolygonZone}
           >
             <span className="control-action-icon" aria-hidden="true">
               <MoveHotspotIcon />
             </span>
-            <span className="control-action-label">Move Selected Hotspot</span>
+            <span className="control-action-label">{isPolygonZone ? 'Polygon Move Unavailable' : 'Move Selected Hotspot'}</span>
           </button>
+          {isPolygonZone ? <p className="helper-note">Polygon regions can be edited and deleted, but point-by-point reshaping is not part of this MVP.</p> : null}
           <button
             type="button"
             className="ui-button danger-button delete-icon-button"

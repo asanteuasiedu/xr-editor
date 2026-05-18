@@ -763,6 +763,19 @@ select {
   font-size: 0.86rem;
 }
 
+.mode-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.polygon-point-count {
+  color: #4b4f7d;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 .scene-list,
 .hotspot-list {
   list-style: none;
@@ -828,6 +841,20 @@ select {
   display: block;
   font-weight: 700;
   font-size: 0.92rem;
+}
+
+.hotspot-action-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.hotspot-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
 }
 
 .scene-name-wrap {
@@ -1116,6 +1143,19 @@ select {
   background: #edf9fb;
 }
 
+.hotspot-geometry-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  margin-top: 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(168, 157, 255, 0.28);
+  background: rgba(236, 233, 255, 0.82);
+  color: #5a48d1;
+  font-size: 0.73rem;
+  font-weight: 700;
+}
+
 .scene-delete,
 .hotspot-delete {
   display: inline-flex;
@@ -1398,6 +1438,67 @@ select {
 
 .panorama-overlay-slot > * {
   pointer-events: auto;
+}
+
+.polygon-overlay-svg {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.polygon-overlay-svg-drawing {
+  pointer-events: none;
+}
+
+.polygon-overlay-group {
+  pointer-events: auto;
+}
+
+.polygon-overlay-shape {
+  fill: rgba(124, 108, 255, 0.16);
+  stroke: rgba(189, 180, 255, 0.96);
+  stroke-width: 2.5;
+  vector-effect: non-scaling-stroke;
+  transition: fill 140ms ease, stroke 140ms ease, opacity 140ms ease;
+}
+
+.polygon-overlay-group:hover .polygon-overlay-shape,
+.polygon-overlay-group-active .polygon-overlay-shape,
+.polygon-overlay-group-selected .polygon-overlay-shape {
+  fill: rgba(124, 108, 255, 0.22);
+  stroke: rgba(255, 255, 255, 0.96);
+}
+
+.polygon-overlay-group-visited .polygon-overlay-shape {
+  fill: rgba(95, 104, 136, 0.16);
+  stroke: rgba(195, 203, 233, 0.74);
+  opacity: 0.74;
+}
+
+.polygon-overlay-vertex,
+.polygon-overlay-drawing-vertex {
+  fill: #ffffff;
+  stroke: rgba(124, 108, 255, 0.94);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.polygon-overlay-drawing-fill {
+  fill: rgba(124, 108, 255, 0.14);
+  stroke: none;
+}
+
+.polygon-overlay-drawing-line {
+  fill: none;
+  stroke: rgba(124, 108, 255, 0.96);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 6 6;
 }
 
 .preview-scene-transition-veil {
@@ -2394,6 +2495,33 @@ select {
   margin: 0 0 var(--space-2);
   color: var(--muted);
   font-size: 0.89rem;
+}
+
+.editor-zone-shape-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 var(--space-2);
+}
+
+.editor-zone-shape-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(168, 157, 255, 0.3);
+  background: rgba(237, 233, 255, 0.84);
+  color: #5847cb;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.editor-zone-shape-detail {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .editor-row {

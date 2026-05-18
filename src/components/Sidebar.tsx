@@ -30,6 +30,7 @@ type SidebarProps = {
   selectedHotspotId: string | null;
   modeMessage: string | null;
   isPlacementModeActive: boolean;
+  placementModeType: 'idle' | 'placingNewHotspot' | 'movingExistingHotspot' | 'drawingPolygon';
   saveStateLabel: string;
   saveStateTone: 'saved' | 'unsaved' | 'restored';
   walkthroughSectionId: EditSection | null;
@@ -54,11 +55,15 @@ type SidebarProps = {
   onCreateSceneFromImageFile: (file: File) => void | Promise<void>;
   onDeleteScene: (sceneId: string) => void;
   onAddHotspot: () => void;
+  onStartDrawingPolygonHotspot: () => void;
+  onFinishPolygonHotspot: () => void;
+  onUndoPolygonPoint: () => void;
   onCancelPlacement: () => void;
   onExportProject: () => void;
   onResetLocalDraft: () => void;
   onSelectHotspot: (hotspotId: string) => void;
   onDeleteHotspot: (hotspotId: string) => void;
+  polygonPointCount: number;
 };
 
 function DeleteTrashIcon({ className = 'delete-action-icon-svg' }: { className?: string }) {
@@ -237,6 +242,7 @@ function Sidebar({
   selectedHotspotId,
   modeMessage,
   isPlacementModeActive,
+  placementModeType,
   saveStateLabel,
   saveStateTone,
   walkthroughSectionId,
@@ -254,11 +260,15 @@ function Sidebar({
   onCreateSceneFromImageFile,
   onDeleteScene,
   onAddHotspot,
+  onStartDrawingPolygonHotspot,
+  onFinishPolygonHotspot,
+  onUndoPolygonPoint,
   onCancelPlacement,
   onExportProject,
   onResetLocalDraft,
   onSelectHotspot,
-  onDeleteHotspot
+  onDeleteHotspot,
+  polygonPointCount
 }: SidebarProps) {
   const sceneUploadInputRef = useRef<HTMLInputElement | null>(null);
   const sceneCaptureCreateInputRef = useRef<HTMLInputElement | null>(null);
@@ -269,6 +279,12 @@ function Sidebar({
   const isGeneratingScene = generateSceneStatus === 'loading';
   const canGenerateScene = generateScenePrompt.trim().length > 0 && !isGeneratingScene;
   const hasStoredGenerationPrompt = Boolean(activeScene.generationPrompt?.trim());
+  const isPolygonDrawingMode = placementModeType === 'drawingPolygon';
+
+  const getHotspotGeometryLabel = (hotspot: Hotspot) =>
+    hotspot.shape === 'polygon'
+      ? `${hotspot.polygonPoints?.length ?? 0} Point Polygon`
+      : 'Point Zone';
 
   const onProjectNameChange = (event: ChangeEvent<HTMLInputElement>) => {
     onUpdateProjectMetadata({ name: event.target.value });
@@ -708,14 +724,23 @@ function Sidebar({
       </div>
       <div className="section-header-row">
         <div />
-        <button
-          type="button"
-          className="ui-button ui-button-primary mini-button add-text-button"
-          onClick={onAddHotspot}
-        >
-          <span className="add-text-button-plus" aria-hidden="true">+</span>
-          <span>Add Insight Zone</span>
-        </button>
+        <div className="hotspot-action-group">
+          <button
+            type="button"
+            className="ui-button ui-button-primary mini-button add-text-button"
+            onClick={onAddHotspot}
+          >
+            <span className="add-text-button-plus" aria-hidden="true">+</span>
+            <span>Point Zone</span>
+          </button>
+          <button
+            type="button"
+            className="ui-button ui-button-secondary mini-button"
+            onClick={onStartDrawingPolygonHotspot}
+          >
+            Draw Region
+          </button>
+        </div>
       </div>
 
       {hotspots.length === 0 ? (
@@ -749,12 +774,16 @@ function Sidebar({
                     : hotspot.type === 'multipleChoice'
                       ? 'hotspot-link-chip-multiplechoice'
                       : 'hotspot-link-chip-info';
+            const hotspotGeometryLabel = getHotspotGeometryLabel(hotspot);
 
             return (
               <li key={hotspot.id} className={`hotspot-row ${isSelected ? 'hotspot-row-selected' : ''}`}>
                 <button type="button" className="hotspot-select" onClick={() => onSelectHotspot(hotspot.id)}>
                   <span className="hotspot-name">{hotspot.title}</span>
-                  <span className={`hotspot-link-chip ${hotspotTypeChipClass}`}>{hotspotTypeLabel}</span>
+                  <span className="hotspot-row-meta">
+                    <span className={`hotspot-link-chip ${hotspotTypeChipClass}`}>{hotspotTypeLabel}</span>
+                    <span className="hotspot-geometry-chip">{hotspotGeometryLabel}</span>
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -773,9 +802,32 @@ function Sidebar({
       {isPlacementModeActive && modeMessage ? (
         <div className="mode-banner-inline">
           <p className="mode-banner-text">{modeMessage}</p>
-          <button type="button" className="ui-button ui-button-secondary mini-button" onClick={onCancelPlacement}>
-            Cancel Placement
-          </button>
+          <div className="mode-banner-actions">
+            {isPolygonDrawingMode ? (
+              <>
+                <span className="polygon-point-count">{polygonPointCount} point(s)</span>
+                <button
+                  type="button"
+                  className="ui-button ui-button-secondary mini-button"
+                  onClick={onUndoPolygonPoint}
+                  disabled={polygonPointCount === 0}
+                >
+                  Undo Last Point
+                </button>
+                <button
+                  type="button"
+                  className="ui-button ui-button-primary mini-button"
+                  onClick={onFinishPolygonHotspot}
+                  disabled={polygonPointCount < 3}
+                >
+                  Finish Polygon
+                </button>
+              </>
+            ) : null}
+            <button type="button" className="ui-button ui-button-secondary mini-button" onClick={onCancelPlacement}>
+              {isPolygonDrawingMode ? 'Cancel' : 'Cancel Placement'}
+            </button>
+          </div>
         </div>
       ) : null}
     </section>

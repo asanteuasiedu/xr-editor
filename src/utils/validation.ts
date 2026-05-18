@@ -1,6 +1,7 @@
 import type {
   FeedbackRewardState,
   Hotspot,
+  HotspotPolygonPoint,
   HotspotType,
   Project,
   Scene,
@@ -28,6 +29,16 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isOptionalString(value: unknown) {
   return value === undefined || typeof value === 'string';
+}
+
+function getPolygonAnchorPosition(points: HotspotPolygonPoint[]) {
+  const yaw = points.reduce((sum, point) => sum + point.yaw, 0) / points.length;
+  const pitch = points.reduce((sum, point) => sum + point.pitch, 0) / points.length;
+
+  return {
+    yaw: Number(yaw.toFixed(2)),
+    pitch: Number(pitch.toFixed(2))
+  };
 }
 
 const zoneTypes: ZoneType[] = ['information', 'media', 'question', 'navigation', 'externalResource'];
@@ -127,13 +138,6 @@ function validateHotspot(value: unknown, sceneIndex: number, hotspotIndex: numbe
     return { ok: false, error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: missing body.` };
   }
 
-  if (!isNumber(value.yaw) || !isNumber(value.pitch)) {
-    return {
-      ok: false,
-      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: yaw and pitch must be numbers.`
-    };
-  }
-
   const type = (value.type === undefined ? 'info' : value.type) as HotspotType;
   if (
     type !== 'info' &&
@@ -155,6 +159,52 @@ function validateHotspot(value: unknown, sceneIndex: number, hotspotIndex: numbe
   const answerOptions = value.answerOptions;
   const correctAnswerIndex = value.correctAnswerIndex;
   const feedbackText = value.feedbackText;
+  const shape = value.shape === 'polygon' ? 'polygon' : 'point';
+  let polygonPoints: HotspotPolygonPoint[] | undefined;
+
+  if (value.shape !== undefined && value.shape !== 'point' && value.shape !== 'polygon') {
+    return {
+      ok: false,
+      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: shape must be point or polygon if provided.`
+    };
+  }
+
+  if (shape === 'polygon') {
+    if (!Array.isArray(value.polygonPoints) || value.polygonPoints.length < 3) {
+      return {
+        ok: false,
+        error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: polygon hotspots require at least 3 polygonPoints.`
+      };
+    }
+
+    polygonPoints = [];
+    for (let pointIndex = 0; pointIndex < value.polygonPoints.length; pointIndex += 1) {
+      const point = value.polygonPoints[pointIndex];
+      if (!isObject(point) || !isNumber(point.yaw) || !isNumber(point.pitch)) {
+        return {
+          ok: false,
+          error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: polygon point ${pointIndex + 1} must include numeric yaw and pitch.`
+        };
+      }
+
+      polygonPoints.push({
+        yaw: Number(point.yaw.toFixed(2)),
+        pitch: Number(point.pitch.toFixed(2))
+      });
+    }
+  }
+
+  const derivedAnchor =
+    shape === 'polygon' && polygonPoints ? getPolygonAnchorPosition(polygonPoints) : null;
+  const yaw = isNumber(value.yaw) ? value.yaw : derivedAnchor?.yaw;
+  const pitch = isNumber(value.pitch) ? value.pitch : derivedAnchor?.pitch;
+
+  if (!isNumber(yaw) || !isNumber(pitch)) {
+    return {
+      ok: false,
+      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: yaw and pitch must be numbers.`
+    };
+  }
 
   if (targetSceneId !== undefined && !isNonEmptyString(targetSceneId)) {
     return {
@@ -337,6 +387,7 @@ function validateHotspot(value: unknown, sceneIndex: number, hotspotIndex: numbe
     ok: true,
     value: {
       id: value.id,
+      shape,
       type,
       zoneType,
       zoneIntent,
@@ -346,8 +397,9 @@ function validateHotspot(value: unknown, sceneIndex: number, hotspotIndex: numbe
       feedbackRewardState: checkedFeedbackRewardState.value,
       title: value.title,
       body: value.body,
-      yaw: value.yaw,
-      pitch: value.pitch,
+      yaw: Number(yaw.toFixed(2)),
+      pitch: Number(pitch.toFixed(2)),
+      polygonPoints,
       targetSceneId: type === 'sceneLink' ? targetSceneId : undefined,
       url: type === 'externalLink' ? url : undefined,
       imageUrl: type === 'image' ? imageUrl : undefined,

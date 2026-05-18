@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import 'pannellum/build/pannellum.js';
 import 'pannellum/build/pannellum.css';
-import type { Hotspot } from '../types/project';
+import type { Hotspot, HotspotPolygonPoint } from '../types/project';
 
 type PanoramaViewerProps = {
   panoramaUrl: string;
@@ -14,12 +14,27 @@ type PanoramaViewerProps = {
   previewEntryId?: number;
   overlayContent?: ReactNode;
   editorPopoverContent?: ReactNode;
-  interactionMode: 'idle' | 'placingNewHotspot' | 'movingExistingHotspot';
+  interactionMode: 'idle' | 'placingNewHotspot' | 'movingExistingHotspot' | 'drawingPolygon';
+  drawingPolygonPoints: HotspotPolygonPoint[];
   onActivateHotspot: (hotspotId: string, anchor?: { x: number; y: number }) => void;
   onPanoramaClick: (position: { yaw: number; pitch: number }) => void;
   onQuickPlaceHotspot?: (position: { yaw: number; pitch: number }) => void;
   onToggleOverlays?: () => void;
   onViewChange: (position: { yaw: number; pitch: number }) => void;
+};
+
+type ScreenPoint = {
+  x: number;
+  y: number;
+};
+
+type ProjectedPolygon = {
+  hotspotId: string;
+  points: ScreenPoint[];
+  centroid: ScreenPoint;
+  isSelected: boolean;
+  isVisited: boolean;
+  isActivePreview: boolean;
 };
 
 // Set true temporarily to compare click-derived coordinates with viewer debug output.
@@ -30,6 +45,26 @@ const IDLE_AUTOROTATE_RESUME_DELAY_MS = 5000;
 const IDLE_AUTOROTATE_SPEED = -0.35;
 const PREVIEW_RIPPLE_DURATION_MS = 980;
 const PREVIEW_RIPPLE_POST_LOAD_DELAY_MS = 320;
+
+function getHotspotShape(hotspot: Hotspot) {
+  return hotspot.shape === 'polygon' ? 'polygon' : 'point';
+}
+
+function doesPolygonCrossSeam(points: HotspotPolygonPoint[]) {
+  if (points.length < 3) {
+    return false;
+  }
+
+  const yaws = points.map((point) => point.yaw);
+  return Math.max(...yaws) - Math.min(...yaws) > 180;
+}
+
+function getPolygonAnchor(points: ScreenPoint[]) {
+  const x = points.reduce((sum, point) => sum + point.x, 0) / points.length;
+  const y = points.reduce((sum, point) => sum + point.y, 0) / points.length;
+
+  return { x, y };
+}
 
 function PanoramaViewer({
   panoramaUrl,
@@ -42,6 +77,7 @@ function PanoramaViewer({
   overlayContent,
   editorPopoverContent,
   interactionMode,
+  drawingPolygonPoints,
   onActivateHotspot,
   onPanoramaClick,
   onQuickPlaceHotspot,
@@ -70,12 +106,17 @@ function PanoramaViewer({
   const previewRippleTimeoutRef = useRef<number | null>(null);
   const pendingPreviewRippleEntryRef = useRef<number | null>(null);
   const previewRippleStartDelayRef = useRef<number | null>(null);
+  const placementTouchRef = useRef<{ x: number; y: number; touchId: number } | null>(null);
+  const projectedPolygonSignatureRef = useRef('');
+  const projectedDrawingSignatureRef = useRef('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPanoramaLoading, setIsPanoramaLoading] = useState(false);
   const [isLoadingOverlayVisible, setIsLoadingOverlayVisible] = useState(false);
   const [editorPopoverStyle, setEditorPopoverStyle] = useState<CSSProperties | null>(null);
   const [useEditorPopoverFallback, setUseEditorPopoverFallback] = useState(false);
   const [showPreviewEntryRipple, setShowPreviewEntryRipple] = useState(false);
+  const [projectedPolygons, setProjectedPolygons] = useState<ProjectedPolygon[]>([]);
+  const [projectedDrawingPoints, setProjectedDrawingPoints] = useState<ScreenPoint[]>([]);
 
   useEffect(() => {
     onActivateHotspotRef.current = onActivateHotspot;
@@ -399,18 +440,30 @@ function PanoramaViewer({
     };
 
     const handleTouchStart = (event: TouchEvent) => {
-      if (isPreviewMode || interactionModeRef.current !== 'idle' || !onQuickPlaceHotspotRef.current) {
+      if (isPreviewMode) {
         return;
       }
 
       if (event.touches.length !== 1 || shouldIgnoreGestureTarget(event.target)) {
         clearLongPress();
+        placementTouchRef.current = null;
         return;
       }
 
       markViewerInteraction();
 
       const touch = event.touches[0];
+      placementTouchRef.current = {
+        x: touch.clientX,
+        y: touch.clientY,
+        touchId: touch.identifier
+      };
+
+      if (interactionModeRef.current !== 'idle') {
+        clearLongPress();
+        return;
+      }
+
       longPressTouchRef.current = {
         x: touch.clientX,
         y: touch.clientY,
@@ -439,6 +492,24 @@ function PanoramaViewer({
     };
 
     const handleTouchMove = (event: TouchEvent) => {
+      const activePlacementTouch = placementTouchRef.current;
+      if (activePlacementTouch) {
+        const matchingPlacementTouch = Array.from(event.touches).find(
+          (touch) => touch.identifier === activePlacementTouch.touchId
+        );
+        if (!matchingPlacementTouch) {
+          placementTouchRef.current = null;
+        } else {
+          const distance = Math.hypot(
+            matchingPlacementTouch.clientX - activePlacementTouch.x,
+            matchingPlacementTouch.clientY - activePlacementTouch.y
+          );
+          if (distance > MOBILE_LONG_PRESS_MOVE_TOLERANCE_PX) {
+            placementTouchRef.current = null;
+          }
+        }
+      }
+
       const activeTouch = longPressTouchRef.current;
       if (!activeTouch) {
         return;
@@ -456,7 +527,23 @@ function PanoramaViewer({
       }
     };
 
-    const handleTouchEnd = () => {
+    const handleTouchEnd = (event: TouchEvent) => {
+      const activePlacementTouch = placementTouchRef.current;
+      if (
+        !isPreviewMode &&
+        interactionModeRef.current !== 'idle' &&
+        activePlacementTouch &&
+        !shouldIgnoreGestureTarget(event.target)
+      ) {
+        const coords = getCoordsFromClient(activePlacementTouch.x, activePlacementTouch.y);
+        placementTouchRef.current = null;
+        if (coords) {
+          onPanoramaClickRef.current(coords);
+        }
+      } else {
+        placementTouchRef.current = null;
+      }
+
       clearLongPress();
     };
 
@@ -529,6 +616,162 @@ function PanoramaViewer({
   }, [panoramaUrl]);
 
   useEffect(() => {
+    const polygonHotspots = hotspots.filter(
+      (hotspot) => getHotspotShape(hotspot) === 'polygon' && (hotspot.polygonPoints?.length ?? 0) >= 3
+    );
+
+    if (polygonHotspots.length === 0 && drawingPolygonPoints.length === 0) {
+      projectedPolygonSignatureRef.current = '';
+      projectedDrawingSignatureRef.current = '';
+      setProjectedPolygons([]);
+      setProjectedDrawingPoints([]);
+      return;
+    }
+
+    let frameId = 0;
+
+    const updateProjectedGeometry = () => {
+      const viewer = viewerRef.current as
+        | (ReturnType<typeof window.pannellum.viewer> & {
+            getRenderer?: () => { getCanvas?: () => HTMLCanvasElement | null } | null;
+            getHfov?: () => number;
+          })
+        | null;
+      const shell = shellRef.current;
+      const renderer = viewer?.getRenderer?.();
+      const canvas = renderer?.getCanvas?.() ?? shell?.querySelector('canvas');
+      const canvasWidth = canvas?.clientWidth ?? shell?.clientWidth ?? 0;
+      const canvasHeight = canvas?.clientHeight ?? shell?.clientHeight ?? 0;
+      const viewerYaw = viewer?.getYaw?.() ?? 0;
+      const viewerPitch = viewer?.getPitch?.() ?? 0;
+      const viewerHfov = viewer?.getHfov?.() ?? 0;
+
+      const shouldReset =
+        !viewer ||
+        !shell ||
+        canvasWidth <= 0 ||
+        canvasHeight <= 0 ||
+        !Number.isFinite(viewerYaw) ||
+        !Number.isFinite(viewerPitch) ||
+        !Number.isFinite(viewerHfov) ||
+        viewerHfov <= 0;
+
+      if (shouldReset) {
+        if (projectedPolygonSignatureRef.current !== '') {
+          projectedPolygonSignatureRef.current = '';
+          setProjectedPolygons([]);
+        }
+        if (projectedDrawingSignatureRef.current !== '') {
+          projectedDrawingSignatureRef.current = '';
+          setProjectedDrawingPoints([]);
+        }
+        frameId = window.requestAnimationFrame(updateProjectedGeometry);
+        return;
+      }
+
+      const projectPoint = (point: HotspotPolygonPoint): ScreenPoint | null => {
+        const hotspotPitchSin = Math.sin((point.pitch * Math.PI) / 180);
+        const hotspotPitchCos = Math.cos((point.pitch * Math.PI) / 180);
+        const configPitchSin = Math.sin((viewerPitch * Math.PI) / 180);
+        const configPitchCos = Math.cos((viewerPitch * Math.PI) / 180);
+        const yawCos = Math.cos(((-point.yaw + viewerYaw) * Math.PI) / 180);
+        const z = hotspotPitchSin * configPitchSin + hotspotPitchCos * yawCos * configPitchCos;
+
+        if (z <= 0) {
+          return null;
+        }
+
+        const yawSin = Math.sin(((-point.yaw + viewerYaw) * Math.PI) / 180);
+        const hfovTan = Math.tan((viewerHfov * Math.PI) / 360);
+        const x = -canvasWidth / hfovTan * yawSin * hotspotPitchCos / z / 2 + canvasWidth / 2;
+        const y =
+          -canvasWidth / hfovTan * (hotspotPitchSin * configPitchCos - hotspotPitchCos * yawCos * configPitchSin) / z / 2 +
+          canvasHeight / 2;
+
+        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+          return null;
+        }
+
+        return { x, y };
+      };
+
+      const nextProjectedPolygons = polygonHotspots.flatMap((hotspot) => {
+          const polygonPoints = hotspot.polygonPoints ?? [];
+          if (doesPolygonCrossSeam(polygonPoints)) {
+            return [];
+          }
+
+          const projectedPoints = polygonPoints.map(projectPoint);
+          if (projectedPoints.some((point) => point === null)) {
+            return [];
+          }
+
+          const visiblePoints = projectedPoints.filter((point): point is ScreenPoint => point !== null);
+          if (visiblePoints.length < 3) {
+            return [];
+          }
+
+          return [
+            {
+              hotspotId: hotspot.id,
+              points: visiblePoints,
+              centroid: getPolygonAnchor(visiblePoints),
+              isSelected: hotspot.id === selectedHotspotId,
+              isVisited: isPreviewMode && visitedPreviewHotspotIds.includes(hotspot.id),
+              isActivePreview: hotspot.id === activePreviewHotspotId
+            }
+          ];
+        });
+
+      const nextProjectedPolygonSignature = JSON.stringify(
+        nextProjectedPolygons.map((polygon) => ({
+          hotspotId: polygon.hotspotId,
+          points: polygon.points.map((point) => [Math.round(point.x), Math.round(point.y)]),
+          isSelected: polygon.isSelected,
+          isVisited: polygon.isVisited,
+          isActivePreview: polygon.isActivePreview
+        }))
+      );
+
+      if (nextProjectedPolygonSignature !== projectedPolygonSignatureRef.current) {
+        projectedPolygonSignatureRef.current = nextProjectedPolygonSignature;
+        setProjectedPolygons(nextProjectedPolygons);
+      }
+
+      const nextDrawingPoints =
+        interactionMode === 'drawingPolygon'
+          ? drawingPolygonPoints
+              .map(projectPoint)
+              .filter((point): point is ScreenPoint => point !== null)
+          : [];
+      const nextDrawingSignature = JSON.stringify(
+        nextDrawingPoints.map((point) => [Math.round(point.x), Math.round(point.y)])
+      );
+
+      if (nextDrawingSignature !== projectedDrawingSignatureRef.current) {
+        projectedDrawingSignatureRef.current = nextDrawingSignature;
+        setProjectedDrawingPoints(nextDrawingPoints);
+      }
+
+      frameId = window.requestAnimationFrame(updateProjectedGeometry);
+    };
+
+    frameId = window.requestAnimationFrame(updateProjectedGeometry);
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [
+    activePreviewHotspotId,
+    drawingPolygonPoints,
+    hotspots,
+    interactionMode,
+    isPreviewMode,
+    selectedHotspotId,
+    visitedPreviewHotspotIds
+  ]);
+
+  useEffect(() => {
     const viewer = viewerRef.current;
     if (!viewer) {
       return;
@@ -543,7 +786,9 @@ function PanoramaViewer({
     });
     renderedHotspotIdsRef.current.clear();
 
-    hotspots.forEach((hotspot) => {
+    hotspots
+      .filter((hotspot) => getHotspotShape(hotspot) === 'point')
+      .forEach((hotspot) => {
       const isVisitedInPreview = isPreviewMode && visitedPreviewHotspotIds.includes(hotspot.id);
       // Keep one native-compatible baseline marker class, then add a single
       // type class for themed meaning without changing the anchor geometry.
@@ -584,7 +829,7 @@ function PanoramaViewer({
             : undefined
       });
       renderedHotspotIdsRef.current.add(hotspot.id);
-    });
+      });
   }, [
     activePreviewHotspotId,
     hotspots,
@@ -725,11 +970,66 @@ function PanoramaViewer({
     <section className={`panel panorama-panel viewer-card ${isPreviewMode ? 'panorama-panel-preview' : ''}`}>
       {!isPreviewMode ? <h2 className="viewer-overlay-title">Your XR Media</h2> : null}
       <div className="pannellum-shell viewer-clip-boundary" ref={shellRef}>
-        <div
-          className={`pannellum-container ${interactionMode !== 'idle' ? 'pannellum-container-placement' : ''}`}
-          ref={containerRef}
-          aria-label="Panorama viewer"
-        />
+      <div
+        className={`pannellum-container ${interactionMode !== 'idle' ? 'pannellum-container-placement' : ''}`}
+        ref={containerRef}
+        aria-label="Panorama viewer"
+      />
+        {projectedPolygons.length > 0 || projectedDrawingPoints.length > 0 ? (
+          <svg
+            className={`polygon-overlay-svg ${interactionMode === 'drawingPolygon' ? 'polygon-overlay-svg-drawing' : ''}`}
+            viewBox={`0 0 ${shellRef.current?.clientWidth || 1} ${shellRef.current?.clientHeight || 1}`}
+            preserveAspectRatio="none"
+          >
+            {projectedPolygons.map((polygon) => (
+              <g
+                key={polygon.hotspotId}
+                className={`polygon-overlay-group${polygon.isSelected ? ' polygon-overlay-group-selected' : ''}${
+                  polygon.isVisited ? ' polygon-overlay-group-visited' : ''
+                }${polygon.isActivePreview ? ' polygon-overlay-group-active' : ''}`}
+              >
+                <polygon
+                  className="polygon-overlay-shape"
+                  points={polygon.points.map((point) => `${point.x},${point.y}`).join(' ')}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onTouchStart={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onActivateHotspot(polygon.hotspotId, polygon.centroid);
+                  }}
+                />
+                {!isPreviewMode && polygon.isSelected
+                  ? polygon.points.map((point, index) => (
+                      <circle
+                        key={`${polygon.hotspotId}-vertex-${index}`}
+                        className="polygon-overlay-vertex"
+                        cx={point.x}
+                        cy={point.y}
+                        r={5}
+                      />
+                    ))
+                  : null}
+              </g>
+            ))}
+            {projectedDrawingPoints.length > 0 ? (
+              <g className="polygon-overlay-drawing">
+                {projectedDrawingPoints.length >= 3 ? (
+                  <polygon
+                    className="polygon-overlay-drawing-fill"
+                    points={projectedDrawingPoints.map((point) => `${point.x},${point.y}`).join(' ')}
+                  />
+                ) : null}
+                <polyline
+                  className="polygon-overlay-drawing-line"
+                  points={projectedDrawingPoints.map((point) => `${point.x},${point.y}`).join(' ')}
+                />
+                {projectedDrawingPoints.map((point, index) => (
+                  <circle key={`drawing-point-${index}`} className="polygon-overlay-drawing-vertex" cx={point.x} cy={point.y} r={5} />
+                ))}
+              </g>
+            ) : null}
+          </svg>
+        ) : null}
         {overlayContent ? <div className="panorama-overlay-slot">{overlayContent}</div> : null}
         {isPreviewMode && showPreviewEntryRipple ? (
           <div className="preview-entry-ripple" aria-hidden="true" key={`preview-ripple-${previewEntryId}`}>

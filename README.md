@@ -50,13 +50,15 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 - Import validation fills safe defaults for older projects that do not yet include the new fields, so legacy image-scene projects continue to load.
 - The schema is intended to make future AI generation safer and more explicit: agents can draft projects, align scenes and zones to objectives, assign difficulty, choose interactions, and plan feedback without guessing from free text alone.
 
-## AI-Assisted 360 Scene Generation (Phase 1)
+## AI-Assisted 360 Scene Generation
 - **Active Scene Details** includes a **Generate 360 Scene** prompt bar for creating a new panoramic learning environment from text.
 - The frontend sends prompts to `POST /api/generate-360-scene`; the OpenAI API key stays server-side in `OPENAI_API_KEY`.
 - Before image generation, the backend now plans a panorama-specific production brief from the user prompt to better target immersive 360 output.
+- Image generation now defaults to `gpt-image-2` and targets a true `2:1` equirectangular panorama request size when that model path supports it.
 - The API route returns an image Data URL, and the editor replaces the current active scene image with that generated panorama.
-- Generated scenes are requested as seamless equirectangular 360 panoramas with high detail, no people, and no text, logos, or watermarks baked into the image.
+- Generated scenes are requested as seamless equirectangular 360 panoramas with exact `2:1` intent, high detail, no people, and no text, logos, or watermarks baked into the image.
 - Generated scenes now also pass through backend panorama normalization, seam scoring, and cautious seam-blending repair when needed before they are returned to the editor.
+- Final generated panoramas are normalized to an exact `2:1` output before the editor loads them, and `OPENAI_IMAGE_MODEL` / `OPENAI_IMAGE_SIZE` can override the backend defaults when needed.
 - For developer diagnostics only, `POST /api/generate-360-scene` also accepts optional request fields like `{ "debug": true, "plannerMode": "planner" }` or `{ "debug": true, "plannerMode": "static" }` to compare planner-assisted and static prompt generation without changing the normal editor flow.
 - This workflow only generates scene media. Hotspot placement, insight-zone editing, project storage, and image-scene behavior remain part of the existing editor workflow.
 - For local end-to-end generation, run the project through Vercel's dev/deployment environment so `/api/generate-360-scene` is available alongside the Vite app.

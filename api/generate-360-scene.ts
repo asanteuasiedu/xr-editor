@@ -68,6 +68,9 @@ type GeneratedPanoramaAttempt = {
   attemptNumber: number;
   revisedPrompt?: string;
   imageDataUrl: string;
+  imageModel: string;
+  requestedImageSize: string;
+  fallbackModelUsed: boolean;
   seamScore: number;
   seamScoreBeforeRepair: number;
   seamScoreAfterRepair: number | null;
@@ -85,8 +88,10 @@ const USER_FACING_GENERATION_ERROR =
   'Could not generate the scene right now. Try another prompt or try again shortly.';
 const PLANNER_MODEL = getEnvValue('OPENAI_PANORAMA_PLANNER_MODEL') || 'gpt-4.1-mini';
 const ENABLE_PANORAMA_PLANNER = getEnvValue('ENABLE_PANORAMA_PLANNER') !== 'false';
-const IMAGE_MODEL = getEnvValue('OPENAI_IMAGE_MODEL') || 'gpt-image-1';
-const IMAGE_SIZE = '1536x1024';
+const IMAGE_MODEL = getEnvValue('OPENAI_IMAGE_MODEL') || 'gpt-image-2';
+const FALLBACK_IMAGE_MODEL = 'gpt-image-1';
+const GPT_IMAGE_2_DEFAULT_SIZE = '2048x1024';
+const GPT_IMAGE_1_DEFAULT_SIZE = '1536x1024';
 const IMAGE_QUALITY = 'medium';
 const IMAGE_OUTPUT_FORMAT = 'png';
 const NORMAL_MAX_ATTEMPTS = 1;
@@ -101,6 +106,12 @@ const ANALYSIS_STRIP_WIDTH = 12;
 const ACCEPTABLE_SEAM_SCORE = 35;
 const MIN_SEAM_BLEND_HALF_WIDTH = 48;
 const SEAM_BLEND_HALF_WIDTH_RATIO = 0.04;
+
+type ImageGenerationConfig = {
+  model: string;
+  size: string;
+  fallbackModelUsed: boolean;
+};
 
 function getGlobalBuffer() {
   const globalBuffer = (globalThis as unknown as {
@@ -135,6 +146,40 @@ function getEnvValue(name: string) {
   }).process;
 
   return globalProcess?.env?.[name];
+}
+
+function getRequestedImageSizeForModel(
+  model: string,
+  options?: { ignoreEnvOverride?: boolean }
+) {
+  const envSize = getEnvValue('OPENAI_IMAGE_SIZE')?.trim();
+  if (!options?.ignoreEnvOverride && envSize) {
+    return envSize;
+  }
+
+  return model === 'gpt-image-2' ? GPT_IMAGE_2_DEFAULT_SIZE : GPT_IMAGE_1_DEFAULT_SIZE;
+}
+
+function getImageGenerationConfigs(primaryModel: string): ImageGenerationConfig[] {
+  const primaryConfig: ImageGenerationConfig = {
+    model: primaryModel,
+    size: getRequestedImageSizeForModel(primaryModel),
+    fallbackModelUsed: false
+  };
+  const fallbackConfig: ImageGenerationConfig = {
+    model: FALLBACK_IMAGE_MODEL,
+    size: getRequestedImageSizeForModel(FALLBACK_IMAGE_MODEL, { ignoreEnvOverride: true }),
+    fallbackModelUsed: true
+  };
+
+  if (
+    primaryConfig.model === fallbackConfig.model &&
+    primaryConfig.size === fallbackConfig.size
+  ) {
+    return [primaryConfig];
+  }
+
+  return [primaryConfig, fallbackConfig];
 }
 
 function getPromptFromBody(body: unknown) {
@@ -192,7 +237,7 @@ function buildPanoramaGenerationPrompt(
   const promptSections = [
     'Create a TRUE full 360-degree equirectangular panoramic image for immersive XR viewing.',
     'The image must be designed as a continuous wraparound panorama for a 360 viewer, not as a standard flat landscape image.',
-    'Target a true 2:1 equirectangular panorama composition. The flat image should appear horizontally stretched or distorted in the way proper equirectangular panoramas do, but it should feel spatially correct when viewed inside a 360-degree panorama viewer.',
+    'The output must read as an exact 2:1 equirectangular panorama. The flat image should appear horizontally stretched or distorted in the way proper equirectangular panoramas do, but it should feel spatially correct when viewed inside a 360-degree panorama viewer.',
     'The left edge and right edge must connect seamlessly as one continuous environment. There must be no visible seam, no abrupt change, no split composition, no mismatched sky, no mismatched horizon, no mismatched buildings, no mismatched trees, no mirrored edge break, and no hard perspective transition at the wrap boundary.',
     'Avoid little-planet projection, fisheye circle, radial collapse, center pinch, vortex, tunnel effect, spiral geometry, top-down bowl distortion, split panorama, collage, two-scene image, framed photo, bordered image, cropped composition, or ordinary wide-angle photograph.',
     'Compose the scene at human eye level with a stable horizon and coherent spatial continuity across the entire 360-degree environment.',
@@ -221,6 +266,45 @@ function hasTimeForAnotherExpensiveStep(startedAt: number, budgetMs = MAX_ROUTE_
 
 function getRouteDurationMs(startedAt: number) {
   return Date.now() - startedAt;
+}
+
+function getAspectRatio(width: number | null, height: number | null) {
+  if (!width || !height) {
+    return null;
+  }
+
+  return Math.round((width / height) * 10_000) / 10_000;
+}
+
+function isExactlyTwoToOne(width: number | null, height: number | null) {
+  return width !== null && height !== null && width === height * 2;
+}
+
+function shouldFallbackToLegacyImageGeneration(params: {
+  model: string;
+  size: string;
+  status: number;
+  message: string;
+}) {
+  const { model, size, status, message } = params;
+  if (model === FALLBACK_IMAGE_MODEL && size === GPT_IMAGE_1_DEFAULT_SIZE) {
+    return false;
+  }
+
+  const normalizedMessage = message.toLowerCase();
+  return (
+    status === 400 ||
+    status === 403 ||
+    status === 404 ||
+    status === 422 ||
+    normalizedMessage.includes('size') ||
+    normalizedMessage.includes('model') ||
+    normalizedMessage.includes('unsupported') ||
+    normalizedMessage.includes('not found') ||
+    normalizedMessage.includes('access') ||
+    normalizedMessage.includes('permission') ||
+    normalizedMessage.includes('invalid')
+  );
 }
 
 function buildAttemptPrompt(
@@ -267,7 +351,7 @@ async function createPanoramaGenerationBrief(params: {
     'Return only the final image prompt text. Do not return JSON, markdown, headings, bullets, explanations, or surrounding commentary.',
     'The brief must strongly enforce all of the following:',
     '- TRUE full 360-degree equirectangular panorama',
-    '- exact 2:1 panorama intent',
+    '- exact 2:1 panorama output',
     '- continuous immersive XR viewer compatibility',
     '- strong left/right edge continuity',
     '- stable horizon',
@@ -350,13 +434,15 @@ async function getImageMetadata(bytes: Uint8Array) {
 }
 
 function isTwoToOne(width: number | null, height: number | null) {
-  return width === NORMALIZED_WIDTH && height === NORMALIZED_HEIGHT;
+  return isExactlyTwoToOne(width, height);
 }
 
 async function normalizePanoramaToTwoToOne(bytes: Uint8Array) {
-  // gpt-image-1 supports fixed landscape outputs such as 1536x1024.
-  // Phase 2 normalizes that valid source image into an exact 2:1 panorama
-  // for the viewer; this is not seam repair or true projection correction.
+  // gpt-image-2 can request a true 2:1 size such as 2048x1024, while older
+  // fallback paths may still return a non-2:1 landscape image like 1536x1024.
+  // The backend always normalizes the final viewer payload into an exact 2:1
+  // panorama. This preserves a stable XR-facing shape without claiming to fix
+  // projection quality or seam continuity on its own.
   const buffer = await sharp(bytes)
     .resize({
       width: NORMALIZED_WIDTH,
@@ -548,6 +634,7 @@ async function processGeneratedImage(
   imageBytes: Uint8Array,
   revisedPrompt: string | undefined,
   attemptNumber: number,
+  generationConfig: ImageGenerationConfig,
   options: {
     runQualityControl: boolean;
     allowRepair: boolean;
@@ -597,6 +684,9 @@ async function processGeneratedImage(
     attemptNumber,
     revisedPrompt,
     imageDataUrl,
+    imageModel: generationConfig.model,
+    requestedImageSize: generationConfig.size,
+    fallbackModelUsed: generationConfig.fallbackModelUsed,
     seamScore,
     seamScoreBeforeRepair,
     seamScoreAfterRepair,
@@ -649,13 +739,15 @@ function buildDebugMetadata(params: {
   mode: GenerationRequestMode;
   attemptDiagnostics: AttemptDiagnostic[];
   selectedAttempt: GeneratedPanoramaAttempt | null;
+  selectedImageModel: string;
 }): GenerationDebugMetadata {
   const {
     plannerMode,
     plannerSucceeded,
     plannedPromptLength,
     attemptDiagnostics,
-    selectedAttempt
+    selectedAttempt,
+    selectedImageModel
   } = params;
 
   return {
@@ -664,7 +756,7 @@ function buildDebugMetadata(params: {
     plannerSucceeded,
     plannerModel: plannerMode === 'planner' ? PLANNER_MODEL : null,
     plannedPromptLength,
-    imageModel: IMAGE_MODEL,
+    imageModel: selectedImageModel,
     attempts: attemptDiagnostics.length,
     attemptSeamScores: attemptDiagnostics.map((attempt) => attempt.seamScore),
     finalSeamScore: selectedAttempt?.seamScore ?? null,
@@ -699,6 +791,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
     !shouldUseFastPath &&
     ENABLE_PANORAMA_PLANNER &&
     hasTimeForAnotherExpensiveStep(startedAt);
+  const imageGenerationConfigs = getImageGenerationConfigs(IMAGE_MODEL);
   console.info('[generate-360-scene] Prompt received', {
     promptLength: prompt.length,
     mode,
@@ -706,6 +799,8 @@ export default async function handler(request: VercelRequest, response: VercelRe
     plannerMode,
     plannerEnabled: shouldRunPlanner,
     plannerAllowedByEnv: ENABLE_PANORAMA_PLANNER,
+    requestedImageModel: IMAGE_MODEL,
+    requestedImageSize: imageGenerationConfigs[0]?.size ?? null,
     maxAttempts,
     qualityControlEnabled: shouldRunQualityControl
   });
@@ -787,50 +882,116 @@ export default async function handler(request: VercelRequest, response: VercelRe
         promptLength: wrappedPrompt.length,
         planningSucceeded,
         plannerModel: planningSucceeded ? PLANNER_MODEL : null,
-        model: IMAGE_MODEL,
-        size: IMAGE_SIZE,
+        requestedImageModel: IMAGE_MODEL,
+        requestedImageSize: imageGenerationConfigs[0]?.size ?? null,
         elapsedMs: getRouteDurationMs(startedAt)
       });
 
-      failurePhase = `attempt-${attemptNumber}-image-generation`;
-      const openAIResponse = await fetch('https://api.openai.com/v1/images/generations', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: IMAGE_MODEL,
-          prompt: wrappedPrompt,
-          n: 1,
-          size: IMAGE_SIZE,
-          quality: IMAGE_QUALITY,
-          output_format: IMAGE_OUTPUT_FORMAT
-        })
-      });
+      let selectedGenerationConfig: ImageGenerationConfig | null = null;
+      let normalizedImage:
+        | {
+            imageBytes: Uint8Array;
+            revisedPrompt: string | undefined;
+          }
+        | null = null;
 
-      const data = (await openAIResponse.json().catch(() => ({}))) as OpenAIImageGenerationResponse;
-      const generatedImage = data.data?.[0];
-      console.info('[generate-360-scene] OpenAI response received', {
-        mode,
-        plannerMode,
-        attemptNumber,
-        status: openAIResponse.status,
-        ok: openAIResponse.ok,
-        topLevelKeys: Object.keys(data ?? {}),
-        firstImageKeys: generatedImage ? Object.keys(generatedImage) : [],
-        hasBase64Image: Boolean(generatedImage?.b64_json),
-        hasImageUrl: Boolean(generatedImage?.url)
-      });
+      for (let requestIndex = 0; requestIndex < imageGenerationConfigs.length; requestIndex += 1) {
+        const generationConfig = imageGenerationConfigs[requestIndex];
 
-      if (!openAIResponse.ok) {
-        console.error('[generate-360-scene] OpenAI image generation failed', {
+        if (!hasTimeForAnotherExpensiveStep(startedAt)) {
+          console.warn('[generate-360-scene] Skipping image generation fallback due to route time budget', {
+            mode,
+            plannerMode,
+            attemptNumber,
+            requestedModel: generationConfig.model,
+            requestedSize: generationConfig.size,
+            elapsedMs: getRouteDurationMs(startedAt)
+          });
+          break;
+        }
+
+        failurePhase = `attempt-${attemptNumber}-image-generation-${generationConfig.model}`;
+        const openAIResponse = await fetch('https://api.openai.com/v1/images/generations', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: generationConfig.model,
+            prompt: wrappedPrompt,
+            n: 1,
+            size: generationConfig.size,
+            quality: IMAGE_QUALITY,
+            output_format: IMAGE_OUTPUT_FORMAT
+          })
+        });
+
+        const data = (await openAIResponse.json().catch(() => ({}))) as OpenAIImageGenerationResponse;
+        const generatedImage = data.data?.[0];
+        const openAIMessage = data.error?.message ?? openAIResponse.statusText;
+        const shouldFallback =
+          !openAIResponse.ok &&
+          requestIndex < imageGenerationConfigs.length - 1 &&
+          shouldFallbackToLegacyImageGeneration({
+            model: generationConfig.model,
+            size: generationConfig.size,
+            status: openAIResponse.status,
+            message: openAIMessage
+          });
+
+        console.info('[generate-360-scene] OpenAI response received', {
           mode,
           plannerMode,
           attemptNumber,
+          requestedModel: generationConfig.model,
+          requestedSize: generationConfig.size,
+          fallbackModelUsed: generationConfig.fallbackModelUsed,
           status: openAIResponse.status,
-          message: data.error?.message ?? openAIResponse.statusText
+          ok: openAIResponse.ok,
+          shouldFallback,
+          topLevelKeys: Object.keys(data ?? {}),
+          firstImageKeys: generatedImage ? Object.keys(generatedImage) : [],
+          hasBase64Image: Boolean(generatedImage?.b64_json),
+          hasImageUrl: Boolean(generatedImage?.url)
         });
+
+        if (!openAIResponse.ok) {
+          if (shouldFallback) {
+            console.warn('[generate-360-scene] Falling back to legacy image generation settings', {
+              mode,
+              plannerMode,
+              attemptNumber,
+              failedModel: generationConfig.model,
+              failedSize: generationConfig.size,
+              status: openAIResponse.status,
+              message: openAIMessage
+            });
+            continue;
+          }
+
+          console.error('[generate-360-scene] OpenAI image generation failed', {
+            mode,
+            plannerMode,
+            attemptNumber,
+            requestedModel: generationConfig.model,
+            requestedSize: generationConfig.size,
+            fallbackModelUsed: generationConfig.fallbackModelUsed,
+            status: openAIResponse.status,
+            message: openAIMessage
+          });
+          return response.status(502).json({
+            error: USER_FACING_GENERATION_ERROR
+          });
+        }
+
+        failurePhase = `attempt-${attemptNumber}-normalization-${generationConfig.model}`;
+        normalizedImage = await normalizeGeneratedImagePayload(data);
+        selectedGenerationConfig = generationConfig;
+        break;
+      }
+
+      if (!selectedGenerationConfig || !normalizedImage) {
         return response.status(502).json({
           error: USER_FACING_GENERATION_ERROR
         });
@@ -838,13 +999,12 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
       let processedAttempt: GeneratedPanoramaAttempt | null = null;
       try {
-        failurePhase = `attempt-${attemptNumber}-normalization`;
-        const normalizedImage = await normalizeGeneratedImagePayload(data);
         failurePhase = `attempt-${attemptNumber}-processing`;
         processedAttempt = await processGeneratedImage(
           normalizedImage.imageBytes,
           normalizedImage.revisedPrompt,
           attemptNumber,
+          selectedGenerationConfig,
           {
             runQualityControl: shouldRunQualityControl,
             allowRepair: shouldAllowDeterministicRepair,
@@ -882,7 +1042,14 @@ export default async function handler(request: VercelRequest, response: VercelRe
         originalHeight: processedAttempt.originalHeight,
         normalizedWidth: processedAttempt.normalizedWidth,
         normalizedHeight: processedAttempt.normalizedHeight,
+        normalizedAspectRatio: getAspectRatio(
+          processedAttempt.normalizedWidth,
+          processedAttempt.normalizedHeight
+        ),
         aspectRatioPassed: processedAttempt.aspectRatioPassed,
+        imageModel: processedAttempt.imageModel,
+        requestedImageSize: processedAttempt.requestedImageSize,
+        fallbackModelUsed: processedAttempt.fallbackModelUsed,
         seamScoreBeforeRepair: processedAttempt.seamScoreBeforeRepair,
         repairAttempted: processedAttempt.repairAttempted,
         seamScoreAfterRepair: processedAttempt.seamScoreAfterRepair,
@@ -903,7 +1070,8 @@ export default async function handler(request: VercelRequest, response: VercelRe
               plannedPromptLength: basePrompt.length,
               mode,
               attemptDiagnostics,
-              selectedAttempt: processedAttempt
+              selectedAttempt: processedAttempt,
+              selectedImageModel: processedAttempt.imageModel
             })
           : undefined;
 
@@ -911,10 +1079,22 @@ export default async function handler(request: VercelRequest, response: VercelRe
           mode,
           plannerMode,
           plannerSucceeded: planningSucceeded,
-          imageModel: IMAGE_MODEL,
+          imageModel: processedAttempt.imageModel,
+          requestedImageSize: processedAttempt.requestedImageSize,
+          fallbackModelUsed: processedAttempt.fallbackModelUsed,
           attempts: attemptDiagnostics.length,
           returnedAttempt: processedAttempt.attemptNumber,
           repairApplied: processedAttempt.repairedSelected,
+          finalWidth: processedAttempt.normalizedWidth,
+          finalHeight: processedAttempt.normalizedHeight,
+          finalAspectRatio: getAspectRatio(
+            processedAttempt.normalizedWidth,
+            processedAttempt.normalizedHeight
+          ),
+          finalAspectRatioIsTwoToOne: isExactlyTwoToOne(
+            processedAttempt.normalizedWidth,
+            processedAttempt.normalizedHeight
+          ),
           seamScoreBeforeRepair: processedAttempt.seamScoreBeforeRepair,
           seamScoreAfterRepair: processedAttempt.seamScoreAfterRepair,
           repairedSelected: processedAttempt.repairedSelected,
@@ -941,7 +1121,9 @@ export default async function handler(request: VercelRequest, response: VercelRe
       mode,
       plannerMode,
       plannerSucceeded: planningSucceeded,
-      imageModel: IMAGE_MODEL,
+      imageModel: bestAttempt.imageModel,
+      requestedImageSize: bestAttempt.requestedImageSize,
+      fallbackModelUsed: bestAttempt.fallbackModelUsed,
       attempts: attemptDiagnostics.length,
       returnedAttempt: bestAttempt.attemptNumber,
       repairApplied: bestAttempt.repairedSelected,
@@ -949,6 +1131,11 @@ export default async function handler(request: VercelRequest, response: VercelRe
       originalHeight: bestAttempt.originalHeight,
       normalizedWidth: bestAttempt.normalizedWidth,
       normalizedHeight: bestAttempt.normalizedHeight,
+      finalAspectRatio: getAspectRatio(bestAttempt.normalizedWidth, bestAttempt.normalizedHeight),
+      finalAspectRatioIsTwoToOne: isExactlyTwoToOne(
+        bestAttempt.normalizedWidth,
+        bestAttempt.normalizedHeight
+      ),
       seamScoreBeforeRepair: bestAttempt.seamScoreBeforeRepair,
       seamScoreAfterRepair: bestAttempt.seamScoreAfterRepair,
       repairedSelected: bestAttempt.repairedSelected,
@@ -963,7 +1150,8 @@ export default async function handler(request: VercelRequest, response: VercelRe
           plannedPromptLength: basePrompt.length,
           mode,
           attemptDiagnostics,
-          selectedAttempt: bestAttempt
+          selectedAttempt: bestAttempt,
+          selectedImageModel: bestAttempt.imageModel
         })
       : undefined;
 
