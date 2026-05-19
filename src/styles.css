@@ -1143,6 +1143,12 @@ select {
   background: #edf9fb;
 }
 
+.hotspot-link-chip-reflection {
+  color: #8a3f8f;
+  border-color: #efcff3;
+  background: #fff0ff;
+}
+
 .hotspot-geometry-chip {
   display: inline-flex;
   align-items: center;
@@ -1447,6 +1453,7 @@ select {
   width: 100%;
   height: 100%;
   overflow: visible;
+  pointer-events: none;
 }
 
 .polygon-overlay-svg-drawing {
@@ -1454,7 +1461,7 @@ select {
 }
 
 .polygon-overlay-group {
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .polygon-overlay-shape {
@@ -1462,6 +1469,8 @@ select {
   stroke: rgba(189, 180, 255, 0.96);
   stroke-width: 2.5;
   vector-effect: non-scaling-stroke;
+  pointer-events: visiblePainted;
+  cursor: pointer;
   transition: fill 140ms ease, stroke 140ms ease, opacity 140ms ease;
 }
 
@@ -1484,6 +1493,7 @@ select {
   stroke: rgba(124, 108, 255, 0.94);
   stroke-width: 2;
   vector-effect: non-scaling-stroke;
+  pointer-events: none;
 }
 
 .polygon-overlay-drawing-fill {
@@ -1531,6 +1541,7 @@ select {
   left: 50%;
   top: 50%;
   border-radius: 999px;
+  pointer-events: none;
   transform: translate(-50%, -50%) scale(0.12);
   will-change: transform, opacity, box-shadow, filter;
 }
@@ -2876,6 +2887,7 @@ select {
   gap: 10px;
   width: min(460px, calc(100% - 32px));
   max-width: calc(100% - 32px);
+  pointer-events: none;
 }
 
 .presentation-progress-overlay {
@@ -2885,6 +2897,7 @@ select {
   display: flex;
   justify-content: flex-end;
   width: min(320px, calc(100% - 32px));
+  pointer-events: none;
 }
 
 .presentation-progress-card {
@@ -2897,6 +2910,7 @@ select {
   box-shadow:
     0 16px 32px rgba(8, 10, 18, 0.28),
     inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  pointer-events: auto;
 }
 
 .presentation-progress-header {
@@ -2979,6 +2993,7 @@ select {
   box-shadow:
     0 18px 38px rgba(8, 10, 18, 0.22),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  pointer-events: auto;
 }
 
 .presentation-meta-top {
@@ -3067,6 +3082,7 @@ select {
   color: rgba(255, 255, 255, 0.9);
   font-size: 0.8rem;
   box-shadow: 0 14px 30px rgba(8, 10, 18, 0.18);
+  pointer-events: auto;
 }
 
 .preview-hint-card p {
@@ -3533,6 +3549,14 @@ select {
     0 0 0 3px rgba(255, 255, 255, 0.16);
 }
 
+.xr-hotspot-type-reflection {
+  border-color: rgba(251, 225, 255, 0.98);
+  background: radial-gradient(circle at 36% 30%, #fff7ff, #eabaff 58%, #b54fcc 100%);
+  box-shadow:
+    0 0 0 1px rgba(17, 24, 39, 0.12),
+    0 0 0 3px rgba(202, 108, 255, 0.16);
+}
+
 .xr-hotspot-visited-preview {
   opacity: 0.62;
   filter: saturate(0.74) brightness(0.9);
@@ -3608,6 +3632,10 @@ select {
   width: min(680px, 94vw);
 }
 
+.reflection-preview-modal {
+  width: min(720px, 94vw);
+}
+
 .presentation-modal-header {
   display: flex;
   align-items: center;
@@ -3641,6 +3669,53 @@ select {
   color: var(--text);
   font-size: 1rem;
   line-height: 1.5;
+}
+
+.reflection-question-prompt {
+  margin: 0 0 16px;
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.reflection-response-group {
+  gap: 8px;
+  margin-top: 0;
+}
+
+.reflection-response-textarea {
+  width: 100%;
+  min-height: 164px;
+  resize: vertical;
+  border-radius: 18px;
+  border: 1px solid rgba(163, 168, 188, 0.42);
+  background: rgba(251, 252, 255, 0.96);
+  color: var(--text);
+  padding: 14px 16px;
+  font: inherit;
+  line-height: 1.55;
+  box-shadow: inset 0 1px 2px rgba(15, 19, 36, 0.04);
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.reflection-response-textarea:focus {
+  outline: none;
+  border-color: rgba(124, 108, 255, 0.6);
+  box-shadow:
+    0 0 0 3px rgba(124, 108, 255, 0.14),
+    inset 0 1px 2px rgba(15, 19, 36, 0.04);
+  background: #fff;
+}
+
+.reflection-response-textarea::placeholder {
+  color: rgba(95, 102, 116, 0.72);
+}
+
+.reflection-helper-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
 }
 
 .quiz-choice-list {

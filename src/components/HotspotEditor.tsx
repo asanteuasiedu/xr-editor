@@ -1,7 +1,12 @@
 import { useRef } from 'react';
 import type { ChangeEvent } from 'react';
 import type { Hotspot, HotspotType, Scene } from '../types/project';
-import { getDefaultZoneMetadata } from '../types/project';
+import {
+  DEFAULT_REFLECTION_PLACEHOLDER,
+  DEFAULT_REFLECTION_PROMPT,
+  DEFAULT_REFLECTION_TITLE,
+  getDefaultZoneMetadata
+} from '../types/project';
 
 type HotspotEditorProps = {
   hotspot?: Hotspot;
@@ -82,7 +87,17 @@ function HotspotEditor({
   }
 
   const handleTextChange =
-    (field: 'title' | 'body' | 'url' | 'imageUrl' | 'questionPrompt' | 'feedbackText') =>
+    (
+      field:
+        | 'title'
+        | 'body'
+        | 'url'
+        | 'imageUrl'
+        | 'questionPrompt'
+        | 'feedbackText'
+        | 'reflectionPrompt'
+        | 'reflectionPlaceholder'
+    ) =>
     (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       onUpdateHotspot(hotspot.id, { [field]: event.target.value });
     };
@@ -93,16 +108,30 @@ function HotspotEditor({
       hotspot.answerOptions && hotspot.answerOptions.length >= 2
         ? hotspot.answerOptions
         : ['Option 1', 'Option 2'];
+    const shouldUseDefaultReflectionTitle =
+      !hotspot.title.trim() ||
+      hotspot.title === 'New Insight Zone' ||
+      hotspot.title === 'Untitled Insight Zone';
     onUpdateHotspot(hotspot.id, {
       type: nextType,
       ...getDefaultZoneMetadata(nextType),
+      title:
+        nextType === 'reflection' && shouldUseDefaultReflectionTitle
+          ? DEFAULT_REFLECTION_TITLE
+          : hotspot.title,
       targetSceneId: nextType === 'sceneLink' ? hotspot.targetSceneId : undefined,
       url: nextType === 'externalLink' ? hotspot.url : undefined,
       imageUrl: nextType === 'image' ? hotspot.imageUrl : undefined,
       questionPrompt: nextType === 'multipleChoice' ? hotspot.questionPrompt ?? 'New question prompt' : undefined,
       answerOptions: nextType === 'multipleChoice' ? existingOptions.slice(0, 4) : undefined,
       correctAnswerIndex: nextType === 'multipleChoice' ? hotspot.correctAnswerIndex ?? 0 : undefined,
-      feedbackText: nextType === 'multipleChoice' ? hotspot.feedbackText ?? '' : undefined
+      feedbackText: nextType === 'multipleChoice' ? hotspot.feedbackText ?? '' : undefined,
+      reflectionPrompt:
+        nextType === 'reflection' ? hotspot.reflectionPrompt ?? DEFAULT_REFLECTION_PROMPT : undefined,
+      reflectionPlaceholder:
+        nextType === 'reflection'
+          ? hotspot.reflectionPlaceholder ?? DEFAULT_REFLECTION_PLACEHOLDER
+          : undefined
     });
   };
 
@@ -192,6 +221,7 @@ function HotspotEditor({
             <option value="externalLink">External Link</option>
             <option value="image">Image</option>
             <option value="multipleChoice">Multiple Choice</option>
+            <option value="reflection">Reflection</option>
           </select>
         </label>
 
@@ -200,7 +230,7 @@ function HotspotEditor({
           <input value={hotspot.title} onChange={handleTextChange('title')} />
         </label>
 
-        {hotspot.type !== 'multipleChoice' ? (
+        {hotspot.type !== 'multipleChoice' && hotspot.type !== 'reflection' ? (
           <label className="editor-field">
             <span>Body</span>
             <textarea value={hotspot.body} onChange={handleTextChange('body')} rows={4} />
@@ -330,6 +360,31 @@ function HotspotEditor({
                 placeholder="Explain the answer or give the learner a short takeaway."
               />
             </label>
+          </>
+        ) : null}
+
+        {hotspot.type === 'reflection' ? (
+          <>
+            <label className="editor-field">
+              <span>Reflection Prompt</span>
+              <textarea
+                value={hotspot.reflectionPrompt ?? DEFAULT_REFLECTION_PROMPT}
+                onChange={handleTextChange('reflectionPrompt')}
+                rows={4}
+                placeholder="What should the learner reflect on here?"
+              />
+            </label>
+
+            <label className="editor-field">
+              <span>Response Placeholder</span>
+              <input
+                value={hotspot.reflectionPlaceholder ?? DEFAULT_REFLECTION_PLACEHOLDER}
+                onChange={handleTextChange('reflectionPlaceholder')}
+                placeholder={DEFAULT_REFLECTION_PLACEHOLDER}
+              />
+            </label>
+
+            <p className="helper-note">Learners will type a written response to this prompt in Preview Mode.</p>
           </>
         ) : null}
         <div className="editor-actions">

@@ -11,7 +11,11 @@ import type {
   ZoneInteractionType,
   ZoneType
 } from '../types/project';
-import { getDefaultZoneMetadata } from '../types/project';
+import {
+  DEFAULT_REFLECTION_PLACEHOLDER as DEFAULT_REFLECTION_PLACEHOLDER_VALUE,
+  DEFAULT_REFLECTION_PROMPT as DEFAULT_REFLECTION_PROMPT_VALUE,
+  getDefaultZoneMetadata
+} from '../types/project';
 
 type ValidationResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -48,6 +52,7 @@ const zoneInteractionTypes: ZoneInteractionType[] = [
   'read',
   'viewImage',
   'answerQuestion',
+  'writeReflection',
   'navigateScene',
   'openExternalResource'
 ];
@@ -55,6 +60,7 @@ const zoneCompletionLogicValues: ZoneCompletionLogic[] = [
   'viewed',
   'answered',
   'answeredCorrectly',
+  'submitted',
   'opened',
   'navigated'
 ];
@@ -144,11 +150,12 @@ function validateHotspot(value: unknown, sceneIndex: number, hotspotIndex: numbe
     type !== 'sceneLink' &&
     type !== 'externalLink' &&
     type !== 'image' &&
-    type !== 'multipleChoice'
+    type !== 'multipleChoice' &&
+    type !== 'reflection'
   ) {
     return {
       ok: false,
-      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: type must be info, sceneLink, externalLink, image, or multipleChoice.`
+      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: type must be info, sceneLink, externalLink, image, multipleChoice, or reflection.`
     };
   }
 
@@ -159,6 +166,8 @@ function validateHotspot(value: unknown, sceneIndex: number, hotspotIndex: numbe
   const answerOptions = value.answerOptions;
   const correctAnswerIndex = value.correctAnswerIndex;
   const feedbackText = value.feedbackText;
+  const reflectionPrompt = value.reflectionPrompt;
+  const reflectionPlaceholder = value.reflectionPlaceholder;
   const shape = value.shape === 'polygon' ? 'polygon' : 'point';
   let polygonPoints: HotspotPolygonPoint[] | undefined;
 
@@ -238,6 +247,20 @@ function validateHotspot(value: unknown, sceneIndex: number, hotspotIndex: numbe
     return {
       ok: false,
       error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: feedbackText must be a string if provided.`
+    };
+  }
+
+  if (reflectionPrompt !== undefined && !isNonEmptyString(reflectionPrompt)) {
+    return {
+      ok: false,
+      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: reflectionPrompt must be a non-empty string if provided.`
+    };
+  }
+
+  if (reflectionPlaceholder !== undefined && !isNonEmptyString(reflectionPlaceholder)) {
+    return {
+      ok: false,
+      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: reflectionPlaceholder must be a non-empty string if provided.`
     };
   }
 
@@ -324,6 +347,15 @@ function validateHotspot(value: unknown, sceneIndex: number, hotspotIndex: numbe
     }
   }
 
+  const normalizedReflectionPrompt =
+    typeof reflectionPrompt === 'string' && reflectionPrompt.trim()
+      ? reflectionPrompt.trim()
+      : DEFAULT_REFLECTION_PROMPT_VALUE;
+  const normalizedReflectionPlaceholder =
+    typeof reflectionPlaceholder === 'string' && reflectionPlaceholder.trim()
+      ? reflectionPlaceholder.trim()
+      : DEFAULT_REFLECTION_PLACEHOLDER_VALUE;
+
   const validatedAnswerOptions = Array.isArray(answerOptions) ? [...answerOptions] : undefined;
   const validatedCorrectAnswerIndex =
     typeof correctAnswerIndex === 'number' ? correctAnswerIndex : undefined;
@@ -353,14 +385,14 @@ function validateHotspot(value: unknown, sceneIndex: number, hotspotIndex: numbe
   if (value.interactionType !== undefined && !isOneOf(value.interactionType, zoneInteractionTypes)) {
     return {
       ok: false,
-      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: interactionType must be read, viewImage, answerQuestion, navigateScene, or openExternalResource.`
+      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: interactionType must be read, viewImage, answerQuestion, writeReflection, navigateScene, or openExternalResource.`
     };
   }
 
   if (value.completionLogic !== undefined && !isOneOf(value.completionLogic, zoneCompletionLogicValues)) {
     return {
       ok: false,
-      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: completionLogic must be viewed, answered, answeredCorrectly, opened, or navigated.`
+      error: `Scene ${sceneIndex + 1}, hotspot ${hotspotIndex + 1}: completionLogic must be viewed, answered, answeredCorrectly, submitted, opened, or navigated.`
     };
   }
 
@@ -406,7 +438,9 @@ function validateHotspot(value: unknown, sceneIndex: number, hotspotIndex: numbe
       questionPrompt: type === 'multipleChoice' ? questionPrompt : undefined,
       answerOptions: type === 'multipleChoice' ? validatedAnswerOptions : undefined,
       correctAnswerIndex: type === 'multipleChoice' ? validatedCorrectAnswerIndex : undefined,
-      feedbackText: type === 'multipleChoice' ? feedbackText : undefined
+      feedbackText: type === 'multipleChoice' ? feedbackText : undefined,
+      reflectionPrompt: type === 'reflection' ? normalizedReflectionPrompt : undefined,
+      reflectionPlaceholder: type === 'reflection' ? normalizedReflectionPlaceholder : undefined
     }
   };
 }

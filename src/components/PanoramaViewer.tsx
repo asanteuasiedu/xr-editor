@@ -39,6 +39,7 @@ type ProjectedPolygon = {
 
 // Set true temporarily to compare click-derived coordinates with viewer debug output.
 const PANNELLUM_HOTSPOT_DEBUG = false;
+const PREVIEW_INTERACTION_DEBUG = false;
 const MOBILE_LONG_PRESS_DELAY_MS = 500;
 const MOBILE_LONG_PRESS_MOVE_TOLERANCE_PX = 12;
 const IDLE_AUTOROTATE_RESUME_DELAY_MS = 5000;
@@ -100,6 +101,7 @@ function PanoramaViewer({
   const onToggleOverlaysRef = useRef(onToggleOverlays);
   const onViewChangeRef = useRef(onViewChange);
   const interactionModeRef = useRef(interactionMode);
+  const isPreviewModeRef = useRef(isPreviewMode);
   const longPressTimeoutRef = useRef<number | null>(null);
   const longPressTouchRef = useRef<{ x: number; y: number; touchId: number } | null>(null);
   const autoRotateResumeTimeoutRef = useRef<number | null>(null);
@@ -141,6 +143,10 @@ function PanoramaViewer({
   useEffect(() => {
     interactionModeRef.current = interactionMode;
   }, [interactionMode]);
+
+  useEffect(() => {
+    isPreviewModeRef.current = isPreviewMode;
+  }, [isPreviewMode]);
 
   useEffect(() => {
     if (!isPreviewMode) {
@@ -198,6 +204,40 @@ function PanoramaViewer({
       }
     };
   }, [isLoadingOverlayVisible, isPreviewMode]);
+
+  useEffect(() => {
+    if (!PREVIEW_INTERACTION_DEBUG || !isPreviewMode) {
+      return;
+    }
+
+    const shell = shellRef.current;
+    const container = containerRef.current;
+    const shellPointerEvents = shell ? window.getComputedStyle(shell).pointerEvents : null;
+    const containerPointerEvents = container ? window.getComputedStyle(container).pointerEvents : null;
+
+    console.info('[preview-interaction-debug] viewer state', {
+      isPreviewMode,
+      isPanoramaLoading,
+      isLoadingOverlayVisible,
+      showPreviewEntryRipple,
+      hasOverlayContent: Boolean(overlayContent),
+      selectedHotspotId,
+      interactionMode,
+      shellPointerEvents,
+      containerPointerEvents,
+      projectedPolygonCount: projectedPolygons.length
+    });
+  }, [
+    drawingPolygonPoints.length,
+    interactionMode,
+    isLoadingOverlayVisible,
+    isPanoramaLoading,
+    isPreviewMode,
+    overlayContent,
+    projectedPolygons.length,
+    selectedHotspotId,
+    showPreviewEntryRipple
+  ]);
 
   useEffect(() => {
     const clearAutoRotateResume = () => {
@@ -418,7 +458,7 @@ function PanoramaViewer({
     });
 
     const handleContextMenu = (event: MouseEvent) => {
-      if (isPreviewMode || interactionModeRef.current !== 'idle' || !onQuickPlaceHotspotRef.current) {
+      if (isPreviewModeRef.current || interactionModeRef.current !== 'idle' || !onQuickPlaceHotspotRef.current) {
         return;
       }
 
@@ -440,7 +480,7 @@ function PanoramaViewer({
     };
 
     const handleTouchStart = (event: TouchEvent) => {
-      if (isPreviewMode) {
+      if (isPreviewModeRef.current) {
         return;
       }
 
@@ -530,7 +570,7 @@ function PanoramaViewer({
     const handleTouchEnd = (event: TouchEvent) => {
       const activePlacementTouch = placementTouchRef.current;
       if (
-        !isPreviewMode &&
+        !isPreviewModeRef.current &&
         interactionModeRef.current !== 'idle' &&
         activePlacementTouch &&
         !shouldIgnoreGestureTarget(event.target)
@@ -575,7 +615,24 @@ function PanoramaViewer({
     }
 
     dragFix?.addEventListener('contextmenu', handleContextMenu, { capture: true });
+    const handlePreviewPointerDebug = (event: PointerEvent) => {
+      if (!PREVIEW_INTERACTION_DEBUG || !isPreviewModeRef.current) {
+        return;
+      }
+
+      const topElement = document.elementFromPoint(event.clientX, event.clientY);
+      console.info('[preview-interaction-debug] pointerdown target', {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        targetTag: event.target instanceof HTMLElement ? event.target.tagName : null,
+        targetClassName: event.target instanceof HTMLElement ? event.target.className : null,
+        topElementTag: topElement instanceof HTMLElement ? topElement.tagName : null,
+        topElementClassName: topElement instanceof HTMLElement ? topElement.className : null
+      });
+    };
+
     shell?.addEventListener('pointerdown', markViewerInteraction, { passive: true });
+    shell?.addEventListener('pointerdown', handlePreviewPointerDebug, { capture: true, passive: true });
     shell?.addEventListener('wheel', markViewerInteraction, { passive: true });
     shell?.addEventListener('touchstart', handleTouchStart, { passive: true });
     shell?.addEventListener('touchmove', handleTouchMove, { passive: true });
@@ -590,6 +647,7 @@ function PanoramaViewer({
     return () => {
       dragFix?.removeEventListener('contextmenu', handleContextMenu, true);
       shell?.removeEventListener('pointerdown', markViewerInteraction);
+      shell?.removeEventListener('pointerdown', handlePreviewPointerDebug, true);
       shell?.removeEventListener('wheel', markViewerInteraction);
       shell?.removeEventListener('touchstart', handleTouchStart);
       shell?.removeEventListener('touchmove', handleTouchMove);

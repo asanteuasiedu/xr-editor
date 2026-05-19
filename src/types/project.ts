@@ -1,16 +1,31 @@
-export type HotspotType = 'info' | 'sceneLink' | 'externalLink' | 'image' | 'multipleChoice';
+export type HotspotType = 'info' | 'sceneLink' | 'externalLink' | 'image' | 'multipleChoice' | 'reflection';
 export type SceneMediaType = 'image';
 export type HotspotShape = 'point' | 'polygon';
 export type HotspotPolygonPoint = {
   yaw: number;
   pitch: number;
 };
+export const DEFAULT_REFLECTION_TITLE = 'Reflection';
+export const DEFAULT_REFLECTION_PROMPT = 'What do you notice, wonder, or connect to here?';
+export const DEFAULT_REFLECTION_PLACEHOLDER = 'Type your response...';
 
 export type ZoneType = 'information' | 'media' | 'question' | 'navigation' | 'externalResource';
 export type ZoneIntent = 'observe' | 'reflect' | 'identify' | 'compare' | 'answer' | 'discover' | 'navigate';
 export type ZoneDifficulty = 'introductory' | 'developing' | 'challenging';
-export type ZoneInteractionType = 'read' | 'viewImage' | 'answerQuestion' | 'navigateScene' | 'openExternalResource';
-export type ZoneCompletionLogic = 'viewed' | 'answered' | 'answeredCorrectly' | 'opened' | 'navigated';
+export type ZoneInteractionType =
+  | 'read'
+  | 'viewImage'
+  | 'answerQuestion'
+  | 'writeReflection'
+  | 'navigateScene'
+  | 'openExternalResource';
+export type ZoneCompletionLogic =
+  | 'viewed'
+  | 'answered'
+  | 'answeredCorrectly'
+  | 'submitted'
+  | 'opened'
+  | 'navigated';
 export type FeedbackRewardState = {
   rewardType: 'none' | 'acknowledgement' | 'points' | 'badge';
   message?: string;
@@ -43,6 +58,8 @@ export type Hotspot = HotspotLearningMetadata & {
   answerOptions?: string[];
   correctAnswerIndex?: number;
   feedbackText?: string;
+  reflectionPrompt?: string;
+  reflectionPlaceholder?: string;
 };
 
 export type Scene = {
@@ -110,6 +127,17 @@ export function getDefaultZoneMetadata(type: HotspotType): HotspotLearningMetada
       interactionType: 'answerQuestion',
       completionLogic: 'answeredCorrectly',
       feedbackRewardState: { rewardType: 'acknowledgement', message: 'Question completed.' }
+    };
+  }
+
+  if (type === 'reflection') {
+    return {
+      zoneType: 'question',
+      zoneIntent: 'reflect',
+      difficulty: 'introductory',
+      interactionType: 'writeReflection',
+      completionLogic: 'submitted',
+      feedbackRewardState: { rewardType: 'acknowledgement', message: 'Reflection submitted.' }
     };
   }
 

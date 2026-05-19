@@ -25,7 +25,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 - 360 image scene rendering via `pannellum` for the active scene
 - Hotspot CRUD scoped to the active scene only
 - Optional hotspot destination links (`targetSceneId`) for scene-to-scene navigation
-- Hotspot types: `info`, `sceneLink`, `externalLink`, `image`, `multipleChoice`
+- Hotspot types: `info`, `sceneLink`, `externalLink`, `image`, `multipleChoice`, `reflection`
 - Clicking a linked hotspot switches to destination scene
 - External-link hotspots open URLs in a new tab
 - Image hotspots open a lightweight image preview modal
@@ -121,6 +121,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 - **Edit Mode** shows the full authoring interface: the combined project panel, scenes/hotspots controls, and hotspot editor.
 - **Presentation Mode** acts like a lightweight immersive viewer with reduced editor chrome, a taller panorama surface for pilot demos, overlaid metadata and app controls, and a stronger cinematic first-entry reveal into the opening scene.
 - Presentation Mode is optimized for phone/tablet viewing with touch-friendly progress cards, readable learning-goal content, and mobile-sized overlays for info, image, and question interactions.
+- Reflection insight zones open a learner-facing writing prompt in Presentation Mode and can collect a session-local written response.
 - Use **Present Project** to enter presentation mode quickly, then **Return to Edit Mode** when done.
 - Switching modes does not lose project data; current scene stays active.
 - A subtle "Tap hotspots to explore" hint appears for new viewers and can be dismissed.
@@ -132,6 +133,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 - `sceneLink`: navigates to destination scene.
 - `externalLink`: opens URL in a new tab.
 - `image`: opens an image viewer modal with title and optional caption pulled from the hotspot body.
+- `reflection`: opens a writing prompt with a textarea and counts as completed after the learner submits a response.
 
 ### Session Progress
 - Each unique insight zone activated in Preview / Presentation Mode counts as `1` point.
@@ -147,6 +149,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 - `externalLink`: purple glowing dot.
 - `image`: white glowing dot.
 - `multipleChoice`: uses the baseline marker style in the viewer and opens a frosted question modal in Presentation Mode.
+- `reflection`: uses a violet-tinted marker and opens a frosted writing modal in Presentation Mode.
 - Selected hotspots show a stronger ring/glow state for easier tracking.
 
 Placement tip: click and release without dragging to place/move at the intended point.

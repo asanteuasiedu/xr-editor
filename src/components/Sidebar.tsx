@@ -763,6 +763,8 @@ function Sidebar({
                     ? 'Image'
                     : hotspot.type === 'multipleChoice'
                       ? 'Multiple Choice'
+                      : hotspot.type === 'reflection'
+                        ? 'Reflection'
                       : 'Info';
             const hotspotTypeChipClass =
               hotspot.type === 'sceneLink'
@@ -773,6 +775,8 @@ function Sidebar({
                     ? 'hotspot-link-chip-image'
                     : hotspot.type === 'multipleChoice'
                       ? 'hotspot-link-chip-multiplechoice'
+                      : hotspot.type === 'reflection'
+                        ? 'hotspot-link-chip-reflection'
                       : 'hotspot-link-chip-info';
             const hotspotGeometryLabel = getHotspotGeometryLabel(hotspot);
 

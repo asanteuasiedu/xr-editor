@@ -6,7 +6,12 @@ import Sidebar, { type EditSection } from './components/Sidebar';
 import HotspotEditor from './components/HotspotEditor';
 import PanoramaViewer from './components/PanoramaViewer';
 import type { Hotspot, HotspotPolygonPoint, Project } from './types/project';
-import { getDefaultZoneMetadata } from './types/project';
+import {
+  DEFAULT_REFLECTION_TITLE,
+  DEFAULT_REFLECTION_PLACEHOLDER,
+  DEFAULT_REFLECTION_PROMPT,
+  getDefaultZoneMetadata
+} from './types/project';
 import { exportProjectToJson, importProjectFromFile } from './utils/exportImport';
 import { imageFileToDataUrl } from './utils/fileAssets';
 import { clearLocalDraft, loadLocalDraft, saveLocalDraft } from './utils/localDraft';
@@ -48,6 +53,7 @@ type Generate360SceneResult = {
 };
 const PREVIEW_HINT_DISMISSED_KEY = 'xr-editor.preview-hint-dismissed.v1';
 const EDIT_WALKTHROUGH_DISMISSED_KEY = 'xr-editor.edit-walkthrough-dismissed.v1';
+const PREVIEW_INTERACTION_DEBUG = false;
 
 const EDIT_WALKTHROUGH_STEPS = [
   {
@@ -291,9 +297,11 @@ function App() {
   const [imagePreview, setImagePreview] = useState<{ src: string; title: string; caption?: string } | null>(null);
   const [infoPreview, setInfoPreview] = useState<{ title: string; body: string } | null>(null);
   const [questionPreviewHotspotId, setQuestionPreviewHotspotId] = useState<string | null>(null);
+  const [reflectionPreviewHotspotId, setReflectionPreviewHotspotId] = useState<string | null>(null);
   const [imagePreviewBroken, setImagePreviewBroken] = useState(false);
   const [discoveredHotspotIds, setDiscoveredHotspotIds] = useState<string[]>([]);
   const [questionResponses, setQuestionResponses] = useState<Record<string, QuestionResponse>>({});
+  const [reflectionResponses, setReflectionResponses] = useState<Record<string, string>>({});
   const [previewHintDismissed, setPreviewHintDismissed] = useState(loadPreviewHintDismissed);
   const [, setEditWalkthroughDismissed] = useState(initialWalkthroughDismissed);
   const [walkthroughStepIndex, setWalkthroughStepIndex] = useState<number | null>(null);
@@ -319,6 +327,7 @@ function App() {
   const hasMountedRef = useRef(false);
   const noticeTimeoutRef = useRef<number | null>(null);
   const previewHotspotPulseTimeoutRef = useRef<number | null>(null);
+  const previousAppModeRef = useRef<AppMode>('edit');
 
   const showTemporaryNotice = useCallback((message: string, durationMs = 2200) => {
     setNoticeMessage(message);
@@ -428,6 +437,18 @@ function App() {
   const activeQuestionEntry = questionPreviewHotspotId ? questionEntryById.get(questionPreviewHotspotId) ?? null : null;
   const activeQuestionConfig = activeQuestionEntry ? getMultipleChoiceConfig(activeQuestionEntry.hotspot) : null;
   const activeQuestionResponse = activeQuestionEntry ? questionResponses[activeQuestionEntry.hotspot.id] : undefined;
+  const activeReflectionHotspot = useMemo(
+    () =>
+      reflectionPreviewHotspotId
+        ? activeScene.hotspots.find(
+            (hotspot) => hotspot.id === reflectionPreviewHotspotId && hotspot.type === 'reflection'
+          ) ?? null
+        : null,
+    [activeScene.hotspots, reflectionPreviewHotspotId]
+  );
+  const activeReflectionResponse = activeReflectionHotspot
+    ? reflectionResponses[activeReflectionHotspot.id] ?? ''
+    : '';
   const totalProgressPoints = useMemo(
     () => project.scenes.reduce((count, scene) => count + scene.hotspots.length, 0),
     [project.scenes]
@@ -461,7 +482,46 @@ function App() {
     totalProgressPoints > 0 &&
     discoveredHotspotIds.length === totalProgressPoints &&
     answeredQuestionCount === totalQuestionCount;
-  const hasActivePreviewOverlay = Boolean(infoPreview || imagePreview || questionPreviewHotspotId);
+  const hasActivePreviewOverlay = Boolean(
+    infoPreview || imagePreview || questionPreviewHotspotId || reflectionPreviewHotspotId
+  );
+
+  useEffect(() => {
+    const enteringPreview = previousAppModeRef.current !== 'preview' && appMode === 'preview';
+    previousAppModeRef.current = appMode;
+
+    if (!PREVIEW_INTERACTION_DEBUG || !enteringPreview) {
+      return;
+    }
+
+    console.info('[preview-interaction-debug] app preview entered', {
+      appMode,
+      selectedHotspotId,
+      hasInfoPreview: Boolean(infoPreview),
+      hasImagePreview: Boolean(imagePreview),
+      hasQuestionPreview: Boolean(questionPreviewHotspotId),
+      hasReflectionPreview: Boolean(reflectionPreviewHotspotId),
+      hasActivePreviewOverlay,
+      showCreationOnboarding,
+      areViewerOverlaysHidden,
+      isContextPanelOpen,
+      isScenePickerOpen,
+      placementMode: placementMode.type
+    });
+  }, [
+    appMode,
+    areViewerOverlaysHidden,
+    hasActivePreviewOverlay,
+    imagePreview,
+    infoPreview,
+    isContextPanelOpen,
+    isScenePickerOpen,
+    placementMode.type,
+    questionPreviewHotspotId,
+    reflectionPreviewHotspotId,
+    selectedHotspotId,
+    showCreationOnboarding
+  ]);
 
   useEffect(() => {
     if (!isExperienceComplete) {
@@ -502,17 +562,24 @@ function App() {
 
   const handleCloseQuestionPreview = () => {
     setQuestionPreviewHotspotId(null);
+    setReflectionPreviewHotspotId(null);
+  };
+
+  const handleCloseReflectionPreview = () => {
+    setReflectionPreviewHotspotId(null);
   };
 
   useEffect(() => {
     if (appMode !== 'preview') {
       setActivePreviewHotspotId(null);
+      setReflectionPreviewHotspotId(null);
       setPreviewRevealOrigin(null);
     }
   }, [appMode]);
 
   useEffect(() => {
     setActivePreviewHotspotId(null);
+    setReflectionPreviewHotspotId(null);
     setPreviewRevealOrigin(null);
   }, [activeScene.id]);
 
@@ -568,6 +635,7 @@ function App() {
     setImagePreview(null);
     setInfoPreview(null);
     setQuestionPreviewHotspotId(null);
+    setReflectionPreviewHotspotId(null);
     setIsScenePickerOpen(false);
     setActiveEditSection('sceneDetails');
     setSelectedHotspotId(null);
@@ -590,6 +658,7 @@ function App() {
     setImagePreview(null);
     setInfoPreview(null);
     setQuestionPreviewHotspotId(null);
+    setReflectionPreviewHotspotId(null);
     setIsScenePickerOpen(false);
     setActiveEditSection('sceneDetails');
     setPlacementMode({ type: 'idle' });
@@ -727,6 +796,7 @@ function App() {
     }
     setImagePreview(null);
     setQuestionPreviewHotspotId(null);
+    setReflectionPreviewHotspotId(null);
     setPlacementMode({ type: 'idle' });
     setIsScenePickerOpen(false);
   };
@@ -737,6 +807,7 @@ function App() {
     setImagePreview(null);
     setInfoPreview(null);
     setQuestionPreviewHotspotId(null);
+    setReflectionPreviewHotspotId(null);
     setActiveEditSection('hotspots');
     setIsContextPanelOpen(true);
     setPlacementMode({ type: 'placingNewHotspot' });
@@ -748,6 +819,7 @@ function App() {
     setImagePreview(null);
     setInfoPreview(null);
     setQuestionPreviewHotspotId(null);
+    setReflectionPreviewHotspotId(null);
     setActiveEditSection('hotspots');
     setIsContextPanelOpen(true);
     setPlacementMode({ type: 'drawingPolygon', points: [] });
@@ -897,7 +969,28 @@ function App() {
 
       if (appMode === 'preview') {
         setActivePreviewHotspotId(hotspotId);
-        setDiscoveredHotspotIds((current) => (current.includes(hotspotId) ? current : [...current, hotspotId]));
+        if (clickedHotspot.type !== 'reflection') {
+          setDiscoveredHotspotIds((current) => (current.includes(hotspotId) ? current : [...current, hotspotId]));
+        }
+      }
+
+      if (clickedHotspot.type === 'reflection') {
+        if (appMode === 'preview') {
+          setPreviewRevealOrigin(anchor ?? null);
+          setImagePreview(null);
+          setInfoPreview(null);
+          setQuestionPreviewHotspotId(null);
+          setReflectionPreviewHotspotId(hotspotId);
+          setSelectedHotspotId(null);
+          return;
+        }
+
+        setImagePreview(null);
+        setInfoPreview(null);
+        setQuestionPreviewHotspotId(null);
+        setReflectionPreviewHotspotId(null);
+        openHotspotDetails(hotspotId);
+        return;
       }
 
       if (clickedHotspot.type === 'multipleChoice') {
@@ -920,6 +1013,7 @@ function App() {
         setImagePreview(null);
         setInfoPreview(null);
         setQuestionPreviewHotspotId(null);
+        setReflectionPreviewHotspotId(null);
         openHotspotDetails(hotspotId);
         return;
       }
@@ -946,6 +1040,7 @@ function App() {
         setImagePreview(null);
         setInfoPreview(null);
         setQuestionPreviewHotspotId(null);
+        setReflectionPreviewHotspotId(null);
         setSelectedHotspotId(null);
         setPlacementMode({ type: 'idle' });
         return;
@@ -964,6 +1059,7 @@ function App() {
         setImagePreview(null);
         setInfoPreview(null);
         setQuestionPreviewHotspotId(null);
+        setReflectionPreviewHotspotId(null);
         if (appMode === 'edit') {
           openHotspotDetails(hotspotId);
         } else {
@@ -989,6 +1085,7 @@ function App() {
         setImagePreviewBroken(false);
         setInfoPreview(null);
         setQuestionPreviewHotspotId(null);
+        setReflectionPreviewHotspotId(null);
         if (appMode === 'edit') {
           openHotspotDetails(hotspotId);
         } else {
@@ -1006,11 +1103,13 @@ function App() {
           body: clickedHotspot.body || 'No details provided.'
         });
         setQuestionPreviewHotspotId(null);
+        setReflectionPreviewHotspotId(null);
         return;
       }
 
       setInfoPreview(null);
       setQuestionPreviewHotspotId(null);
+      setReflectionPreviewHotspotId(null);
       openHotspotDetails(hotspotId);
     },
     [activeScene.hotspots, activeScene.id, appMode, openHotspotDetails, placementMode.type, project.scenes]
@@ -1120,6 +1219,34 @@ function App() {
     [questionEntryById]
   );
 
+  const handleUpdateReflectionResponse = useCallback((hotspotId: string, responseText: string) => {
+    setReflectionResponses((current) => ({
+      ...current,
+      [hotspotId]: responseText
+    }));
+  }, []);
+
+  const handleSubmitReflection = useCallback(() => {
+    if (!activeReflectionHotspot) {
+      return;
+    }
+
+    const trimmedResponse = activeReflectionResponse.trim();
+    if (!trimmedResponse) {
+      return;
+    }
+
+    setReflectionResponses((current) => ({
+      ...current,
+      [activeReflectionHotspot.id]: trimmedResponse
+    }));
+    setDiscoveredHotspotIds((current) =>
+      current.includes(activeReflectionHotspot.id) ? current : [...current, activeReflectionHotspot.id]
+    );
+    setReflectionPreviewHotspotId(null);
+    setPreviewRevealOrigin(null);
+  }, [activeReflectionHotspot, activeReflectionResponse]);
+
   const handleExportProject = () => {
     setImportError(null);
     setNoticeMessage(null);
@@ -1139,9 +1266,11 @@ function App() {
       setProject(importedProject);
       setDiscoveredHotspotIds([]);
       setQuestionResponses({});
+      setReflectionResponses({});
       setImagePreview(null);
       setInfoPreview(null);
       setQuestionPreviewHotspotId(null);
+      setReflectionPreviewHotspotId(null);
       setIsScenePickerOpen(false);
       setSelectedHotspotId(null);
       setPlacementMode({ type: 'idle' });
@@ -1168,9 +1297,11 @@ function App() {
     setProject(createDefaultProject());
     setDiscoveredHotspotIds([]);
     setQuestionResponses({});
+    setReflectionResponses({});
     setImagePreview(null);
     setInfoPreview(null);
     setQuestionPreviewHotspotId(null);
+    setReflectionPreviewHotspotId(null);
     setImagePreviewBroken(false);
     setSelectedHotspotId(null);
     setPlacementMode({ type: 'idle' });
@@ -1197,6 +1328,7 @@ function App() {
     setImagePreview(null);
     setInfoPreview(null);
     setQuestionPreviewHotspotId(null);
+    setReflectionPreviewHotspotId(null);
     setIsScenePickerOpen(false);
     setPlacementMode({ type: 'idle' });
 
@@ -1214,6 +1346,7 @@ function App() {
     setImagePreview(null);
     setInfoPreview(null);
     setQuestionPreviewHotspotId(null);
+    setReflectionPreviewHotspotId(null);
     setIsScenePickerOpen(false);
     setPlacementMode({ type: 'idle' });
     setSelectedHotspotId(null);
@@ -1226,6 +1359,7 @@ function App() {
     setImagePreview(null);
     setInfoPreview(null);
     setQuestionPreviewHotspotId(null);
+    setReflectionPreviewHotspotId(null);
     setIsScenePickerOpen(false);
     setPlacementMode({ type: 'idle' });
     setSelectedHotspotId(null);
@@ -1464,6 +1598,11 @@ function App() {
         '--reveal-origin-y': `${previewRevealOrigin.y}px`
       } as CSSProperties)
     : undefined;
+  const activeReflectionPrompt =
+    activeReflectionHotspot?.reflectionPrompt?.trim() || DEFAULT_REFLECTION_PROMPT;
+  const activeReflectionPlaceholder =
+    activeReflectionHotspot?.reflectionPlaceholder?.trim() || DEFAULT_REFLECTION_PLACEHOLDER;
+  const isReflectionSubmitDisabled = activeReflectionResponse.trim().length === 0;
   useEffect(() => {
     if (appMode !== 'arPreview') {
       if (arStreamRef.current) {
@@ -1886,6 +2025,8 @@ function App() {
                               ? 'Image preview marker'
                               : arPreviewSelectedHotspot.type === 'multipleChoice'
                                 ? 'Question preview marker'
+                                : arPreviewSelectedHotspot.type === 'reflection'
+                                  ? 'Reflection prompt marker'
                                 : 'Information preview marker'}
                       </p>
                     </div>
@@ -2124,6 +2265,69 @@ function App() {
                 ) : (
                   <p className="quiz-helper-note">Choose one answer. Each question scores once per session.</p>
                 )}
+              </div>
+            </div>
+          ) : null}
+          {activeReflectionHotspot ? (
+            <div
+              className="presentation-overlay presentation-overlay-reveal"
+              style={presentationRevealStyle}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Reflection prompt"
+              onClick={handleCloseReflectionPreview}
+            >
+              <div
+                className="presentation-modal reflection-preview-modal"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="presentation-modal-header">
+                  <div className="presentation-modal-heading">
+                    <p className="presentation-modal-kicker">Reflection</p>
+                    <h3>{activeReflectionHotspot.title || DEFAULT_REFLECTION_TITLE}</h3>
+                  </div>
+                  <button
+                    type="button"
+                    className="ui-button ui-button-secondary mini-button"
+                    onClick={handleCloseReflectionPreview}
+                  >
+                    Close
+                  </button>
+                </div>
+                <p className="reflection-question-prompt">{activeReflectionPrompt}</p>
+                <label className="field-group reflection-response-group">
+                  <span>Response</span>
+                  <textarea
+                    className="reflection-response-textarea"
+                    rows={6}
+                    placeholder={activeReflectionPlaceholder}
+                    value={activeReflectionResponse}
+                    onChange={(event) =>
+                      handleUpdateReflectionResponse(activeReflectionHotspot.id, event.target.value)
+                    }
+                  />
+                </label>
+                <p className="reflection-helper-note">
+                  Submit to count this reflection toward Activity Progress. Responses stay local to this preview
+                  session.
+                </p>
+                <div className="editor-actions">
+                  <button
+                    type="button"
+                    className="ui-button ui-button-secondary mini-button"
+                    onClick={handleCloseReflectionPreview}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="ui-button ui-button-primary mini-button"
+                    onClick={handleSubmitReflection}
+                    disabled={isReflectionSubmitDisabled}
+                  >
+                    Submit Reflection
+                  </button>
+                </div>
               </div>
             </div>
           ) : null}
