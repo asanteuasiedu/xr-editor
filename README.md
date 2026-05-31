@@ -17,6 +17,50 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
    ```
 3. Open the local URL shown in terminal (usually `http://localhost:5173`).
 
+## Authentication
+- Authentication now uses Supabase Auth on the client so users can sign up, log in, and log out without changing the existing guest editor flow.
+- Login is currently optional. Guests can still generate scenes, open the catalog, enter the editor, add insight zones, and preview projects.
+- Required client environment variables:
+  ```env
+  VITE_SUPABASE_URL=your-supabase-project-url
+  VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
+  ```
+- Local setup:
+  1. Create or open a Supabase project.
+  2. Enable Email/Password auth in the Supabase dashboard.
+  3. Add the two `VITE_SUPABASE_*` variables to `.env.local`.
+  4. Restart `npm run dev`.
+- Vercel setup:
+  1. In your Vercel project settings, add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+  2. Redeploy after saving the variables.
+- Only the public anon key is used in the frontend. Do not expose a Supabase service-role key in Vite environment variables.
+
+## Individual Profiles
+- Authenticated users now get an `individual` profile record on first sign-in or first profile refresh.
+- Guest mode is still supported. Guests can keep using onboarding, scene generation, the catalog, the editor, and preview mode without logging in.
+- Profile data lives in the Supabase `profiles` table, and the SQL migration is stored at:
+  - [supabase/migrations/create_profiles.sql](/Users/homecomputer/xr-editor/supabase/migrations/create_profiles.sql)
+- The table includes:
+  - `user_id`
+  - `email`
+  - `display_name`
+  - `organization`
+  - `profile_type`
+  - `role`
+  - `created_at`
+  - `updated_at`
+- Row Level Security is enabled. The SQL adds policies so authenticated users can only:
+  - select their own profile
+  - insert their own profile
+  - update their own profile
+- To apply the SQL in Supabase:
+  1. Open the Supabase dashboard.
+  2. Open **SQL Editor**.
+  3. Paste the contents of `supabase/migrations/create_profiles.sql` and run it.
+  4. Confirm the `profiles` table exists and RLS is enabled.
+  5. Sign up or log in through the app.
+  6. Open **Profile** from the auth controls and confirm your row is created automatically.
+
 ## What Works Now
 - One in-memory project with multiple scenes
 - Editable project metadata (name, objective, subject / domain, target age / grade band, author / organization)

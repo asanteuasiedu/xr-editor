@@ -1,14 +1,24 @@
 import type { FormEvent } from 'react';
 import { useState } from 'react';
+import AuthControls from './AuthControls';
 
 type CreationOnboardingProps = {
   onGenerate: (prompt: string) => Promise<void>;
   onOpenCatalog: () => void;
+  onOpenSignIn: () => void;
+  onOpenSignUp: () => void;
+  onOpenProfile: () => void;
 };
 
 type CreationOnboardingStatus = 'idle' | 'loading' | 'error';
 
-function CreationOnboarding({ onGenerate, onOpenCatalog }: CreationOnboardingProps) {
+function CreationOnboarding({
+  onGenerate,
+  onOpenCatalog,
+  onOpenSignIn,
+  onOpenSignUp,
+  onOpenProfile
+}: CreationOnboardingProps) {
   const [prompt, setPrompt] = useState('');
   const [status, setStatus] = useState<CreationOnboardingStatus>('idle');
   const [message, setMessage] = useState<string | null>(null);
@@ -55,14 +65,12 @@ function CreationOnboarding({ onGenerate, onOpenCatalog }: CreationOnboardingPro
           </div>
         </div>
 
-        <div className="creation-onboarding-header-actions">
-          <button type="button" className="ui-button ui-button-secondary creation-onboarding-auth-button" title="Coming soon">
-            Login
-          </button>
-          <button type="button" className="ui-button ui-button-primary creation-onboarding-auth-button" title="Coming soon">
-            Sign Up
-          </button>
-        </div>
+        <AuthControls
+          variant="onboarding"
+          onOpenSignIn={onOpenSignIn}
+          onOpenSignUp={onOpenSignUp}
+          onOpenProfile={onOpenProfile}
+        />
       </header>
 
       <div className="creation-onboarding-center">

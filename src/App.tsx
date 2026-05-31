@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ChangeEvent } from 'react';
 import Layout from './components/Layout';
+import AuthControls from './components/AuthControls';
+import AuthModal, { type AuthModalMode } from './components/AuthModal';
+import ProfileModal from './components/ProfileModal';
 import CreationOnboarding from './components/CreationOnboarding';
 import Sidebar, { type EditSection } from './components/Sidebar';
 import HotspotEditor from './components/HotspotEditor';
 import PanoramaViewer from './components/PanoramaViewer';
+import { useAuth } from './context/AuthContext';
 import type { Hotspot, HotspotPolygonPoint, Project } from './types/project';
 import {
   DEFAULT_REFLECTION_TITLE,
@@ -278,6 +282,7 @@ function getScreenSpaceMarkerPosition(hotspot: Hotspot, index: number) {
 }
 
 function App() {
+  const { user } = useAuth();
   const initialLoad = useMemo(() => loadLocalDraft(), []);
   const initialWalkthroughDismissed = useMemo(() => loadEditWalkthroughDismissed(), []);
   const initialProject = useMemo(
@@ -290,6 +295,8 @@ function App() {
   const [selectedHotspotId, setSelectedHotspotId] = useState<string | null>(null);
   const [, setCurrentView] = useState({ yaw: 0, pitch: 0 });
   const [appMode, setAppMode] = useState<AppMode>('edit');
+  const [authModalMode, setAuthModalMode] = useState<AuthModalMode | null>(null);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [placementMode, setPlacementMode] = useState<PlacementMode>({ type: 'idle' });
   const [importError, setImportError] = useState<string | null>(null);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
@@ -342,6 +349,30 @@ function App() {
     }, durationMs);
   }, []);
 
+  const handleOpenSignIn = useCallback(() => {
+    setAuthModalMode('signIn');
+  }, []);
+
+  const handleOpenSignUp = useCallback(() => {
+    setAuthModalMode('signUp');
+  }, []);
+
+  const handleCloseAuthModal = useCallback(() => {
+    setAuthModalMode(null);
+  }, []);
+
+  const handleOpenProfile = useCallback(() => {
+    if (!user) {
+      return;
+    }
+
+    setIsProfileModalOpen(true);
+  }, [user]);
+
+  const handleCloseProfileModal = useCallback(() => {
+    setIsProfileModalOpen(false);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (previewHotspotPulseTimeoutRef.current !== null) {
@@ -372,6 +403,12 @@ function App() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setIsProfileModalOpen(false);
+    }
+  }, [user]);
 
   const activeScene = useMemo(
     () => project.scenes.find((scene) => scene.id === project.activeSceneId) ?? project.scenes[0],
@@ -1670,70 +1707,79 @@ function App() {
   }, [appMode, cameraPreviewRequestId]);
 
   return (
-    <Layout
-      title="XR Editor"
-      subtitle="Local XR experience editor"
-      mode={appMode === 'edit' ? 'edit' : 'preview'}
-      overlaysHidden={appMode !== 'arPreview' && areViewerOverlaysHidden}
-      hideHeader={isCreationOnboardingActive}
-      logoSrc="/branding/udeesa-logo.png"
-      headerControls={
-        <div className="header-mode-group">
-          <span className="mode-indicator-pill">
-            {appMode === 'edit' ? 'Edit Mode' : appMode === 'arPreview' ? 'AR Preview' : 'Preview Mode'}
-          </span>
-          {appMode === 'edit' ? (
-            <button
-              type="button"
-              className="ui-button ui-button-primary mode-toggle-button"
-              onClick={handleEnterPresentationMode}
-            >
-              Present Project
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="ui-button ui-button-secondary mode-toggle-button"
-              onClick={appMode === 'arPreview' ? handleExitCameraPreview : handleToggleAppMode}
-            >
-              Edit Mode
-            </button>
-          )}
-        </div>
-      }
-      sidebar={
-        appMode === 'edit' && !isCreationOnboardingActive ? (
-          <nav className="edit-nav-rail" aria-label="Editor sections">
-            {[
-              ['project', 'Project'],
-              ['scenes', 'Scenes'],
-              ['sceneDetails', 'Details'],
-              ['hotspots', 'Insight Zones']
-            ].map(([sectionId, label]) => {
-              const isActive = activeEditSection === sectionId;
-              return (
+    <>
+      <Layout
+        title="XR Editor"
+        subtitle="Local XR experience editor"
+        mode={appMode === 'edit' ? 'edit' : 'preview'}
+        overlaysHidden={appMode !== 'arPreview' && areViewerOverlaysHidden}
+        hideHeader={isCreationOnboardingActive}
+        logoSrc="/branding/udeesa-logo.png"
+        headerControls={
+          <div className="header-controls-cluster">
+            <AuthControls
+              variant="header"
+              onOpenSignIn={handleOpenSignIn}
+              onOpenSignUp={handleOpenSignUp}
+              onOpenProfile={handleOpenProfile}
+            />
+            <div className="header-mode-group">
+              <span className="mode-indicator-pill">
+                {appMode === 'edit' ? 'Edit Mode' : appMode === 'arPreview' ? 'AR Preview' : 'Preview Mode'}
+              </span>
+              {appMode === 'edit' ? (
                 <button
-                  key={sectionId}
                   type="button"
-                  className={`edit-rail-button ${isActive ? 'edit-rail-button-active' : ''}`}
-                  onClick={() => {
-                    setActiveEditSection(sectionId as EditSection);
-                    setIsContextPanelOpen(true);
-                  }}
+                  className="ui-button ui-button-primary mode-toggle-button"
+                  onClick={handleEnterPresentationMode}
                 >
-                  <span className="edit-rail-icon">
-                    <RailIcon section={sectionId as EditSection} />
-                  </span>
-                  <span className="edit-rail-label">{label}</span>
+                  Present Project
                 </button>
-              );
-            })}
-          </nav>
-        ) : null
-      }
-      contextPanel={
-        appMode === 'edit' && !isCreationOnboardingActive && isContextPanelOpen ? (
-          <div className="context-panel-stack">
+              ) : (
+                <button
+                  type="button"
+                  className="ui-button ui-button-secondary mode-toggle-button"
+                  onClick={appMode === 'arPreview' ? handleExitCameraPreview : handleToggleAppMode}
+                >
+                  Edit Mode
+                </button>
+              )}
+            </div>
+          </div>
+        }
+        sidebar={
+          appMode === 'edit' && !isCreationOnboardingActive ? (
+            <nav className="edit-nav-rail" aria-label="Editor sections">
+              {[
+                ['project', 'Project'],
+                ['scenes', 'Scenes'],
+                ['sceneDetails', 'Details'],
+                ['hotspots', 'Insight Zones']
+              ].map(([sectionId, label]) => {
+                const isActive = activeEditSection === sectionId;
+                return (
+                  <button
+                    key={sectionId}
+                    type="button"
+                    className={`edit-rail-button ${isActive ? 'edit-rail-button-active' : ''}`}
+                    onClick={() => {
+                      setActiveEditSection(sectionId as EditSection);
+                      setIsContextPanelOpen(true);
+                    }}
+                  >
+                    <span className="edit-rail-icon">
+                      <RailIcon section={sectionId as EditSection} />
+                    </span>
+                    <span className="edit-rail-label">{label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          ) : null
+        }
+        contextPanel={
+          appMode === 'edit' && !isCreationOnboardingActive && isContextPanelOpen ? (
+            <div className="context-panel-stack">
             <div className="context-panel-toolbar">
               <div className="context-panel-toolbar-actions">
                 <button
@@ -1943,6 +1989,9 @@ function App() {
                 <CreationOnboarding
                   onGenerate={handleOnboardingGenerateScene}
                   onOpenCatalog={handleOpenScenePicker}
+                  onOpenSignIn={handleOpenSignIn}
+                  onOpenSignUp={handleOpenSignUp}
+                  onOpenProfile={handleOpenProfile}
                 />
               ) : null}
             </section>
@@ -2366,7 +2415,15 @@ function App() {
           ) : null}
         </div>
       }
-    />
+      />
+      <AuthModal
+        mode={authModalMode ?? 'signIn'}
+        isOpen={authModalMode !== null}
+        onClose={handleCloseAuthModal}
+        onSwitchMode={setAuthModalMode}
+      />
+      <ProfileModal isOpen={isProfileModalOpen} onClose={handleCloseProfileModal} />
+    </>
   );
 }
 
