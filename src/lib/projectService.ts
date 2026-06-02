@@ -7,6 +7,7 @@ type SaveProjectToCloudParams = {
   userId: string;
   project: Project;
   existingProjectId?: string | null;
+  status?: 'draft' | 'published';
 };
 
 type UpdateCloudProjectStatusParams = {
@@ -92,16 +93,28 @@ function getProjectThumbnail(project: Project) {
 export async function saveProjectToCloud({
   userId,
   project,
-  existingProjectId
+  existingProjectId,
+  status
 }: SaveProjectToCloudParams): Promise<CloudProject> {
   const client = requireSupabaseClient();
-  const payload = {
+  const payload: {
+    user_id: string;
+    title: string;
+    description: string | null;
+    project_data: Project;
+    thumbnail_url: string | null;
+    status?: 'draft' | 'published';
+  } = {
     user_id: userId,
     title: getProjectTitle(project),
     description: getProjectDescription(project),
     project_data: project,
     thumbnail_url: getProjectThumbnail(project)
   };
+
+  if (status) {
+    payload.status = status;
+  }
 
   if (existingProjectId) {
     const { data, error } = await client
@@ -123,7 +136,7 @@ export async function saveProjectToCloud({
     .from('projects')
     .insert({
       ...payload,
-      status: 'draft'
+      status: status ?? 'draft'
     })
     .select('*')
     .single();

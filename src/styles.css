@@ -2826,6 +2826,10 @@ select {
   gap: 10px;
 }
 
+.profile-new-project-shell {
+  align-content: start;
+}
+
 .profile-experience-card-button {
   appearance: none;
   display: block;
@@ -2947,6 +2951,94 @@ select {
   box-shadow:
     0 22px 44px rgba(4, 6, 12, 0.28),
     inset 0 0 0 1px rgba(143, 132, 255, 0.18);
+}
+
+.profile-new-project-card {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1 / 1;
+  border-radius: 24px;
+  border: 1px solid rgba(132, 119, 255, 0.48);
+  background:
+    radial-gradient(circle at 50% 32%, rgba(134, 118, 255, 0.16), transparent 38%),
+    linear-gradient(180deg, rgba(245, 247, 255, 0.98), rgba(235, 239, 252, 0.94));
+  box-shadow:
+    0 20px 36px rgba(4, 6, 12, 0.2),
+    inset 0 0 0 1px rgba(132, 119, 255, 0.12);
+}
+
+.profile-new-project-card::after {
+  content: '';
+  position: absolute;
+  inset: 14px;
+  border-radius: 18px;
+  border: 1px dashed rgba(132, 119, 255, 0.3);
+}
+
+.profile-new-project-plus {
+  position: relative;
+  z-index: 1;
+  color: #6d58ff;
+  font-size: clamp(3rem, 7vw, 4.4rem);
+  line-height: 1;
+  font-weight: 400;
+  text-shadow: 0 10px 28px rgba(109, 88, 255, 0.22);
+}
+
+.profile-new-project-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.profile-new-project-actions .ui-button {
+  flex: 1 1 0;
+}
+
+.profile-new-project-generate {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
+    rgba(8, 10, 18, 0.26);
+}
+
+.profile-new-project-generate input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 15px;
+  border-radius: 16px;
+  border: 1px solid rgba(162, 168, 190, 0.28);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.98);
+  font: inherit;
+  box-shadow: inset 0 1px 2px rgba(5, 7, 12, 0.24);
+}
+
+.profile-new-project-generate input::placeholder {
+  color: rgba(220, 225, 244, 0.54);
+}
+
+.profile-new-project-generate input:focus {
+  outline: none;
+  border-color: rgba(124, 108, 255, 0.72);
+  box-shadow:
+    0 0 0 4px rgba(124, 108, 255, 0.14),
+    inset 0 1px 2px rgba(5, 7, 12, 0.24);
+}
+
+.profile-new-project-generate-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.profile-new-project-generate-actions .ui-button {
+  flex: 1 1 0;
 }
 
 .auth-modal-submit,
@@ -4558,6 +4650,10 @@ select {
     justify-content: space-between;
   }
 
+  .profile-experience-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .presentation-meta-row {
     gap: 6px 10px;
     justify-content: flex-start;
@@ -5134,10 +5230,6 @@ select {
     justify-content: flex-start;
   }
 
-  .profile-experience-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .my-project-row {
     flex-direction: column;
     align-items: stretch;
@@ -5166,6 +5258,16 @@ select {
 
   .profile-experience-grid {
     grid-template-columns: 1fr;
+  }
+
+  .profile-new-project-actions,
+  .profile-new-project-generate-actions {
+    flex-direction: column;
+  }
+
+  .profile-new-project-actions .ui-button,
+  .profile-new-project-generate-actions .ui-button {
+    width: 100%;
   }
 
   .presentation-overlay {

@@ -238,6 +238,48 @@ function deriveSceneNameFromFile(file: File, fallbackName: string) {
   return trimmedName || fallbackName;
 }
 
+function deriveProjectNameFromPrompt(prompt: string) {
+  const trimmed = prompt.trim();
+  if (!trimmed) {
+    return 'Generated XR Project';
+  }
+
+  const words = trimmed.split(/\s+/).slice(0, 7);
+  const label = words.join(' ').trim();
+  return label ? label.charAt(0).toUpperCase() + label.slice(1) : 'Generated XR Project';
+}
+
+function buildFreshProjectFromPanorama(params: {
+  panoramaUrl: string;
+  projectName: string;
+  generationPrompt?: string;
+}): Project {
+  const baseProject = createProjectFromTemplate('blankTour');
+  const activeSceneId = baseProject.activeSceneId;
+  const normalizedProjectName = params.projectName.trim() || 'Untitled XR Project';
+  const trimmedGenerationPrompt = params.generationPrompt?.trim();
+
+  return {
+    ...baseProject,
+    name: normalizedProjectName,
+    description: trimmedGenerationPrompt || baseProject.description,
+    projectObjective: trimmedGenerationPrompt || baseProject.projectObjective,
+    scenes: baseProject.scenes.map((scene) =>
+      scene.id === activeSceneId
+        ? {
+            ...scene,
+            name: 'Scene 1',
+            panoramaUrl: params.panoramaUrl,
+            hotspots: [],
+            aiGenerated: trimmedGenerationPrompt ? true : undefined,
+            generationPrompt: trimmedGenerationPrompt || undefined,
+            generationAttemptCount: trimmedGenerationPrompt ? 1 : undefined
+          }
+        : scene
+    )
+  };
+}
+
 function getHotspotShape(hotspot: Hotspot) {
   return hotspot.shape === 'polygon' ? 'polygon' : 'point';
 }
@@ -466,6 +508,16 @@ function App() {
 
   const handleCloseMyProjectsModal = useCallback(() => {
     setIsMyProjectsModalOpen(false);
+  }, []);
+
+  const upsertCloudProjectInState = useCallback((nextProject: CloudProject) => {
+    setCloudProjects((currentProjects) => {
+      const mergedProjects = [nextProject, ...currentProjects.filter((entry) => entry.id !== nextProject.id)];
+      mergedProjects.sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime());
+      return mergedProjects;
+    });
+    setCloudProjectsStatus('ready');
+    setCloudProjectsError(null);
   }, []);
 
   useEffect(() => {
@@ -1445,18 +1497,14 @@ function App() {
       });
 
       setCloudProjectId(savedProject.id);
-      setCloudProjects((currentProjects) => {
-        const nextProjects = [savedProject, ...currentProjects.filter((entry) => entry.id !== savedProject.id)];
-        nextProjects.sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime());
-        return nextProjects;
-      });
+      upsertCloudProjectInState(savedProject);
       setCloudSaveStatus('saved');
       showTemporaryNotice('Project saved to your account');
     } catch (error) {
       setCloudSaveStatus('error');
       setImportError(getFriendlyCloudProjectErrorMessage(error));
     }
-  }, [cloudProjectId, project, showTemporaryNotice, user?.id]);
+  }, [cloudProjectId, project, showTemporaryNotice, upsertCloudProjectInState, user?.id]);
 
   const handleOpenCloudProject = useCallback(
     async (projectId: string) => {
@@ -1472,11 +1520,7 @@ function App() {
           userId: user.id,
           projectId
         });
-        setCloudProjects((currentProjects) => {
-          const nextProjects = [cloudProject, ...currentProjects.filter((entry) => entry.id !== cloudProject.id)];
-          nextProjects.sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime());
-          return nextProjects;
-        });
+        upsertCloudProjectInState(cloudProject);
         applyLoadedProject(cloudProject.project_data, {
           cloudProjectId: cloudProject.id,
           notice: `Loaded "${cloudProject.title || 'Untitled Project'}" from your account.`
@@ -1488,7 +1532,7 @@ function App() {
         setCloudProjectsError(getFriendlyCloudProjectErrorMessage(error));
       }
     },
-    [applyLoadedProject, user?.id]
+    [applyLoadedProject, upsertCloudProjectInState, user?.id]
   );
 
   const handleDeleteCloudProject = useCallback(
@@ -1544,11 +1588,7 @@ function App() {
           status
         });
 
-        setCloudProjects((currentProjects) => {
-          const nextProjects = [updatedProject, ...currentProjects.filter((entry) => entry.id !== updatedProject.id)];
-          nextProjects.sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime());
-          return nextProjects;
-        });
+        upsertCloudProjectInState(updatedProject);
 
         showTemporaryNotice(
           status === 'published' ? 'Experience marked as published' : 'Experience moved back to draft'
@@ -1557,7 +1597,87 @@ function App() {
         setCloudProjectsError(getFriendlyCloudProjectErrorMessage(error));
       }
     },
-    [showTemporaryNotice, user?.id]
+    [showTemporaryNotice, upsertCloudProjectInState, user?.id]
+  );
+
+  const handleCreateProjectFromUpload = useCallback(
+    async (file: File) => {
+      if (!user?.id) {
+        throw new Error('Sign in to create a saved project.');
+      }
+
+      const imageResult = await imageFileToDataUrl(file);
+      if (!imageResult.ok) {
+        throw new Error(imageResult.error || 'Could not create the project from that image.');
+      }
+
+      const nextProject = buildFreshProjectFromPanorama({
+        panoramaUrl: imageResult.dataUrl,
+        projectName: deriveSceneNameFromFile(file, 'Untitled XR Project')
+      });
+
+      try {
+        const savedProject = await saveProjectToCloud({
+          userId: user.id,
+          project: nextProject,
+          status: 'draft'
+        });
+
+        upsertCloudProjectInState(savedProject);
+        setIsMyProjectsModalOpen(false);
+        applyLoadedProject(savedProject.project_data, {
+          cloudProjectId: savedProject.id,
+          notice: null
+        });
+        setCloudProjectId(savedProject.id);
+        showTemporaryNotice('New draft project created from upload');
+      } catch (error) {
+        console.error('[cloud-projects] could not create project from upload', error);
+        throw new Error('Could not create the project from that image.');
+      }
+    },
+    [applyLoadedProject, showTemporaryNotice, upsertCloudProjectInState, user?.id]
+  );
+
+  const handleCreateProjectFromPrompt = useCallback(
+    async (prompt: string) => {
+      const trimmedPrompt = prompt.trim();
+
+      if (!user?.id) {
+        throw new Error('Sign in to create a saved project.');
+      }
+
+      if (!trimmedPrompt) {
+        throw new Error('Please enter a scene description first.');
+      }
+
+      try {
+        const result = await requestGenerated360Scene(trimmedPrompt);
+        const nextProject = buildFreshProjectFromPanorama({
+          panoramaUrl: result.imageDataUrl,
+          projectName: deriveProjectNameFromPrompt(trimmedPrompt),
+          generationPrompt: trimmedPrompt
+        });
+        const savedProject = await saveProjectToCloud({
+          userId: user.id,
+          project: nextProject,
+          status: 'draft'
+        });
+
+        upsertCloudProjectInState(savedProject);
+        setIsMyProjectsModalOpen(false);
+        applyLoadedProject(savedProject.project_data, {
+          cloudProjectId: savedProject.id,
+          notice: null
+        });
+        setCloudProjectId(savedProject.id);
+        showTemporaryNotice('New AI-generated draft project created');
+      } catch (error) {
+        console.error('[cloud-projects] could not create project from generation', error);
+        throw new Error('Could not generate a new project right now. Try again shortly.');
+      }
+    },
+    [applyLoadedProject, showTemporaryNotice, upsertCloudProjectInState, user?.id]
   );
 
   const handleImportFileSelection = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -2683,6 +2803,8 @@ function App() {
         onToggleProjectStatus={(projectId, status) => {
           void handleToggleCloudProjectStatus(projectId, status);
         }}
+        onCreateProjectFromUpload={handleCreateProjectFromUpload}
+        onCreateProjectFromPrompt={handleCreateProjectFromPrompt}
       />
     </>
   );

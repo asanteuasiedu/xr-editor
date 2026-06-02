@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import type { CloudProject } from '../types/cloudProject';
 
@@ -14,6 +14,8 @@ type UserProfilePanelProps = {
   onOpenProject: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
   onToggleProjectStatus: (projectId: string, status: 'draft' | 'published') => void;
+  onCreateProjectFromUpload: (file: File) => Promise<void>;
+  onCreateProjectFromPrompt: (prompt: string) => Promise<void>;
 };
 
 function formatUpdatedDate(value: string) {
@@ -68,11 +70,19 @@ function UserProfilePanel({
   onEditProfile,
   onOpenProject,
   onDeleteProject,
-  onToggleProjectStatus
+  onToggleProjectStatus,
+  onCreateProjectFromUpload,
+  onCreateProjectFromPrompt
 }: UserProfilePanelProps) {
   const { user, profile, signOut } = useAuth();
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [isUploadCreating, setIsUploadCreating] = useState(false);
+  const [isGeneratePromptOpen, setIsGeneratePromptOpen] = useState(false);
+  const [generatePrompt, setGeneratePrompt] = useState('');
+  const [isGenerateCreating, setIsGenerateCreating] = useState(false);
+  const [creationError, setCreationError] = useState<string | null>(null);
 
   const displayName = useMemo(
     () => getProfileDisplayName(profile?.display_name, profile?.email ?? user?.email),
@@ -82,6 +92,18 @@ function UserProfilePanel({
   const bio = profile?.bio?.trim() || null;
   const organization = profile?.organization?.trim() || null;
   const initials = useMemo(() => getInitials(displayName), [displayName]);
+  const trimmedGeneratePrompt = generatePrompt.trim();
+
+  useEffect(() => {
+    if (!isOpen) {
+      setIsUploadCreating(false);
+      setIsGeneratePromptOpen(false);
+      setGeneratePrompt('');
+      setIsGenerateCreating(false);
+      setCreationError(null);
+      setSignOutError(null);
+    }
+  }, [isOpen]);
 
   if (!isOpen || !user) {
     return null;
@@ -189,15 +211,141 @@ function UserProfilePanel({
             </p>
           ) : null}
 
-          {!loading && !error && projects.length === 0 ? (
-            <div className="my-projects-empty-state">
-              <strong>No saved experiences yet.</strong>
-              <p>Use Save to Account from the Project panel to add your first experience to this profile grid.</p>
-            </div>
+          {creationError ? (
+            <p className="auth-modal-status auth-modal-status-error" role="status" aria-live="polite">
+              {creationError}
+            </p>
           ) : null}
 
-          {!loading && projects.length > 0 ? (
+          {!loading ? (
             <div className="profile-experience-grid" role="list">
+              <article className="profile-experience-card profile-new-project-shell" role="listitem">
+                <input
+                  ref={uploadInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden-file-input"
+                  onChange={async (event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = '';
+
+                    if (!file) {
+                      return;
+                    }
+
+                    setCreationError(null);
+                    setIsUploadCreating(true);
+
+                    try {
+                      await onCreateProjectFromUpload(file);
+                    } catch (creationIssue) {
+                      setCreationError(
+                        creationIssue instanceof Error
+                          ? creationIssue.message
+                          : 'Could not create the project from that image.'
+                      );
+                    } finally {
+                      setIsUploadCreating(false);
+                    }
+                  }}
+                />
+                <div className="profile-new-project-card">
+                  <div className="profile-new-project-plus" aria-hidden="true">
+                    +
+                  </div>
+                </div>
+                <div className="profile-new-project-actions">
+                  <button
+                    type="button"
+                    className="ui-button ui-button-secondary mini-button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (isUploadCreating || isGenerateCreating) {
+                        return;
+                      }
+                      setCreationError(null);
+                      uploadInputRef.current?.click();
+                    }}
+                    disabled={isUploadCreating || isGenerateCreating}
+                  >
+                    {isUploadCreating ? 'Uploading...' : 'Upload'}
+                  </button>
+                  <button
+                    type="button"
+                    className="ui-button ui-button-primary mini-button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setCreationError(null);
+                      setIsGeneratePromptOpen((current) => !current);
+                    }}
+                    disabled={isUploadCreating || isGenerateCreating}
+                  >
+                    {isGenerateCreating ? 'Generating...' : 'Generate'}
+                  </button>
+                </div>
+                {isGeneratePromptOpen ? (
+                  <form
+                    className="profile-new-project-generate"
+                    onSubmit={async (event) => {
+                      event.preventDefault();
+
+                      if (!trimmedGeneratePrompt || isGenerateCreating || isUploadCreating) {
+                        if (!trimmedGeneratePrompt) {
+                          setCreationError('Please enter a scene description first.');
+                        }
+                        return;
+                      }
+
+                      setCreationError(null);
+                      setIsGenerateCreating(true);
+
+                      try {
+                        await onCreateProjectFromPrompt(trimmedGeneratePrompt);
+                        setGeneratePrompt('');
+                        setIsGeneratePromptOpen(false);
+                      } catch (creationIssue) {
+                        setCreationError(
+                          creationIssue instanceof Error
+                            ? creationIssue.message
+                            : 'Could not generate a new project right now. Try again shortly.'
+                        );
+                      } finally {
+                        setIsGenerateCreating(false);
+                      }
+                    }}
+                  >
+                    <input
+                      type="text"
+                      value={generatePrompt}
+                      onChange={(event) => setGeneratePrompt(event.target.value)}
+                      placeholder="Describe a 360 learning environment"
+                      disabled={isGenerateCreating || isUploadCreating}
+                    />
+                    <div className="profile-new-project-generate-actions">
+                      <button
+                        type="button"
+                        className="ui-button ui-button-secondary mini-button"
+                        onClick={() => {
+                          setGeneratePrompt('');
+                          setCreationError(null);
+                          setIsGeneratePromptOpen(false);
+                        }}
+                        disabled={isGenerateCreating}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="ui-button ui-button-primary mini-button"
+                        disabled={!trimmedGeneratePrompt || isGenerateCreating || isUploadCreating}
+                      >
+                        {isGenerateCreating ? 'Generating...' : 'Create Draft'}
+                      </button>
+                    </div>
+                  </form>
+                ) : null}
+              </article>
+
               {projects.map((project) => {
                 const projectStatus = project.status === 'published' ? 'published' : 'draft';
                 const nextStatus = projectStatus === 'draft' ? 'published' : 'draft';
@@ -239,14 +387,20 @@ function UserProfilePanel({
                       <button
                         type="button"
                         className="ui-button ui-button-secondary mini-button"
-                        onClick={() => onToggleProjectStatus(project.id, nextStatus)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void onToggleProjectStatus(project.id, nextStatus);
+                        }}
                       >
                         {projectStatus === 'draft' ? 'Publish' : 'Move to Draft'}
                       </button>
                       <button
                         type="button"
                         className="ui-button ui-button-secondary mini-button"
-                        onClick={() => onDeleteProject(project.id)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void onDeleteProject(project.id);
+                        }}
                       >
                         Delete
                       </button>
