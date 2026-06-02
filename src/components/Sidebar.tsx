@@ -33,6 +33,9 @@ type SidebarProps = {
   placementModeType: 'idle' | 'placingNewHotspot' | 'movingExistingHotspot' | 'drawingPolygon';
   saveStateLabel: string;
   saveStateTone: 'saved' | 'unsaved' | 'restored';
+  isUserSignedIn: boolean;
+  isCloudProjectLinked: boolean;
+  cloudSaveStatus: 'idle' | 'saving' | 'saved' | 'error';
   walkthroughSectionId: EditSection | null;
   onAddScene: () => void;
   onPresentProject: () => void;
@@ -54,6 +57,8 @@ type SidebarProps = {
   onImproveScenePanorama: () => Promise<void>;
   onCreateSceneFromImageFile: (file: File) => void | Promise<void>;
   onDeleteScene: (sceneId: string) => void;
+  onSaveProjectToCloud: () => void | Promise<void>;
+  onOpenMyProjects: () => void;
   onAddHotspot: () => void;
   onStartDrawingPolygonHotspot: () => void;
   onFinishPolygonHotspot: () => void;
@@ -245,6 +250,9 @@ function Sidebar({
   placementModeType,
   saveStateLabel,
   saveStateTone,
+  isUserSignedIn,
+  isCloudProjectLinked,
+  cloudSaveStatus,
   walkthroughSectionId,
   onAddScene,
   onPresentProject,
@@ -259,6 +267,8 @@ function Sidebar({
   onImproveScenePanorama,
   onCreateSceneFromImageFile,
   onDeleteScene,
+  onSaveProjectToCloud,
+  onOpenMyProjects,
   onAddHotspot,
   onStartDrawingPolygonHotspot,
   onFinishPolygonHotspot,
@@ -280,6 +290,12 @@ function Sidebar({
   const canGenerateScene = generateScenePrompt.trim().length > 0 && !isGeneratingScene;
   const hasStoredGenerationPrompt = Boolean(activeScene.generationPrompt?.trim());
   const isPolygonDrawingMode = placementModeType === 'drawingPolygon';
+  const isSavingProjectToCloud = cloudSaveStatus === 'saving';
+  const cloudSaveButtonLabel = isSavingProjectToCloud
+    ? 'Saving to Account...'
+    : isCloudProjectLinked
+      ? 'Update Saved Project'
+      : 'Save to Account';
 
   const getHotspotGeometryLabel = (hotspot: Hotspot) =>
     hotspot.shape === 'polygon'
@@ -481,6 +497,50 @@ function Sidebar({
             <span className="control-action-label">Reset Local Draft</span>
           </button>
         </div>
+      </div>
+      <div className="sidebar-subsection">
+        <p className="sidebar-subsection-title">Account Saving</p>
+        {isUserSignedIn ? (
+          <>
+            <div className="stacked-actions compact-actions">
+              <button
+                type="button"
+                className="ui-button ui-button-secondary control-button"
+                onClick={onSaveProjectToCloud}
+                disabled={isSavingProjectToCloud}
+              >
+                <span className="control-action-icon" aria-hidden="true">
+                  <ProjectActionIcon />
+                </span>
+                <span className="control-action-label">{cloudSaveButtonLabel}</span>
+              </button>
+              <button
+                type="button"
+                className="ui-button ui-button-secondary control-button"
+                onClick={onOpenMyProjects}
+              >
+                <span className="control-action-icon" aria-hidden="true">
+                  <ControlActionIcon name="scene" />
+                </span>
+                <span className="control-action-label">My Projects</span>
+              </button>
+            </div>
+            <p className="helper-note">
+              {isCloudProjectLinked
+                ? 'This editor project is linked to a cloud project in your account.'
+                : 'Save the current editor state to your account without changing local draft behavior.'}
+            </p>
+          </>
+        ) : (
+          <>
+            <button type="button" className="ui-button ui-button-secondary control-button" disabled>
+              <span className="control-action-label">Log in to save projects to your account</span>
+            </button>
+            <p className="helper-note">
+              Guests can keep working with local drafts and exports. Account saving becomes available after login.
+            </p>
+          </>
+        )}
       </div>
       <div className="sidebar-subsection project-panel-actions">
         <p className="sidebar-subsection-title">Launch & Share</p>

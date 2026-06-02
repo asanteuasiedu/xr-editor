@@ -25,6 +25,8 @@ type AuthContextValue = {
   updateProfile: (params: {
     displayName?: string | null;
     organization?: string | null;
+    avatarUrl?: string | null;
+    bio?: string | null;
     role?: UserProfile['role'];
   }) => Promise<void>;
 };
@@ -262,7 +264,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async refreshProfile() {
         await refreshProfile();
       },
-      async updateProfile({ displayName, organization, role }) {
+      async updateProfile({ displayName, organization, avatarUrl, bio, role }) {
         if (!user?.id) {
           throw new Error('Sign in to update your profile.');
         }
@@ -274,6 +276,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             userId: user.id,
             displayName,
             organization,
+            avatarUrl,
+            bio,
             role
           });
           setProfile(nextProfile);

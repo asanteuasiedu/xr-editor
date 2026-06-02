@@ -38,13 +38,16 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 ## Individual Profiles
 - Authenticated users now get an `individual` profile record on first sign-in or first profile refresh.
 - Guest mode is still supported. Guests can keep using onboarding, scene generation, the catalog, the editor, and preview mode without logging in.
-- Profile data lives in the Supabase `profiles` table, and the SQL migration is stored at:
+- Profile data lives in the Supabase `profiles` table, and the SQL migrations are stored at:
   - [supabase/migrations/create_profiles.sql](/Users/homecomputer/xr-editor/supabase/migrations/create_profiles.sql)
+  - [supabase/migrations/add_profile_avatar_bio.sql](/Users/homecomputer/xr-editor/supabase/migrations/add_profile_avatar_bio.sql)
 - The table includes:
   - `user_id`
   - `email`
   - `display_name`
   - `organization`
+  - `avatar_url`
+  - `bio`
   - `profile_type`
   - `role`
   - `created_at`
@@ -57,9 +60,42 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
   1. Open the Supabase dashboard.
   2. Open **SQL Editor**.
   3. Paste the contents of `supabase/migrations/create_profiles.sql` and run it.
-  4. Confirm the `profiles` table exists and RLS is enabled.
-  5. Sign up or log in through the app.
-  6. Open **Profile** from the auth controls and confirm your row is created automatically.
+  4. Paste the contents of `supabase/migrations/add_profile_avatar_bio.sql` and run it.
+  5. Confirm the `profiles` table exists and RLS is enabled.
+  6. Sign up or log in through the app.
+  7. Open **Profile** from the auth controls and confirm your row is created automatically.
+
+## Cloud Projects
+- Authenticated users can now save full XR editor projects to their account without changing the existing local-draft workflow.
+- Guest mode is still supported. Guests can keep working with local drafts, scene generation, scene selection, editing, preview mode, and JSON export/import without logging in.
+- Saved projects now appear in the signed-in profile panel as experience cards with an active-scene panorama preview, title, and `Draft` / `Published` badge.
+- Cloud project data lives in the Supabase `projects` table, and the SQL migrations are stored at:
+  - [supabase/migrations/create_projects.sql](/Users/homecomputer/xr-editor/supabase/migrations/create_projects.sql)
+  - [supabase/migrations/add_project_status.sql](/Users/homecomputer/xr-editor/supabase/migrations/add_project_status.sql)
+- The table includes:
+  - `user_id`
+  - `title`
+  - `description`
+  - `project_data`
+  - `status`
+  - `thumbnail_url`
+  - `created_at`
+  - `updated_at`
+- `thumbnail_url` is currently derived from the active scene panorama when a project is saved. If that panorama is a data URL, the preview will also be stored inline for now. Moving preview assets into storage can happen later if payload size becomes a concern.
+- `Published` is metadata only in this phase. It helps creators organize their saved experiences but does not yet create public share pages or URLs.
+- Row Level Security is enabled. The SQL adds policies so authenticated users can only:
+  - select their own projects
+  - insert their own projects
+  - update their own projects
+  - delete their own projects
+- To apply the SQL in Supabase:
+  1. Open the Supabase dashboard.
+  2. Open **SQL Editor**.
+  3. Paste the contents of `supabase/migrations/create_projects.sql` and run it.
+  4. Paste the contents of `supabase/migrations/add_project_status.sql` and run it.
+  5. Confirm the `projects` table exists and RLS is enabled.
+  6. Sign up or log in through the app.
+  7. Use **Save to Account** from the Project panel, then open **Profile** from the auth controls to confirm the project is stored in the experience grid.
 
 ## What Works Now
 - One in-memory project with multiple scenes
@@ -79,6 +115,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 - Local image uploads for scene panoramas and image hotspots (embedded as Data URLs)
 - Global Edit Mode / Presentation Mode flow for polished immersive viewing
 - Guided onboarding card for first-time or blank-project flows
+- Signed-in individual profile panel with avatar URL, bio, and a saved-experience grid
 - Starter templates: Blank Tour, Museum Exhibit, Lesson Module, Photo Story
 
 ## AI-Operable Experience Schema
@@ -260,6 +297,7 @@ If a scene is deleted, any hotspot links pointing to that scene are cleared auto
 - If local draft JSON is corrupted or invalid, it is ignored and the app falls back safely to the starter project.
 - The sidebar shows local save state: `Saved locally`, `Unsaved changes`, or `Restored local draft`.
 - `Reset Local Draft` remains available from `Project` and clears the local draft after confirmation.
+- Logged-in users can also use **Save to Account** and **My Projects** for Supabase-backed cloud storage, but local draft behavior remains active for both guests and authenticated users.
 
 ## Local Uploads (360 Images + Image Hotspots)
 - In **Active Scene Details**, use **Upload Panorama** to choose a 360 image from your computer.

@@ -5,6 +5,8 @@ function ProfileModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
   const { user, profile, profileLoading, updateProfile, refreshProfile, isConfigured } = useAuth();
   const [displayName, setDisplayName] = useState('');
   const [organization, setOrganization] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [bio, setBio] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState<string | null>(null);
 
@@ -17,9 +19,11 @@ function ProfileModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
 
     setDisplayName(profile?.display_name ?? '');
     setOrganization(profile?.organization ?? '');
+    setAvatarUrl(profile?.avatar_url ?? '');
+    setBio(profile?.bio ?? '');
     setStatus('idle');
     setMessage(null);
-  }, [isOpen, profile?.display_name, profile?.organization]);
+  }, [isOpen, profile?.avatar_url, profile?.bio, profile?.display_name, profile?.organization]);
 
   if (!isOpen || !user) {
     return null;
@@ -40,7 +44,9 @@ function ProfileModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
     try {
       await updateProfile({
         displayName,
-        organization
+        organization,
+        avatarUrl,
+        bio
       });
       setStatus('success');
       setMessage('Profile saved.');
@@ -108,6 +114,40 @@ function ProfileModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
                 }
               }}
               placeholder="School, studio, or team"
+              disabled={isSaving || profileLoading || !isConfigured || !profile}
+            />
+          </label>
+
+          <label className="auth-modal-field">
+            <span>Avatar URL</span>
+            <input
+              type="url"
+              value={avatarUrl}
+              onChange={(event) => {
+                setAvatarUrl(event.target.value);
+                if (status !== 'loading') {
+                  setStatus('idle');
+                  setMessage(null);
+                }
+              }}
+              placeholder="https://example.com/avatar.jpg"
+              disabled={isSaving || profileLoading || !isConfigured || !profile}
+            />
+          </label>
+
+          <label className="auth-modal-field">
+            <span>Bio</span>
+            <textarea
+              value={bio}
+              onChange={(event) => {
+                setBio(event.target.value);
+                if (status !== 'loading') {
+                  setStatus('idle');
+                  setMessage(null);
+                }
+              }}
+              placeholder="Share what you create, teach, or explore with XR."
+              rows={4}
               disabled={isSaving || profileLoading || !isConfigured || !profile}
             />
           </label>

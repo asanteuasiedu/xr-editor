@@ -10,6 +10,8 @@ type UpdateUserProfileParams = {
   userId: string;
   displayName?: string | null;
   organization?: string | null;
+  avatarUrl?: string | null;
+  bio?: string | null;
   role?: UserProfile['role'];
 };
 
@@ -19,6 +21,8 @@ type ProfileRow = {
   email: string;
   display_name: string | null;
   organization: string | null;
+  avatar_url: string | null;
+  bio: string | null;
   profile_type: string;
   role: string;
   created_at: string;
@@ -45,6 +49,8 @@ function mapProfileRow(row: ProfileRow): UserProfile {
     email: row.email,
     display_name: row.display_name,
     organization: row.organization,
+    avatar_url: row.avatar_url,
+    bio: row.bio,
     profile_type: row.profile_type === 'individual' ? 'individual' : 'individual',
     role: row.role === 'educator' || row.role === 'admin' ? row.role : 'creator',
     created_at: row.created_at,
@@ -118,12 +124,16 @@ export async function updateUserProfile({
   userId,
   displayName,
   organization,
+  avatarUrl,
+  bio,
   role
 }: UpdateUserProfileParams): Promise<UserProfile> {
   const client = requireSupabaseClient();
   const patch: Record<string, string | null> = {
     display_name: normalizeOptionalText(displayName),
-    organization: normalizeOptionalText(organization)
+    organization: normalizeOptionalText(organization),
+    avatar_url: normalizeOptionalText(avatarUrl),
+    bio: normalizeOptionalText(bio)
   };
 
   if (role) {

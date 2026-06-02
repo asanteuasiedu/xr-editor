@@ -4,11 +4,20 @@ import Layout from './components/Layout';
 import AuthControls from './components/AuthControls';
 import AuthModal, { type AuthModalMode } from './components/AuthModal';
 import ProfileModal from './components/ProfileModal';
+import UserProfilePanel from './components/UserProfilePanel';
 import CreationOnboarding from './components/CreationOnboarding';
 import Sidebar, { type EditSection } from './components/Sidebar';
 import HotspotEditor from './components/HotspotEditor';
 import PanoramaViewer from './components/PanoramaViewer';
 import { useAuth } from './context/AuthContext';
+import {
+  deleteCloudProject,
+  loadCloudProject,
+  loadUserProjects,
+  saveProjectToCloud,
+  updateCloudProjectStatus
+} from './lib/projectService';
+import type { CloudProject } from './types/cloudProject';
 import type { Hotspot, HotspotPolygonPoint, Project } from './types/project';
 import {
   DEFAULT_REFLECTION_TITLE,
@@ -55,6 +64,8 @@ type Generate360SceneResult = {
   imageDataUrl: string;
   revisedPrompt?: string;
 };
+type CloudSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+type CloudProjectsStatus = 'idle' | 'loading' | 'ready' | 'error';
 const PREVIEW_HINT_DISMISSED_KEY = 'xr-editor.preview-hint-dismissed.v1';
 const EDIT_WALKTHROUGH_DISMISSED_KEY = 'xr-editor.edit-walkthrough-dismissed.v1';
 const PREVIEW_INTERACTION_DEBUG = false;
@@ -92,6 +103,39 @@ function getActiveSceneFromProject(project: Project) {
 
 function projectHasValidActiveScene(project: Project) {
   return Boolean(getActiveSceneFromProject(project)?.panoramaUrl.trim());
+}
+
+function getFriendlyCloudProjectErrorMessage(error: unknown) {
+  if (!(error instanceof Error)) {
+    return 'Cloud project actions could not be completed right now.';
+  }
+
+  const normalized = error.message.trim().toLowerCase();
+
+  if (
+    normalized.includes('relation \"projects\" does not exist') ||
+    normalized.includes('could not find the table')
+  ) {
+    return 'Project storage is not ready yet. Apply the Supabase projects SQL and try again.';
+  }
+
+  if (
+    normalized.includes('row-level security') ||
+    normalized.includes('permission denied') ||
+    normalized.includes('violates row-level security policy')
+  ) {
+    return 'Project permissions are not configured correctly in Supabase yet.';
+  }
+
+  if (normalized.includes('authentication is not configured')) {
+    return 'Cloud project saving is not configured yet. Add the Supabase Vite environment variables to continue.';
+  }
+
+  if (normalized.includes('json')) {
+    return 'This project could not be loaded from cloud storage because its saved data is invalid.';
+  }
+
+  return error.message;
 }
 
 function loadPreviewHintDismissed() {
@@ -297,10 +341,16 @@ function App() {
   const [appMode, setAppMode] = useState<AppMode>('edit');
   const [authModalMode, setAuthModalMode] = useState<AuthModalMode | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isMyProjectsModalOpen, setIsMyProjectsModalOpen] = useState(false);
   const [placementMode, setPlacementMode] = useState<PlacementMode>({ type: 'idle' });
   const [importError, setImportError] = useState<string | null>(null);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>(initialLoad.restored ? 'restored' : 'saved');
+  const [cloudProjectId, setCloudProjectId] = useState<string | null>(null);
+  const [cloudSaveStatus, setCloudSaveStatus] = useState<CloudSaveStatus>('idle');
+  const [cloudProjects, setCloudProjects] = useState<CloudProject[]>([]);
+  const [cloudProjectsStatus, setCloudProjectsStatus] = useState<CloudProjectsStatus>('idle');
+  const [cloudProjectsError, setCloudProjectsError] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<{ src: string; title: string; caption?: string } | null>(null);
   const [infoPreview, setInfoPreview] = useState<{ title: string; body: string } | null>(null);
   const [questionPreviewHotspotId, setQuestionPreviewHotspotId] = useState<string | null>(null);
@@ -361,16 +411,61 @@ function App() {
     setAuthModalMode(null);
   }, []);
 
+  const handleCloseProfileModal = useCallback(() => {
+    setIsProfileModalOpen(false);
+  }, []);
+
+  const handleOpenProfileEditor = useCallback(() => {
+    if (!user) {
+      return;
+    }
+
+    setIsMyProjectsModalOpen(false);
+    setIsProfileModalOpen(true);
+  }, [user]);
+
+  const refreshCloudProjects = useCallback(async () => {
+    if (!user?.id) {
+      setCloudProjects([]);
+      setCloudProjectsStatus('idle');
+      setCloudProjectsError(null);
+      return;
+    }
+
+    setCloudProjectsStatus('loading');
+    setCloudProjectsError(null);
+
+    try {
+      const projects = await loadUserProjects(user.id);
+      setCloudProjects(projects);
+      setCloudProjectsStatus('ready');
+    } catch (error) {
+      setCloudProjects([]);
+      setCloudProjectsStatus('error');
+      setCloudProjectsError(getFriendlyCloudProjectErrorMessage(error));
+    }
+  }, [user?.id]);
+
   const handleOpenProfile = useCallback(() => {
     if (!user) {
       return;
     }
 
-    setIsProfileModalOpen(true);
-  }, [user]);
+    setIsMyProjectsModalOpen(true);
+    void refreshCloudProjects();
+  }, [refreshCloudProjects, user]);
 
-  const handleCloseProfileModal = useCallback(() => {
-    setIsProfileModalOpen(false);
+  const handleOpenMyProjects = useCallback(() => {
+    if (!user) {
+      return;
+    }
+
+    setIsMyProjectsModalOpen(true);
+    void refreshCloudProjects();
+  }, [refreshCloudProjects, user]);
+
+  const handleCloseMyProjectsModal = useCallback(() => {
+    setIsMyProjectsModalOpen(false);
   }, []);
 
   useEffect(() => {
@@ -407,8 +502,22 @@ function App() {
   useEffect(() => {
     if (!user) {
       setIsProfileModalOpen(false);
+      setIsMyProjectsModalOpen(false);
+      setCloudProjectId(null);
+      setCloudProjects([]);
+      setCloudProjectsStatus('idle');
+      setCloudProjectsError(null);
+      setCloudSaveStatus('idle');
     }
   }, [user]);
+
+  useEffect(() => {
+    if (cloudSaveStatus === 'saving') {
+      return;
+    }
+
+    setCloudSaveStatus('idle');
+  }, [project]);
 
   const activeScene = useMemo(
     () => project.scenes.find((scene) => scene.id === project.activeSceneId) ?? project.scenes[0],
@@ -1290,6 +1399,167 @@ function App() {
     exportProjectToJson(project);
   };
 
+  const applyLoadedProject = useCallback(
+    (nextProject: Project, options?: { cloudProjectId?: string | null; notice?: string | null }) => {
+      setProject(nextProject);
+      setCloudProjectId(options?.cloudProjectId ?? null);
+      setDiscoveredHotspotIds([]);
+      setQuestionResponses({});
+      setReflectionResponses({});
+      setImagePreview(null);
+      setInfoPreview(null);
+      setQuestionPreviewHotspotId(null);
+      setReflectionPreviewHotspotId(null);
+      setImagePreviewBroken(false);
+      setIsScenePickerOpen(false);
+      setSelectedHotspotId(null);
+      setPlacementMode({ type: 'idle' });
+      setImportError(null);
+      setNoticeMessage(options?.notice ?? null);
+      setSaveState('unsaved');
+      setWalkthroughStepIndex(null);
+      setPendingWalkthroughAfterOnboarding(false);
+      setAppMode('edit');
+      setActiveEditSection('project');
+      setIsContextPanelOpen(true);
+      setShowCreationOnboarding(!projectHasValidActiveScene(nextProject));
+      setCloudSaveStatus('idle');
+    },
+    []
+  );
+
+  const handleSaveProjectToAccount = useCallback(async () => {
+    if (!user?.id) {
+      setImportError('Log in to save projects to your account.');
+      return;
+    }
+
+    setCloudSaveStatus('saving');
+    setImportError(null);
+
+    try {
+      const savedProject = await saveProjectToCloud({
+        userId: user.id,
+        project,
+        existingProjectId: cloudProjectId
+      });
+
+      setCloudProjectId(savedProject.id);
+      setCloudProjects((currentProjects) => {
+        const nextProjects = [savedProject, ...currentProjects.filter((entry) => entry.id !== savedProject.id)];
+        nextProjects.sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime());
+        return nextProjects;
+      });
+      setCloudSaveStatus('saved');
+      showTemporaryNotice('Project saved to your account');
+    } catch (error) {
+      setCloudSaveStatus('error');
+      setImportError(getFriendlyCloudProjectErrorMessage(error));
+    }
+  }, [cloudProjectId, project, showTemporaryNotice, user?.id]);
+
+  const handleOpenCloudProject = useCallback(
+    async (projectId: string) => {
+      if (!user?.id) {
+        return;
+      }
+
+      setCloudProjectsError(null);
+      setCloudProjectsStatus('loading');
+
+      try {
+        const cloudProject = await loadCloudProject({
+          userId: user.id,
+          projectId
+        });
+        setCloudProjects((currentProjects) => {
+          const nextProjects = [cloudProject, ...currentProjects.filter((entry) => entry.id !== cloudProject.id)];
+          nextProjects.sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime());
+          return nextProjects;
+        });
+        applyLoadedProject(cloudProject.project_data, {
+          cloudProjectId: cloudProject.id,
+          notice: `Loaded "${cloudProject.title || 'Untitled Project'}" from your account.`
+        });
+        setCloudProjectsStatus('ready');
+        setIsMyProjectsModalOpen(false);
+      } catch (error) {
+        setCloudProjectsStatus('error');
+        setCloudProjectsError(getFriendlyCloudProjectErrorMessage(error));
+      }
+    },
+    [applyLoadedProject, user?.id]
+  );
+
+  const handleDeleteCloudProject = useCallback(
+    async (projectId: string) => {
+      if (!user?.id) {
+        return;
+      }
+
+      const targetProject = cloudProjects.find((entry) => entry.id === projectId);
+      const projectLabel = targetProject?.title || 'this cloud project';
+      const shouldDelete = window.confirm(
+        `Delete "${projectLabel}" from your account?\n\nThis will not remove your current local draft.`
+      );
+
+      if (!shouldDelete) {
+        return;
+      }
+
+      setCloudProjectsError(null);
+
+      try {
+        await deleteCloudProject({
+          userId: user.id,
+          projectId
+        });
+        setCloudProjects((currentProjects) => currentProjects.filter((entry) => entry.id !== projectId));
+
+        if (cloudProjectId === projectId) {
+          setCloudProjectId(null);
+          setCloudSaveStatus('idle');
+        }
+
+        showTemporaryNotice('Cloud project deleted');
+      } catch (error) {
+        setCloudProjectsError(getFriendlyCloudProjectErrorMessage(error));
+      }
+    },
+    [cloudProjectId, cloudProjects, showTemporaryNotice, user?.id]
+  );
+
+  const handleToggleCloudProjectStatus = useCallback(
+    async (projectId: string, status: 'draft' | 'published') => {
+      if (!user?.id) {
+        return;
+      }
+
+      setCloudProjectsError(null);
+
+      try {
+        const updatedProject = await updateCloudProjectStatus({
+          userId: user.id,
+          projectId,
+          status
+        });
+
+        setCloudProjects((currentProjects) => {
+          const nextProjects = [updatedProject, ...currentProjects.filter((entry) => entry.id !== updatedProject.id)];
+          nextProjects.sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime());
+          return nextProjects;
+        });
+
+        showTemporaryNotice(
+          status === 'published' ? 'Experience marked as published' : 'Experience moved back to draft'
+        );
+      } catch (error) {
+        setCloudProjectsError(getFriendlyCloudProjectErrorMessage(error));
+      }
+    },
+    [showTemporaryNotice, user?.id]
+  );
+
   const handleImportFileSelection = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -1300,23 +1570,7 @@ function App() {
 
     try {
       const importedProject = await importProjectFromFile(file);
-      setProject(importedProject);
-      setDiscoveredHotspotIds([]);
-      setQuestionResponses({});
-      setReflectionResponses({});
-      setImagePreview(null);
-      setInfoPreview(null);
-      setQuestionPreviewHotspotId(null);
-      setReflectionPreviewHotspotId(null);
-      setIsScenePickerOpen(false);
-      setSelectedHotspotId(null);
-      setPlacementMode({ type: 'idle' });
-      setImportError(null);
-      setNoticeMessage(null);
-      setSaveState('unsaved');
-      setWalkthroughStepIndex(null);
-      setPendingWalkthroughAfterOnboarding(false);
-      setShowCreationOnboarding(!projectHasValidActiveScene(importedProject));
+      applyLoadedProject(importedProject, { cloudProjectId: null, notice: null });
     } catch (error) {
       setImportError(error instanceof Error ? error.message : 'Import failed due to an unknown error.');
     }
@@ -1331,27 +1585,8 @@ function App() {
     }
 
     clearLocalDraft();
-    setProject(createDefaultProject());
-    setDiscoveredHotspotIds([]);
-    setQuestionResponses({});
-    setReflectionResponses({});
-    setImagePreview(null);
-    setInfoPreview(null);
-    setQuestionPreviewHotspotId(null);
-    setReflectionPreviewHotspotId(null);
-    setImagePreviewBroken(false);
-    setSelectedHotspotId(null);
-    setPlacementMode({ type: 'idle' });
-    setImportError(null);
-    setNoticeMessage(null);
-    setSaveState('unsaved');
-    setActiveEditSection('project');
-    setIsContextPanelOpen(true);
-    setWalkthroughStepIndex(null);
+    applyLoadedProject(createDefaultProject(), { cloudProjectId: null, notice: null });
     setEditWalkthroughDismissed(false);
-    setShowCreationOnboarding(true);
-    setPendingWalkthroughAfterOnboarding(false);
-    setIsScenePickerOpen(false);
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(EDIT_WALKTHROUGH_DISMISSED_KEY);
     }
@@ -1835,6 +2070,9 @@ function App() {
               placementModeType={placementMode.type}
               saveStateLabel={saveStateLabel}
               saveStateTone={saveState}
+              isUserSignedIn={Boolean(user)}
+              isCloudProjectLinked={Boolean(cloudProjectId)}
+              cloudSaveStatus={cloudSaveStatus}
               walkthroughSectionId={activeWalkthroughStep?.id ?? null}
               onAddScene={handleAddScene}
               onPresentProject={handleEnterPresentationMode}
@@ -1849,6 +2087,8 @@ function App() {
               onImproveScenePanorama={handleImproveActiveScenePanorama}
               onCreateSceneFromImageFile={handleCreateSceneFromImageFile}
               onDeleteScene={handleDeleteScene}
+              onSaveProjectToCloud={handleSaveProjectToAccount}
+              onOpenMyProjects={handleOpenMyProjects}
               onAddHotspot={handleStartPlacingHotspot}
               onStartDrawingPolygonHotspot={handleStartDrawingPolygonHotspot}
               onFinishPolygonHotspot={handleFinishPolygonHotspot}
@@ -2423,6 +2663,27 @@ function App() {
         onSwitchMode={setAuthModalMode}
       />
       <ProfileModal isOpen={isProfileModalOpen} onClose={handleCloseProfileModal} />
+      <UserProfilePanel
+        isOpen={isMyProjectsModalOpen}
+        projects={cloudProjects}
+        loading={cloudProjectsStatus === 'loading'}
+        error={cloudProjectsError}
+        currentProjectId={cloudProjectId}
+        onClose={handleCloseMyProjectsModal}
+        onRefresh={() => {
+          void refreshCloudProjects();
+        }}
+        onEditProfile={handleOpenProfileEditor}
+        onOpenProject={(projectId) => {
+          void handleOpenCloudProject(projectId);
+        }}
+        onDeleteProject={(projectId) => {
+          void handleDeleteCloudProject(projectId);
+        }}
+        onToggleProjectStatus={(projectId, status) => {
+          void handleToggleCloudProjectStatus(projectId, status);
+        }}
+      />
     </>
   );
 }
