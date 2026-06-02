@@ -99,6 +99,26 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
   7. Use **Save to Account** from the Project panel, or create a new draft from the **Profile** grid via **Upload** or **Generate**.
   8. Open **Profile** from the auth controls to confirm the project is stored in the experience grid.
 
+## Project Analytics Foundation
+- Saved cloud projects can now record lightweight engagement analytics events in Supabase for future dashboard work.
+- The analytics SQL migration lives at:
+  - [supabase/migrations/create_project_analytics.sql](/Users/homecomputer/xr-editor/supabase/migrations/create_project_analytics.sql)
+- MVP analytics currently track these event types:
+  - `session_start`
+  - `session_end`
+  - `scene_view`
+  - `hotspot_open`
+  - `hotspot_complete`
+  - `question_answer`
+  - `reflection_submit`
+  - `project_complete`
+- In this phase, analytics only run for:
+  - logged-in users
+  - cloud-saved projects
+  - Preview / Present Project mode sessions
+- Tracked events are stored in `public.project_analytics_events` and include scene context, hotspot context, progress snapshots, timestamps, and lightweight device/browser info.
+- Dashboard and reporting UI are intentionally not included yet; this phase only lays the tracking foundation.
+
 ## What Works Now
 - One in-memory project with multiple scenes
 - Editable project metadata (name, objective, subject / domain, target age / grade band, author / organization)

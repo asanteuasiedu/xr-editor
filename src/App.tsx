@@ -10,6 +10,7 @@ import Sidebar, { type EditSection } from './components/Sidebar';
 import HotspotEditor from './components/HotspotEditor';
 import PanoramaViewer from './components/PanoramaViewer';
 import { useAuth } from './context/AuthContext';
+import { trackProjectAnalyticsEvent } from './lib/analyticsService';
 import {
   deleteCloudProject,
   loadCloudProject,
@@ -17,6 +18,7 @@ import {
   saveProjectToCloud,
   updateCloudProjectStatus
 } from './lib/projectService';
+import type { ProjectAnalyticsEvent } from './types/analytics';
 import type { CloudProject } from './types/cloudProject';
 import type { Hotspot, HotspotPolygonPoint, Project } from './types/project';
 import {
@@ -27,6 +29,7 @@ import {
 } from './types/project';
 import { exportProjectToJson, importProjectFromFile } from './utils/exportImport';
 import { imageFileToDataUrl } from './utils/fileAssets';
+import { getBrowserName, getDeviceType, getOrCreateAnalyticsSessionId, resetAnalyticsSessionId } from './utils/analyticsSession';
 import { clearLocalDraft, loadLocalDraft, saveLocalDraft } from './utils/localDraft';
 import { SCENE_LIBRARY_ITEMS, STARTER_SCENE_PANORAMA_URL } from './utils/sceneLibrary';
 import { createProjectFromTemplate } from './utils/templates';
@@ -427,6 +430,11 @@ function App() {
   const noticeTimeoutRef = useRef<number | null>(null);
   const previewHotspotPulseTimeoutRef = useRef<number | null>(null);
   const previousAppModeRef = useRef<AppMode>('edit');
+  const analyticsSessionIdRef = useRef<string | null>(null);
+  const analyticsProjectIdRef = useRef<string | null>(null);
+  const analyticsUserIdRef = useRef<string | null>(null);
+  const lastTrackedPreviewSceneKeyRef = useRef<string | null>(null);
+  const completedProjectSessionKeyRef = useRef<string | null>(null);
 
   const showTemporaryNotice = useCallback((message: string, durationMs = 2200) => {
     setNoticeMessage(message);
@@ -440,6 +448,32 @@ function App() {
       noticeTimeoutRef.current = null;
     }, durationMs);
   }, []);
+
+  const trackPreviewAnalyticsEvent = useCallback(
+    (event: Omit<ProjectAnalyticsEvent, 'project_id' | 'user_id' | 'session_id' | 'device_type' | 'browser_name'>) => {
+      if (appMode !== 'preview' || !cloudProjectId || !user?.id) {
+        return;
+      }
+
+      const sessionId =
+        analyticsSessionIdRef.current && analyticsProjectIdRef.current === cloudProjectId
+          ? analyticsSessionIdRef.current
+          : getOrCreateAnalyticsSessionId(cloudProjectId);
+
+      analyticsSessionIdRef.current = sessionId;
+      analyticsProjectIdRef.current = cloudProjectId;
+
+      void trackProjectAnalyticsEvent({
+        ...event,
+        project_id: cloudProjectId,
+        user_id: user.id,
+        session_id: sessionId,
+        device_type: getDeviceType(),
+        browser_name: getBrowserName()
+      });
+    },
+    [appMode, cloudProjectId, user?.id]
+  );
 
   const handleOpenSignIn = useCallback(() => {
     setAuthModalMode('signIn');
@@ -652,6 +686,20 @@ function App() {
     [project.scenes]
   );
   const progressPercent = totalProgressPoints === 0 ? 0 : (discoveredHotspotIds.length / totalProgressPoints) * 100;
+  const getProjectedProgressValue = useCallback(
+    (hotspotId?: string) => {
+      if (!hotspotId || totalProgressPoints === 0) {
+        return Number(progressPercent.toFixed(2));
+      }
+
+      const nextCount = discoveredHotspotIds.includes(hotspotId)
+        ? discoveredHotspotIds.length
+        : discoveredHotspotIds.length + 1;
+
+      return Number(((nextCount / totalProgressPoints) * 100).toFixed(2));
+    },
+    [discoveredHotspotIds, progressPercent, totalProgressPoints]
+  );
   const totalQuestionCount = questionEntries.length;
   const answeredQuestionIds = useMemo(
     () => Object.keys(questionResponses).filter((hotspotId) => questionEntryById.has(hotspotId)),
@@ -748,6 +796,157 @@ function App() {
     completionPendingAfterOverlayClose,
     hasActivePreviewOverlay,
     isExperienceComplete
+  ]);
+
+  useEffect(() => {
+    const endAnalyticsSession = (reason: 'preview_exit' | 'project_switch' | 'tracking_unavailable') => {
+      const previousProjectId = analyticsProjectIdRef.current;
+      const previousSessionId = analyticsSessionIdRef.current;
+      const previousUserId = analyticsUserIdRef.current;
+
+      if (previousProjectId && previousSessionId && previousUserId) {
+        void trackProjectAnalyticsEvent({
+          project_id: previousProjectId,
+          user_id: previousUserId,
+          session_id: previousSessionId,
+          event_type: 'session_end',
+          progress_value: Number(progressPercent.toFixed(2)),
+          device_type: getDeviceType(),
+          browser_name: getBrowserName(),
+          metadata: {
+            reason
+          }
+        });
+      }
+
+      if (previousProjectId) {
+        resetAnalyticsSessionId(previousProjectId);
+      }
+
+      analyticsSessionIdRef.current = null;
+      analyticsProjectIdRef.current = null;
+      analyticsUserIdRef.current = null;
+      lastTrackedPreviewSceneKeyRef.current = null;
+      completedProjectSessionKeyRef.current = null;
+    };
+
+    if (appMode !== 'preview' || !cloudProjectId || !user?.id) {
+      endAnalyticsSession(appMode === 'preview' ? 'tracking_unavailable' : 'preview_exit');
+      return;
+    }
+
+    if (
+      analyticsProjectIdRef.current &&
+      analyticsSessionIdRef.current &&
+      analyticsUserIdRef.current &&
+      analyticsProjectIdRef.current !== cloudProjectId
+    ) {
+      endAnalyticsSession('project_switch');
+    }
+
+    if (analyticsSessionIdRef.current && analyticsProjectIdRef.current === cloudProjectId) {
+      return;
+    }
+
+    const sessionId = getOrCreateAnalyticsSessionId(cloudProjectId);
+    analyticsSessionIdRef.current = sessionId;
+    analyticsProjectIdRef.current = cloudProjectId;
+    analyticsUserIdRef.current = user.id;
+    lastTrackedPreviewSceneKeyRef.current = null;
+    completedProjectSessionKeyRef.current = null;
+
+    trackPreviewAnalyticsEvent({
+      event_type: 'session_start',
+      scene_id: activeScene.id,
+      scene_name: activeScene.name || 'Untitled Scene',
+      progress_value: Number(progressPercent.toFixed(2)),
+      metadata: {
+        totalScenes: project.scenes.length,
+        totalHotspots: totalProgressPoints
+      }
+    });
+  }, [
+    activeScene.id,
+    activeScene.name,
+    appMode,
+    cloudProjectId,
+    progressPercent,
+    project.scenes.length,
+    totalProgressPoints,
+    trackPreviewAnalyticsEvent,
+    user?.id
+  ]);
+
+  useEffect(() => {
+    if (appMode !== 'preview' || !cloudProjectId || !user?.id || !analyticsSessionIdRef.current) {
+      return;
+    }
+
+    const sceneKey = `${analyticsSessionIdRef.current}:${activeScene.id}`;
+    if (lastTrackedPreviewSceneKeyRef.current === sceneKey) {
+      return;
+    }
+
+    lastTrackedPreviewSceneKeyRef.current = sceneKey;
+    trackPreviewAnalyticsEvent({
+      event_type: 'scene_view',
+      scene_id: activeScene.id,
+      scene_name: activeScene.name || 'Untitled Scene',
+      progress_value: Number(progressPercent.toFixed(2)),
+      metadata: {
+        hotspotCount: activeScene.hotspots.length
+      }
+    });
+  }, [
+    activeScene.hotspots.length,
+    activeScene.id,
+    activeScene.name,
+    appMode,
+    cloudProjectId,
+    progressPercent,
+    trackPreviewAnalyticsEvent,
+    user?.id
+  ]);
+
+  useEffect(() => {
+    if (
+      appMode !== 'preview' ||
+      !cloudProjectId ||
+      !user?.id ||
+      !analyticsSessionIdRef.current ||
+      !isExperienceComplete
+    ) {
+      return;
+    }
+
+    const sessionKey = `${cloudProjectId}:${analyticsSessionIdRef.current}`;
+    if (completedProjectSessionKeyRef.current === sessionKey) {
+      return;
+    }
+
+    completedProjectSessionKeyRef.current = sessionKey;
+    trackPreviewAnalyticsEvent({
+      event_type: 'project_complete',
+      scene_id: activeScene.id,
+      scene_name: activeScene.name || 'Untitled Scene',
+      progress_value: 100,
+      metadata: {
+        answeredQuestionCount,
+        totalQuestionCount,
+        totalCorrectAnswers
+      }
+    });
+  }, [
+    activeScene.id,
+    activeScene.name,
+    answeredQuestionCount,
+    appMode,
+    cloudProjectId,
+    isExperienceComplete,
+    totalCorrectAnswers,
+    totalQuestionCount,
+    trackPreviewAnalyticsEvent,
+    user?.id
   ]);
 
   const handleCloseInfoPreview = () => {
@@ -1165,7 +1364,23 @@ function App() {
         return;
       }
 
+      const sceneName = activeScene.name || 'Untitled Scene';
+      const hotspotTitle = clickedHotspot.title || 'Untitled Insight Zone';
+
       if (appMode === 'preview') {
+        trackPreviewAnalyticsEvent({
+          event_type: 'hotspot_open',
+          scene_id: activeScene.id,
+          scene_name: sceneName,
+          hotspot_id: clickedHotspot.id,
+          hotspot_title: hotspotTitle,
+          hotspot_type: clickedHotspot.type,
+          progress_value: Number(progressPercent.toFixed(2)),
+          metadata: {
+            shape: getHotspotShape(clickedHotspot)
+          }
+        });
+
         setActivePreviewHotspotId(hotspotId);
         if (clickedHotspot.type !== 'reflection') {
           setDiscoveredHotspotIds((current) => (current.includes(hotspotId) ? current : [...current, hotspotId]));
@@ -1241,6 +1456,15 @@ function App() {
         setReflectionPreviewHotspotId(null);
         setSelectedHotspotId(null);
         setPlacementMode({ type: 'idle' });
+        trackPreviewAnalyticsEvent({
+          event_type: 'hotspot_complete',
+          scene_id: activeScene.id,
+          scene_name: sceneName,
+          hotspot_id: clickedHotspot.id,
+          hotspot_title: hotspotTitle,
+          hotspot_type: clickedHotspot.type,
+          progress_value: getProjectedProgressValue(hotspotId)
+        });
         return;
       }
 
@@ -1262,6 +1486,15 @@ function App() {
           openHotspotDetails(hotspotId);
         } else {
           setSelectedHotspotId(hotspotId);
+          trackPreviewAnalyticsEvent({
+            event_type: 'hotspot_complete',
+            scene_id: activeScene.id,
+            scene_name: sceneName,
+            hotspot_id: clickedHotspot.id,
+            hotspot_title: hotspotTitle,
+            hotspot_type: clickedHotspot.type,
+            progress_value: getProjectedProgressValue(hotspotId)
+          });
         }
         return;
       }
@@ -1288,6 +1521,15 @@ function App() {
           openHotspotDetails(hotspotId);
         } else {
           setSelectedHotspotId(hotspotId);
+          trackPreviewAnalyticsEvent({
+            event_type: 'hotspot_complete',
+            scene_id: activeScene.id,
+            scene_name: sceneName,
+            hotspot_id: clickedHotspot.id,
+            hotspot_title: hotspotTitle,
+            hotspot_type: clickedHotspot.type,
+            progress_value: getProjectedProgressValue(hotspotId)
+          });
         }
         return;
       }
@@ -1302,6 +1544,15 @@ function App() {
         });
         setQuestionPreviewHotspotId(null);
         setReflectionPreviewHotspotId(null);
+        trackPreviewAnalyticsEvent({
+          event_type: 'hotspot_complete',
+          scene_id: activeScene.id,
+          scene_name: sceneName,
+          hotspot_id: clickedHotspot.id,
+          hotspot_title: hotspotTitle,
+          hotspot_type: clickedHotspot.type,
+          progress_value: getProjectedProgressValue(hotspotId)
+        });
         return;
       }
 
@@ -1310,7 +1561,18 @@ function App() {
       setReflectionPreviewHotspotId(null);
       openHotspotDetails(hotspotId);
     },
-    [activeScene.hotspots, activeScene.id, appMode, openHotspotDetails, placementMode.type, project.scenes]
+    [
+      activeScene.hotspots,
+      activeScene.id,
+      activeScene.name,
+      appMode,
+      getProjectedProgressValue,
+      openHotspotDetails,
+      placementMode.type,
+      progressPercent,
+      project.scenes,
+      trackPreviewAnalyticsEvent
+    ]
   );
 
   useEffect(() => {
@@ -1388,6 +1650,10 @@ function App() {
 
   const handleAnswerMultipleChoice = useCallback(
     (hotspotId: string, selectedIndex: number) => {
+      if (questionResponses[hotspotId]) {
+        return;
+      }
+
       const entry = questionEntryById.get(hotspotId);
       if (!entry) {
         return;
@@ -1399,6 +1665,10 @@ function App() {
         return;
       }
 
+      const isCorrect = selectedIndex === questionConfig.correctAnswerIndex;
+      const sceneName = sceneNameById[entry.sceneId] ?? 'Untitled Scene';
+      const responseText = questionConfig.options[selectedIndex] ?? null;
+
       setQuestionResponses((current) => {
         if (current[hotspotId]) {
           return current;
@@ -1408,13 +1678,44 @@ function App() {
           ...current,
           [hotspotId]: {
             selectedIndex,
-            isCorrect: selectedIndex === questionConfig.correctAnswerIndex,
+            isCorrect,
             sceneId: entry.sceneId
           }
         };
       });
+
+      trackPreviewAnalyticsEvent({
+        event_type: 'question_answer',
+        scene_id: entry.sceneId,
+        scene_name: sceneName,
+        hotspot_id: entry.hotspot.id,
+        hotspot_title: entry.hotspot.title || 'Untitled Insight Zone',
+        hotspot_type: entry.hotspot.type,
+        response_text: responseText,
+        answer_correct: isCorrect,
+        progress_value: Number(progressPercent.toFixed(2)),
+        metadata: {
+          selectedIndex,
+          correctAnswerIndex: questionConfig.correctAnswerIndex
+        }
+      });
+
+      trackPreviewAnalyticsEvent({
+        event_type: 'hotspot_complete',
+        scene_id: entry.sceneId,
+        scene_name: sceneName,
+        hotspot_id: entry.hotspot.id,
+        hotspot_title: entry.hotspot.title || 'Untitled Insight Zone',
+        hotspot_type: entry.hotspot.type,
+        answer_correct: isCorrect,
+        progress_value: Number(progressPercent.toFixed(2)),
+        metadata: {
+          selectedIndex,
+          correctAnswerIndex: questionConfig.correctAnswerIndex
+        }
+      });
     },
-    [questionEntryById]
+    [progressPercent, questionEntryById, questionResponses, sceneNameById, trackPreviewAnalyticsEvent]
   );
 
   const handleUpdateReflectionResponse = useCallback((hotspotId: string, responseText: string) => {
@@ -1434,6 +1735,9 @@ function App() {
       return;
     }
 
+    const projectedProgressValue = getProjectedProgressValue(activeReflectionHotspot.id);
+    const sceneName = activeScene.name || 'Untitled Scene';
+
     setReflectionResponses((current) => ({
       ...current,
       [activeReflectionHotspot.id]: trimmedResponse
@@ -1443,7 +1747,40 @@ function App() {
     );
     setReflectionPreviewHotspotId(null);
     setPreviewRevealOrigin(null);
-  }, [activeReflectionHotspot, activeReflectionResponse]);
+    trackPreviewAnalyticsEvent({
+      event_type: 'reflection_submit',
+      scene_id: activeScene.id,
+      scene_name: sceneName,
+      hotspot_id: activeReflectionHotspot.id,
+      hotspot_title: activeReflectionHotspot.title || 'Reflection',
+      hotspot_type: activeReflectionHotspot.type,
+      response_text: trimmedResponse,
+      progress_value: projectedProgressValue,
+      metadata: {
+        responseLength: trimmedResponse.length
+      }
+    });
+    trackPreviewAnalyticsEvent({
+      event_type: 'hotspot_complete',
+      scene_id: activeScene.id,
+      scene_name: sceneName,
+      hotspot_id: activeReflectionHotspot.id,
+      hotspot_title: activeReflectionHotspot.title || 'Reflection',
+      hotspot_type: activeReflectionHotspot.type,
+      response_text: trimmedResponse,
+      progress_value: projectedProgressValue,
+      metadata: {
+        responseLength: trimmedResponse.length
+      }
+    });
+  }, [
+    activeReflectionHotspot,
+    activeReflectionResponse,
+    activeScene.id,
+    activeScene.name,
+    getProjectedProgressValue,
+    trackPreviewAnalyticsEvent
+  ]);
 
   const handleExportProject = () => {
     setImportError(null);
