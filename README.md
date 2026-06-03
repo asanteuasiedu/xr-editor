@@ -119,6 +119,19 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 - Tracked events are stored in `public.project_analytics_events` and include scene context, hotspot context, progress snapshots, timestamps, and lightweight device/browser info.
 - Dashboard and reporting UI are intentionally not included yet; this phase only lays the tracking foundation.
 
+## Project Analytics Dashboard
+- Each saved project card in the signed-in profile grid now includes **View Analytics**.
+- The analytics dashboard loads tracked events for that specific cloud project and surfaces MVP metrics such as:
+  - sessions
+  - average time
+  - completion rate
+  - top insight zone
+  - device usage
+  - reflection submissions
+  - scene reach
+- Some metrics are intentionally approximate in this phase. For example, average time is inferred from the first and last tracked event in each session.
+- True spatial heatmaps are a future phase. The current dashboard includes a legend and engagement summaries, not precise viewer-position heatmaps.
+
 ## What Works Now
 - One in-memory project with multiple scenes
 - Editable project metadata (name, objective, subject / domain, target age / grade band, author / organization)

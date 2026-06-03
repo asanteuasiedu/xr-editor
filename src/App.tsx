@@ -4,13 +4,14 @@ import Layout from './components/Layout';
 import AuthControls from './components/AuthControls';
 import AuthModal, { type AuthModalMode } from './components/AuthModal';
 import ProfileModal from './components/ProfileModal';
+import ProjectAnalyticsDashboard from './components/ProjectAnalyticsDashboard';
 import UserProfilePanel from './components/UserProfilePanel';
 import CreationOnboarding from './components/CreationOnboarding';
 import Sidebar, { type EditSection } from './components/Sidebar';
 import HotspotEditor from './components/HotspotEditor';
 import PanoramaViewer from './components/PanoramaViewer';
 import { useAuth } from './context/AuthContext';
-import { trackProjectAnalyticsEvent } from './lib/analyticsService';
+import { loadProjectAnalyticsEvents, trackProjectAnalyticsEvent } from './lib/analyticsService';
 import {
   deleteCloudProject,
   loadCloudProject,
@@ -136,6 +137,36 @@ function getFriendlyCloudProjectErrorMessage(error: unknown) {
 
   if (normalized.includes('json')) {
     return 'This project could not be loaded from cloud storage because its saved data is invalid.';
+  }
+
+  return error.message;
+}
+
+function getFriendlyAnalyticsErrorMessage(error: unknown) {
+  if (!(error instanceof Error)) {
+    return 'Analytics could not be loaded right now.';
+  }
+
+  const normalized = error.message.trim().toLowerCase();
+
+  if (
+    normalized.includes('relation "project_analytics_events" does not exist') ||
+    normalized.includes('relation \"project_analytics_events\" does not exist') ||
+    normalized.includes('could not find the table')
+  ) {
+    return 'Analytics storage is not ready yet. Apply the Supabase analytics SQL and try again.';
+  }
+
+  if (
+    normalized.includes('row-level security') ||
+    normalized.includes('permission denied') ||
+    normalized.includes('violates row-level security policy')
+  ) {
+    return 'Analytics permissions are not configured correctly in Supabase yet.';
+  }
+
+  if (normalized.includes('authentication is not configured')) {
+    return 'Analytics is not configured yet. Add the Supabase Vite environment variables to continue.';
   }
 
   return error.message;
@@ -396,6 +427,10 @@ function App() {
   const [cloudProjects, setCloudProjects] = useState<CloudProject[]>([]);
   const [cloudProjectsStatus, setCloudProjectsStatus] = useState<CloudProjectsStatus>('idle');
   const [cloudProjectsError, setCloudProjectsError] = useState<string | null>(null);
+  const [analyticsProject, setAnalyticsProject] = useState<CloudProject | null>(null);
+  const [analyticsEvents, setAnalyticsEvents] = useState<ProjectAnalyticsEvent[]>([]);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<{ src: string; title: string; caption?: string } | null>(null);
   const [infoPreview, setInfoPreview] = useState<{ title: string; body: string } | null>(null);
   const [questionPreviewHotspotId, setQuestionPreviewHotspotId] = useState<string | null>(null);
@@ -544,6 +579,39 @@ function App() {
     setIsMyProjectsModalOpen(false);
   }, []);
 
+  const handleCloseAnalyticsDashboard = useCallback(() => {
+    setAnalyticsProject(null);
+    setAnalyticsEvents([]);
+    setAnalyticsLoading(false);
+    setAnalyticsError(null);
+  }, []);
+
+  const handleViewProjectAnalytics = useCallback(
+    async (cloudProject: CloudProject) => {
+      if (!user?.id) {
+        return;
+      }
+
+      setAnalyticsProject(cloudProject);
+      setAnalyticsEvents([]);
+      setAnalyticsLoading(true);
+      setAnalyticsError(null);
+
+      try {
+        const events = await loadProjectAnalyticsEvents({
+          projectId: cloudProject.id,
+          userId: user.id
+        });
+        setAnalyticsEvents(events);
+      } catch (error) {
+        setAnalyticsError(getFriendlyAnalyticsErrorMessage(error));
+      } finally {
+        setAnalyticsLoading(false);
+      }
+    },
+    [user?.id]
+  );
+
   const upsertCloudProjectInState = useCallback((nextProject: CloudProject) => {
     setCloudProjects((currentProjects) => {
       const mergedProjects = [nextProject, ...currentProjects.filter((entry) => entry.id !== nextProject.id)];
@@ -594,6 +662,10 @@ function App() {
       setCloudProjectsStatus('idle');
       setCloudProjectsError(null);
       setCloudSaveStatus('idle');
+      setAnalyticsProject(null);
+      setAnalyticsEvents([]);
+      setAnalyticsLoading(false);
+      setAnalyticsError(null);
     }
   }, [user]);
 
@@ -1897,6 +1969,10 @@ function App() {
         });
         setCloudProjects((currentProjects) => currentProjects.filter((entry) => entry.id !== projectId));
 
+        if (analyticsProject?.id === projectId) {
+          handleCloseAnalyticsDashboard();
+        }
+
         if (cloudProjectId === projectId) {
           setCloudProjectId(null);
           setCloudSaveStatus('idle');
@@ -1907,7 +1983,7 @@ function App() {
         setCloudProjectsError(getFriendlyCloudProjectErrorMessage(error));
       }
     },
-    [cloudProjectId, cloudProjects, showTemporaryNotice, user?.id]
+    [analyticsProject?.id, cloudProjectId, cloudProjects, handleCloseAnalyticsDashboard, showTemporaryNotice, user?.id]
   );
 
   const handleToggleCloudProjectStatus = useCallback(
@@ -1926,6 +2002,10 @@ function App() {
         });
 
         upsertCloudProjectInState(updatedProject);
+
+        setAnalyticsProject((currentProject) =>
+          currentProject?.id === updatedProject.id ? updatedProject : currentProject
+        );
 
         showTemporaryNotice(
           status === 'published' ? 'Experience marked as published' : 'Experience moved back to draft'
@@ -3134,6 +3214,9 @@ function App() {
         onOpenProject={(projectId) => {
           void handleOpenCloudProject(projectId);
         }}
+        onViewAnalytics={(cloudProject) => {
+          void handleViewProjectAnalytics(cloudProject);
+        }}
         onDeleteProject={(projectId) => {
           void handleDeleteCloudProject(projectId);
         }}
@@ -3143,6 +3226,19 @@ function App() {
         onCreateProjectFromUpload={handleCreateProjectFromUpload}
         onCreateProjectFromPrompt={handleCreateProjectFromPrompt}
       />
+      {analyticsProject ? (
+        <ProjectAnalyticsDashboard
+          project={analyticsProject}
+          events={analyticsEvents}
+          loading={analyticsLoading}
+          error={analyticsError}
+          onClose={handleCloseAnalyticsDashboard}
+          onOpenProject={(projectId) => {
+            handleCloseAnalyticsDashboard();
+            void handleOpenCloudProject(projectId);
+          }}
+        />
+      ) : null}
     </>
   );
 }

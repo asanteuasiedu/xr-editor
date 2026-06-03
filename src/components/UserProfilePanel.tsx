@@ -12,6 +12,7 @@ type UserProfilePanelProps = {
   onRefresh: () => void;
   onEditProfile: () => void;
   onOpenProject: (projectId: string) => void;
+  onViewAnalytics: (project: CloudProject) => void;
   onDeleteProject: (projectId: string) => void;
   onToggleProjectStatus: (projectId: string, status: 'draft' | 'published') => void;
   onCreateProjectFromUpload: (file: File) => Promise<void>;
@@ -69,6 +70,7 @@ function UserProfilePanel({
   onRefresh,
   onEditProfile,
   onOpenProject,
+  onViewAnalytics,
   onDeleteProject,
   onToggleProjectStatus,
   onCreateProjectFromUpload,
@@ -384,6 +386,16 @@ function UserProfilePanel({
                       </div>
                     </button>
                     <div className="profile-experience-card-actions">
+                      <button
+                        type="button"
+                        className="ui-button ui-button-secondary mini-button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onViewAnalytics(project);
+                        }}
+                      >
+                        View Analytics
+                      </button>
                       <button
                         type="button"
                         className="ui-button ui-button-secondary mini-button"

@@ -27,3 +27,57 @@ export type ProjectAnalyticsEvent = {
   metadata?: Record<string, unknown> | null;
   created_at?: string;
 };
+
+export type ProjectAnalyticsHotspotSummary = {
+  hotspotId: string | null;
+  hotspotTitle: string;
+  hotspotType: string | null;
+  interactions: number;
+  completions: number;
+  opens: number;
+};
+
+export type ProjectAnalyticsSceneReach = {
+  sceneId: string;
+  sceneName: string;
+  sessionsReached: number;
+  reachRate: number;
+  thumbnailUrl?: string | null;
+  order: number;
+};
+
+export type ProjectAnalyticsDeviceUsage = {
+  deviceType: string;
+  count: number;
+  percentage: number;
+};
+
+export type ProjectAnalyticsDailyMetric = {
+  date: string;
+  value: number | null;
+};
+
+export type ProjectAnalyticsReflectionSummary = {
+  hotspotId: string | null;
+  hotspotTitle: string;
+  sceneName: string;
+  responseText: string;
+  createdAt: string;
+};
+
+export type ProjectAnalyticsSummary = {
+  totalSessions: number;
+  totalEvents: number;
+  averageTimeMinutes: number | null;
+  completionRate: number;
+  totalCompletions: number;
+  topHotspot: ProjectAnalyticsHotspotSummary | null;
+  hotspotInteractionCounts: ProjectAnalyticsHotspotSummary[];
+  sceneReach: ProjectAnalyticsSceneReach[];
+  deviceUsage: ProjectAnalyticsDeviceUsage[];
+  reflectionCount: number;
+  recentReflections: ProjectAnalyticsReflectionSummary[];
+  dailySessions: ProjectAnalyticsDailyMetric[];
+  dailyAverageTime: ProjectAnalyticsDailyMetric[];
+  uniqueHotspotsInteracted: number;
+};
