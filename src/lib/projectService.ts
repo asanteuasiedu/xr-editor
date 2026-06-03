@@ -1,6 +1,10 @@
 import { authConfigurationError, supabase } from './supabaseClient';
 import type { Project } from '../types/project';
-import type { CloudProject } from '../types/cloudProject';
+import type {
+  CloudProject,
+  CloudProjectCreatorProfile,
+  CloudProjectWithProfile
+} from '../types/cloudProject';
 import { validateProjectData } from '../utils/validation';
 
 type SaveProjectToCloudParams = {
@@ -37,6 +41,23 @@ type ProjectRow = {
   created_at: string;
   updated_at: string;
 };
+
+type PublicCreatorProfileRow = {
+  user_id: string;
+  display_name: string | null;
+  organization: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+};
+
+type LoadPublishedProjectsParams = {
+  limit?: number;
+  search?: string;
+};
+
+function isDevelopmentEnvironment() {
+  return typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
+}
 
 function requireSupabaseClient() {
   if (!supabase) {
@@ -88,6 +109,15 @@ function getProjectThumbnail(project: Project) {
 
   const thumbnailUrl = activeScene?.panoramaUrl?.trim();
   return thumbnailUrl ? thumbnailUrl : null;
+}
+
+function mapCreatorProfileRow(row: PublicCreatorProfileRow): CloudProjectCreatorProfile {
+  return {
+    display_name: row.display_name,
+    organization: row.organization,
+    avatar_url: row.avatar_url,
+    bio: row.bio
+  };
 }
 
 export async function saveProjectToCloud({
@@ -174,6 +204,88 @@ export async function loadUserProjects(userId: string): Promise<CloudProject[]> 
   }
 
   return projects;
+}
+
+export async function loadPublishedProjects(
+  params: LoadPublishedProjectsParams = {}
+): Promise<CloudProjectWithProfile[]> {
+  const limit = Math.max(1, Math.min(params.limit ?? 60, 120));
+  const searchTerm = params.search?.trim().toLowerCase() ?? '';
+
+  if (!supabase) {
+    if (isDevelopmentEnvironment()) {
+      console.warn('[explore] skipped published project load because Supabase is not configured');
+    }
+    return [];
+  }
+
+  const client = requireSupabaseClient();
+  const { data, error } = await client
+    .from('projects')
+    .select('*')
+    .eq('status', 'published')
+    .order('updated_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw error;
+  }
+
+  const baseProjects: CloudProject[] = [];
+
+  for (const row of (data ?? []) as ProjectRow[]) {
+    try {
+      baseProjects.push(mapProjectRow(row));
+    } catch (mappingError) {
+      console.warn('[explore] skipping invalid published project', {
+        projectId: row.id,
+        error: mappingError instanceof Error ? mappingError.message : 'Unknown project validation failure.'
+      });
+    }
+  }
+
+  const creatorIds = Array.from(new Set(baseProjects.map((project) => project.user_id).filter(Boolean)));
+  const creatorProfiles = new Map<string, CloudProjectCreatorProfile>();
+
+  if (creatorIds.length > 0) {
+    const { data: creatorData, error: creatorError } = await client
+      .from('public_creator_profiles')
+      .select('user_id, display_name, organization, avatar_url, bio')
+      .in('user_id', creatorIds);
+
+    if (creatorError) {
+      if (isDevelopmentEnvironment()) {
+        console.warn('[explore] could not load creator profile summaries', creatorError);
+      }
+    } else {
+      for (const row of (creatorData ?? []) as PublicCreatorProfileRow[]) {
+        creatorProfiles.set(row.user_id, mapCreatorProfileRow(row));
+      }
+    }
+  }
+
+  const projectsWithProfiles = baseProjects.map((project) => ({
+    ...project,
+    creator_profile: creatorProfiles.get(project.user_id) ?? null
+  }));
+
+  if (!searchTerm) {
+    return projectsWithProfiles;
+  }
+
+  return projectsWithProfiles.filter((project) => {
+    const title = project.title.toLowerCase();
+    const description = project.description?.toLowerCase() ?? '';
+    const creatorName = project.creator_profile?.display_name?.toLowerCase() ?? '';
+    const organization = project.creator_profile?.organization?.toLowerCase() ?? '';
+
+    return (
+      title.includes(searchTerm) ||
+      description.includes(searchTerm) ||
+      creatorName.includes(searchTerm) ||
+      organization.includes(searchTerm)
+    );
+  });
 }
 
 export async function loadCloudProject({ userId, projectId }: LoadCloudProjectParams): Promise<CloudProject> {

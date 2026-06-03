@@ -35,6 +35,8 @@ type SidebarProps = {
   saveStateTone: 'saved' | 'unsaved' | 'restored';
   isUserSignedIn: boolean;
   isCloudProjectLinked: boolean;
+  isViewingPublicProject: boolean;
+  isViewingOwnedPublishedProject: boolean;
   cloudSaveStatus: 'idle' | 'saving' | 'saved' | 'error';
   walkthroughSectionId: EditSection | null;
   onAddScene: () => void;
@@ -252,6 +254,8 @@ function Sidebar({
   saveStateTone,
   isUserSignedIn,
   isCloudProjectLinked,
+  isViewingPublicProject,
+  isViewingOwnedPublishedProject,
   cloudSaveStatus,
   walkthroughSectionId,
   onAddScene,
@@ -295,6 +299,8 @@ function Sidebar({
     ? 'Saving to Account...'
     : isCloudProjectLinked
       ? 'Update Saved Project'
+      : isViewingPublicProject
+        ? 'Save Copy to Account'
       : 'Save to Account';
 
   const getHotspotGeometryLabel = (hotspot: Hotspot) =>
@@ -528,7 +534,11 @@ function Sidebar({
             <p className="helper-note">
               {isCloudProjectLinked
                 ? 'This editor project is linked to a cloud project in your account.'
-                : 'Save the current editor state to your account without changing local draft behavior.'}
+                : isViewingPublicProject
+                  ? isViewingOwnedPublishedProject
+                    ? 'You are viewing the published Explore version of your own experience. Saving will create a separate copy in your account.'
+                    : 'You are viewing a published community experience. Saving to your account will create your own copy.'
+                  : 'Save the current editor state to your account without changing local draft behavior.'}
             </p>
           </>
         ) : (

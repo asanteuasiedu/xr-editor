@@ -3,6 +3,7 @@ import type { CSSProperties, ChangeEvent } from 'react';
 import Layout from './components/Layout';
 import AuthControls from './components/AuthControls';
 import AuthModal, { type AuthModalMode } from './components/AuthModal';
+import ExploreProjectsPanel from './components/ExploreProjectsPanel';
 import ProfileModal from './components/ProfileModal';
 import ProjectAnalyticsDashboard from './components/ProjectAnalyticsDashboard';
 import UserProfilePanel from './components/UserProfilePanel';
@@ -15,12 +16,14 @@ import { loadProjectAnalyticsEvents, trackProjectAnalyticsEvent } from './lib/an
 import {
   deleteCloudProject,
   loadCloudProject,
+  loadPublishedProjects,
   loadUserProjects,
   saveProjectToCloud,
   updateCloudProjectStatus
 } from './lib/projectService';
+import { isSupabaseConfigured } from './lib/supabaseClient';
 import type { ProjectAnalyticsEvent } from './types/analytics';
-import type { CloudProject } from './types/cloudProject';
+import type { CloudProject, CloudProjectWithProfile } from './types/cloudProject';
 import type { Hotspot, HotspotPolygonPoint, Project } from './types/project';
 import {
   DEFAULT_REFLECTION_TITLE,
@@ -167,6 +170,35 @@ function getFriendlyAnalyticsErrorMessage(error: unknown) {
 
   if (normalized.includes('authentication is not configured')) {
     return 'Analytics is not configured yet. Add the Supabase Vite environment variables to continue.';
+  }
+
+  return error.message;
+}
+
+function getFriendlyExploreErrorMessage(error: unknown) {
+  if (!(error instanceof Error)) {
+    return 'Published experiences could not be loaded right now.';
+  }
+
+  const normalized = error.message.trim().toLowerCase();
+
+  if (
+    normalized.includes('relation "projects" does not exist') ||
+    normalized.includes('relation \"projects\" does not exist') ||
+    normalized.includes('could not find the table')
+  ) {
+    return 'Explore is not ready yet. Apply the Supabase projects SQL and try again.';
+  }
+
+  if (
+    normalized.includes('relation "public_creator_profiles" does not exist') ||
+    normalized.includes('relation \"public_creator_profiles\" does not exist')
+  ) {
+    return 'Explore creator profiles are not ready yet. Apply the published-project explore SQL and try again.';
+  }
+
+  if (normalized.includes('authentication is not configured')) {
+    return 'Explore is unavailable until Supabase is configured.';
   }
 
   return error.message;
@@ -418,6 +450,7 @@ function App() {
   const [authModalMode, setAuthModalMode] = useState<AuthModalMode | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isMyProjectsModalOpen, setIsMyProjectsModalOpen] = useState(false);
+  const [isExploreOpen, setIsExploreOpen] = useState(false);
   const [placementMode, setPlacementMode] = useState<PlacementMode>({ type: 'idle' });
   const [importError, setImportError] = useState<string | null>(null);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
@@ -427,6 +460,11 @@ function App() {
   const [cloudProjects, setCloudProjects] = useState<CloudProject[]>([]);
   const [cloudProjectsStatus, setCloudProjectsStatus] = useState<CloudProjectsStatus>('idle');
   const [cloudProjectsError, setCloudProjectsError] = useState<string | null>(null);
+  const [publishedProjects, setPublishedProjects] = useState<CloudProjectWithProfile[]>([]);
+  const [publishedProjectsLoading, setPublishedProjectsLoading] = useState(false);
+  const [publishedProjectsError, setPublishedProjectsError] = useState<string | null>(null);
+  const [viewingPublishedProjectId, setViewingPublishedProjectId] = useState<string | null>(null);
+  const [viewingPublishedProjectOwnerId, setViewingPublishedProjectOwnerId] = useState<string | null>(null);
   const [analyticsProject, setAnalyticsProject] = useState<CloudProject | null>(null);
   const [analyticsEvents, setAnalyticsEvents] = useState<ProjectAnalyticsEvent[]>([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
@@ -579,6 +617,37 @@ function App() {
     setIsMyProjectsModalOpen(false);
   }, []);
 
+  const refreshPublishedProjects = useCallback(async () => {
+    if (!isSupabaseConfigured) {
+      setPublishedProjects([]);
+      setPublishedProjectsLoading(false);
+      setPublishedProjectsError('Explore is unavailable until Supabase is configured.');
+      return;
+    }
+
+    setPublishedProjectsLoading(true);
+    setPublishedProjectsError(null);
+
+    try {
+      const projects = await loadPublishedProjects();
+      setPublishedProjects(projects);
+    } catch (error) {
+      setPublishedProjects([]);
+      setPublishedProjectsError(getFriendlyExploreErrorMessage(error));
+    } finally {
+      setPublishedProjectsLoading(false);
+    }
+  }, []);
+
+  const handleOpenExplore = useCallback(() => {
+    setIsExploreOpen(true);
+    void refreshPublishedProjects();
+  }, [refreshPublishedProjects]);
+
+  const handleCloseExplore = useCallback(() => {
+    setIsExploreOpen(false);
+  }, []);
+
   const handleCloseAnalyticsDashboard = useCallback(() => {
     setAnalyticsProject(null);
     setAnalyticsEvents([]);
@@ -680,6 +749,10 @@ function App() {
   const activeScene = useMemo(
     () => project.scenes.find((scene) => scene.id === project.activeSceneId) ?? project.scenes[0],
     [project]
+  );
+  const isViewingPublicProject = Boolean(viewingPublishedProjectId && !cloudProjectId);
+  const isViewingOwnedPublishedProject = Boolean(
+    isViewingPublicProject && user?.id && viewingPublishedProjectOwnerId === user.id
   );
   const isCreationOnboardingActive = appMode === 'edit' && showCreationOnboarding;
   const activeWalkthroughStep = walkthroughStepIndex === null ? null : EDIT_WALKTHROUGH_STEPS[walkthroughStepIndex];
@@ -1887,9 +1960,19 @@ function App() {
   };
 
   const applyLoadedProject = useCallback(
-    (nextProject: Project, options?: { cloudProjectId?: string | null; notice?: string | null }) => {
+    (
+      nextProject: Project,
+      options?: {
+        cloudProjectId?: string | null;
+        notice?: string | null;
+        viewingPublishedProjectId?: string | null;
+        viewingPublishedProjectOwnerId?: string | null;
+      }
+    ) => {
       setProject(nextProject);
       setCloudProjectId(options?.cloudProjectId ?? null);
+      setViewingPublishedProjectId(options?.viewingPublishedProjectId ?? null);
+      setViewingPublishedProjectOwnerId(options?.viewingPublishedProjectOwnerId ?? null);
       setDiscoveredHotspotIds([]);
       setQuestionResponses({});
       setReflectionResponses({});
@@ -1923,6 +2006,7 @@ function App() {
 
     setCloudSaveStatus('saving');
     setImportError(null);
+    const isSavingCopyFromPublishedExplore = Boolean(viewingPublishedProjectId && !cloudProjectId);
 
     try {
       const savedProject = await saveProjectToCloud({
@@ -1932,14 +2016,23 @@ function App() {
       });
 
       setCloudProjectId(savedProject.id);
+      setViewingPublishedProjectId(null);
+      setViewingPublishedProjectOwnerId(null);
       upsertCloudProjectInState(savedProject);
       setCloudSaveStatus('saved');
-      showTemporaryNotice('Project saved to your account');
+      showTemporaryNotice(isSavingCopyFromPublishedExplore ? 'Saved a copy to your account' : 'Project saved to your account');
     } catch (error) {
       setCloudSaveStatus('error');
       setImportError(getFriendlyCloudProjectErrorMessage(error));
     }
-  }, [cloudProjectId, project, showTemporaryNotice, upsertCloudProjectInState, user?.id]);
+  }, [
+    cloudProjectId,
+    project,
+    showTemporaryNotice,
+    upsertCloudProjectInState,
+    user?.id,
+    viewingPublishedProjectId
+  ]);
 
   const handleOpenCloudProject = useCallback(
     async (projectId: string) => {
@@ -1962,12 +2055,31 @@ function App() {
         });
         setCloudProjectsStatus('ready');
         setIsMyProjectsModalOpen(false);
+        setIsExploreOpen(false);
       } catch (error) {
         setCloudProjectsStatus('error');
         setCloudProjectsError(getFriendlyCloudProjectErrorMessage(error));
       }
     },
     [applyLoadedProject, upsertCloudProjectInState, user?.id]
+  );
+
+  const handleOpenPublishedProject = useCallback(
+    (publishedProject: CloudProjectWithProfile) => {
+      handleCloseAnalyticsDashboard();
+      applyLoadedProject(publishedProject.project_data, {
+        cloudProjectId: null,
+        notice:
+          user?.id && user.id === publishedProject.user_id
+            ? `Viewing the published Explore version of "${publishedProject.title || 'Untitled Project'}". Save to Account will create a separate copy.`
+            : `Viewing "${publishedProject.title || 'Untitled Project'}" from Explore. Save to Account will create your own copy.`,
+        viewingPublishedProjectId: publishedProject.id,
+        viewingPublishedProjectOwnerId: publishedProject.user_id
+      });
+      setIsExploreOpen(false);
+      setIsMyProjectsModalOpen(false);
+    },
+    [applyLoadedProject, handleCloseAnalyticsDashboard, user?.id]
   );
 
   const handleDeleteCloudProject = useCallback(
@@ -2004,12 +2116,25 @@ function App() {
           setCloudSaveStatus('idle');
         }
 
+        if (isExploreOpen) {
+          void refreshPublishedProjects();
+        }
+
         showTemporaryNotice('Cloud project deleted');
       } catch (error) {
         setCloudProjectsError(getFriendlyCloudProjectErrorMessage(error));
       }
     },
-    [analyticsProject?.id, cloudProjectId, cloudProjects, handleCloseAnalyticsDashboard, showTemporaryNotice, user?.id]
+    [
+      analyticsProject?.id,
+      cloudProjectId,
+      cloudProjects,
+      handleCloseAnalyticsDashboard,
+      isExploreOpen,
+      refreshPublishedProjects,
+      showTemporaryNotice,
+      user?.id
+    ]
   );
 
   const handleToggleCloudProjectStatus = useCallback(
@@ -2036,11 +2161,14 @@ function App() {
         showTemporaryNotice(
           status === 'published' ? 'Experience marked as published' : 'Experience moved back to draft'
         );
+        if (isExploreOpen) {
+          void refreshPublishedProjects();
+        }
       } catch (error) {
         setCloudProjectsError(getFriendlyCloudProjectErrorMessage(error));
       }
     },
-    [showTemporaryNotice, upsertCloudProjectInState, user?.id]
+    [isExploreOpen, refreshPublishedProjects, showTemporaryNotice, upsertCloudProjectInState, user?.id]
   );
 
   const handleCreateProjectFromUpload = useCallback(
@@ -2515,6 +2643,13 @@ function App() {
         logoSrc="/branding/udeesa-logo.png"
         headerControls={
           <div className="header-controls-cluster">
+            <button
+              type="button"
+              className="ui-button ui-button-secondary app-auth-button"
+              onClick={handleOpenExplore}
+            >
+              Explore
+            </button>
             <AuthControls
               variant="header"
               onOpenSignIn={handleOpenSignIn}
@@ -2635,6 +2770,8 @@ function App() {
               saveStateTone={saveState}
               isUserSignedIn={Boolean(user)}
               isCloudProjectLinked={Boolean(cloudProjectId)}
+              isViewingPublicProject={isViewingPublicProject}
+              isViewingOwnedPublishedProject={isViewingOwnedPublishedProject}
               cloudSaveStatus={cloudSaveStatus}
               walkthroughSectionId={activeWalkthroughStep?.id ?? null}
               onAddScene={handleAddScene}
@@ -2792,6 +2929,7 @@ function App() {
                 <CreationOnboarding
                   onGenerate={handleOnboardingGenerateScene}
                   onOpenCatalog={handleOpenScenePicker}
+                  onOpenExplore={handleOpenExplore}
                   onOpenSignIn={handleOpenSignIn}
                   onOpenSignUp={handleOpenSignUp}
                   onOpenProfile={handleOpenProfile}
@@ -3226,6 +3364,17 @@ function App() {
         onSwitchMode={setAuthModalMode}
       />
       <ProfileModal isOpen={isProfileModalOpen} onClose={handleCloseProfileModal} />
+      <ExploreProjectsPanel
+        isOpen={isExploreOpen}
+        projects={publishedProjects}
+        loading={publishedProjectsLoading}
+        error={publishedProjectsError}
+        onClose={handleCloseExplore}
+        onRefresh={() => {
+          void refreshPublishedProjects();
+        }}
+        onOpenProject={handleOpenPublishedProject}
+      />
       <UserProfilePanel
         isOpen={isMyProjectsModalOpen}
         projects={cloudProjects}

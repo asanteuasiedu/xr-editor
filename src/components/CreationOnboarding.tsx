@@ -5,6 +5,7 @@ import AuthControls from './AuthControls';
 type CreationOnboardingProps = {
   onGenerate: (prompt: string) => Promise<void>;
   onOpenCatalog: () => void;
+  onOpenExplore: () => void;
   onOpenSignIn: () => void;
   onOpenSignUp: () => void;
   onOpenProfile: () => void;
@@ -15,6 +16,7 @@ type CreationOnboardingStatus = 'idle' | 'loading' | 'error';
 function CreationOnboarding({
   onGenerate,
   onOpenCatalog,
+  onOpenExplore,
   onOpenSignIn,
   onOpenSignUp,
   onOpenProfile
@@ -65,6 +67,13 @@ function CreationOnboarding({
           </div>
         </div>
 
+        <button
+          type="button"
+          className="ui-button ui-button-secondary creation-onboarding-auth-button creation-onboarding-explore-button"
+          onClick={onOpenExplore}
+        >
+          Explore
+        </button>
         <AuthControls
           variant="onboarding"
           onOpenSignIn={onOpenSignIn}

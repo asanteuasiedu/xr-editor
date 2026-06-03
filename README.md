@@ -73,6 +73,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 - Cloud project data lives in the Supabase `projects` table, and the SQL migrations are stored at:
   - [supabase/migrations/create_projects.sql](/Users/homecomputer/xr-editor/supabase/migrations/create_projects.sql)
   - [supabase/migrations/add_project_status.sql](/Users/homecomputer/xr-editor/supabase/migrations/add_project_status.sql)
+  - [supabase/migrations/add_published_project_explore_policy.sql](/Users/homecomputer/xr-editor/supabase/migrations/add_published_project_explore_policy.sql)
 - The table includes:
   - `user_id`
   - `title`
@@ -89,15 +90,38 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
   - insert their own projects
   - update their own projects
   - delete their own projects
+- The Explore migration adds one additional public-facing rule:
+  - anyone can read projects where `status = 'published'`
+  - drafts remain private
+- The Explore migration also creates `public.public_creator_profiles`, a safe public view exposing creator-facing profile fields used on Explore cards:
+  - `display_name`
+  - `organization`
+  - `avatar_url`
+  - `bio`
 - To apply the SQL in Supabase:
   1. Open the Supabase dashboard.
   2. Open **SQL Editor**.
   3. Paste the contents of `supabase/migrations/create_projects.sql` and run it.
   4. Paste the contents of `supabase/migrations/add_project_status.sql` and run it.
-  5. Confirm the `projects` table exists and RLS is enabled.
-  6. Sign up or log in through the app.
-  7. Use **Save to Account** from the Project panel, or create a new draft from the **Profile** grid via **Upload** or **Generate**.
-  8. Open **Profile** from the auth controls to confirm the project is stored in the experience grid.
+  5. Paste the contents of `supabase/migrations/add_published_project_explore_policy.sql` and run it.
+  6. Confirm the `projects` table exists and RLS is enabled.
+  7. Sign up or log in through the app.
+  8. Use **Save to Account** from the Project panel, or create a new draft from the **Profile** grid via **Upload** or **Generate**.
+  9. Open **Profile** from the auth controls to confirm the project is stored in the experience grid.
+
+## Explore
+- The top header now includes **Explore**, available to both guests and signed-in users.
+- Explore shows all `Published` XR projects in a shared community grid with:
+  - preview thumbnail
+  - title
+  - published badge
+  - creator display info
+  - updated date
+- Opening an Explore project loads it into the editor as a public/community experience, not as an owned linked cloud project.
+- Because of that:
+  - `cloudProjectId` remains unset for explored projects
+  - analytics ownership behavior is preserved
+  - **Save to Account** creates the current user's own copy instead of overwriting the original published project
 
 ## Project Analytics Foundation
 - Saved cloud projects can now record lightweight engagement analytics events in Supabase for future dashboard work.
