@@ -772,6 +772,28 @@ function App() {
     },
     [discoveredHotspotIds, progressPercent, totalProgressPoints]
   );
+  const buildHotspotAnalyticsMetadata = useCallback(
+    (hotspot: Hotspot, sceneId: string, sceneName: string, extra?: Record<string, unknown>) => ({
+      sceneId,
+      sceneName,
+      shape: getHotspotShape(hotspot),
+      yaw: hotspot.yaw,
+      pitch: hotspot.pitch,
+      ...(hotspot.polygonPoints?.length
+        ? {
+            polygonPoints: hotspot.polygonPoints.map((point) => ({
+              yaw: point.yaw,
+              pitch: point.pitch
+            }))
+          }
+        : {}),
+      ...(hotspot.type === 'reflection' && hotspot.reflectionPrompt?.trim()
+        ? { reflectionPrompt: hotspot.reflectionPrompt.trim() }
+        : {}),
+      ...(extra ?? {})
+    }),
+    []
+  );
   const totalQuestionCount = questionEntries.length;
   const answeredQuestionIds = useMemo(
     () => Object.keys(questionResponses).filter((hotspotId) => questionEntryById.has(hotspotId)),
@@ -1448,9 +1470,7 @@ function App() {
           hotspot_title: hotspotTitle,
           hotspot_type: clickedHotspot.type,
           progress_value: Number(progressPercent.toFixed(2)),
-          metadata: {
-            shape: getHotspotShape(clickedHotspot)
-          }
+          metadata: buildHotspotAnalyticsMetadata(clickedHotspot, activeScene.id, sceneName)
         });
 
         setActivePreviewHotspotId(hotspotId);
@@ -1535,7 +1555,8 @@ function App() {
           hotspot_id: clickedHotspot.id,
           hotspot_title: hotspotTitle,
           hotspot_type: clickedHotspot.type,
-          progress_value: getProjectedProgressValue(hotspotId)
+          progress_value: getProjectedProgressValue(hotspotId),
+          metadata: buildHotspotAnalyticsMetadata(clickedHotspot, activeScene.id, sceneName)
         });
         return;
       }
@@ -1565,7 +1586,8 @@ function App() {
             hotspot_id: clickedHotspot.id,
             hotspot_title: hotspotTitle,
             hotspot_type: clickedHotspot.type,
-            progress_value: getProjectedProgressValue(hotspotId)
+            progress_value: getProjectedProgressValue(hotspotId),
+            metadata: buildHotspotAnalyticsMetadata(clickedHotspot, activeScene.id, sceneName)
           });
         }
         return;
@@ -1600,7 +1622,8 @@ function App() {
             hotspot_id: clickedHotspot.id,
             hotspot_title: hotspotTitle,
             hotspot_type: clickedHotspot.type,
-            progress_value: getProjectedProgressValue(hotspotId)
+            progress_value: getProjectedProgressValue(hotspotId),
+            metadata: buildHotspotAnalyticsMetadata(clickedHotspot, activeScene.id, sceneName)
           });
         }
         return;
@@ -1623,7 +1646,8 @@ function App() {
           hotspot_id: clickedHotspot.id,
           hotspot_title: hotspotTitle,
           hotspot_type: clickedHotspot.type,
-          progress_value: getProjectedProgressValue(hotspotId)
+          progress_value: getProjectedProgressValue(hotspotId),
+          metadata: buildHotspotAnalyticsMetadata(clickedHotspot, activeScene.id, sceneName)
         });
         return;
       }
@@ -1638,6 +1662,7 @@ function App() {
       activeScene.id,
       activeScene.name,
       appMode,
+      buildHotspotAnalyticsMetadata,
       getProjectedProgressValue,
       openHotspotDetails,
       placementMode.type,
@@ -1766,10 +1791,10 @@ function App() {
         response_text: responseText,
         answer_correct: isCorrect,
         progress_value: Number(progressPercent.toFixed(2)),
-        metadata: {
+        metadata: buildHotspotAnalyticsMetadata(entry.hotspot, entry.sceneId, sceneName, {
           selectedIndex,
           correctAnswerIndex: questionConfig.correctAnswerIndex
-        }
+        })
       });
 
       trackPreviewAnalyticsEvent({
@@ -1781,13 +1806,13 @@ function App() {
         hotspot_type: entry.hotspot.type,
         answer_correct: isCorrect,
         progress_value: Number(progressPercent.toFixed(2)),
-        metadata: {
+        metadata: buildHotspotAnalyticsMetadata(entry.hotspot, entry.sceneId, sceneName, {
           selectedIndex,
           correctAnswerIndex: questionConfig.correctAnswerIndex
-        }
+        })
       });
     },
-    [progressPercent, questionEntryById, questionResponses, sceneNameById, trackPreviewAnalyticsEvent]
+    [buildHotspotAnalyticsMetadata, progressPercent, questionEntryById, questionResponses, sceneNameById, trackPreviewAnalyticsEvent]
   );
 
   const handleUpdateReflectionResponse = useCallback((hotspotId: string, responseText: string) => {
@@ -1828,9 +1853,9 @@ function App() {
       hotspot_type: activeReflectionHotspot.type,
       response_text: trimmedResponse,
       progress_value: projectedProgressValue,
-      metadata: {
+      metadata: buildHotspotAnalyticsMetadata(activeReflectionHotspot, activeScene.id, sceneName, {
         responseLength: trimmedResponse.length
-      }
+      })
     });
     trackPreviewAnalyticsEvent({
       event_type: 'hotspot_complete',
@@ -1841,15 +1866,16 @@ function App() {
       hotspot_type: activeReflectionHotspot.type,
       response_text: trimmedResponse,
       progress_value: projectedProgressValue,
-      metadata: {
+      metadata: buildHotspotAnalyticsMetadata(activeReflectionHotspot, activeScene.id, sceneName, {
         responseLength: trimmedResponse.length
-      }
+      })
     });
   }, [
     activeReflectionHotspot,
     activeReflectionResponse,
     activeScene.id,
     activeScene.name,
+    buildHotspotAnalyticsMetadata,
     getProjectedProgressValue,
     trackPreviewAnalyticsEvent
   ]);

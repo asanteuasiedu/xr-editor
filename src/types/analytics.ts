@@ -61,8 +61,24 @@ export type ProjectAnalyticsReflectionSummary = {
   hotspotId: string | null;
   hotspotTitle: string;
   sceneName: string;
+  reflectionPrompt?: string | null;
   responseText: string;
   createdAt: string;
+};
+
+export type ProjectAnalyticsHeatmapPoint = {
+  hotspotId: string | null;
+  hotspotTitle: string;
+  hotspotType: string | null;
+  sceneId: string | null;
+  sceneName: string;
+  yaw: number;
+  pitch: number;
+  polygonPoints?: Array<{ yaw: number; pitch: number }> | null;
+  interactionCount: number;
+  completionCount: number;
+  intensity: 'low' | 'medium' | 'high';
+  intensityValue: number;
 };
 
 export type ProjectAnalyticsSummary = {
@@ -77,7 +93,9 @@ export type ProjectAnalyticsSummary = {
   deviceUsage: ProjectAnalyticsDeviceUsage[];
   reflectionCount: number;
   recentReflections: ProjectAnalyticsReflectionSummary[];
+  reflectionDetails: ProjectAnalyticsReflectionSummary[];
   dailySessions: ProjectAnalyticsDailyMetric[];
   dailyAverageTime: ProjectAnalyticsDailyMetric[];
   uniqueHotspotsInteracted: number;
+  heatmapPoints: ProjectAnalyticsHeatmapPoint[];
 };

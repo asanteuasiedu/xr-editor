@@ -131,6 +131,12 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
   - scene reach
 - Some metrics are intentionally approximate in this phase. For example, average time is inferred from the first and last tracked event in each session.
 - True spatial heatmaps are a future phase. The current dashboard includes a legend and engagement summaries, not precise viewer-position heatmaps.
+- Hotspot interaction events now also record approximate spatial metadata such as `yaw`, `pitch`, and scene identifiers, which lets the dashboard render heatmap-style engagement blobs over the project preview.
+- The dashboard now includes:
+  - a heatmap-style preview overlay for the active scene
+  - scene reach percentages across the learning pathway
+  - a reflection details view for submitted written responses
+  - CSV export of raw tracked analytics events
 
 ## What Works Now
 - One in-memory project with multiple scenes

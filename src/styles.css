@@ -3123,6 +3123,34 @@ select {
   min-height: 280px;
 }
 
+.analytics-heatmap-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.analytics-heatmap-blob {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  filter: blur(10px);
+  mix-blend-mode: screen;
+}
+
+.analytics-heatmap-blob-low {
+  background: radial-gradient(circle, rgba(99, 217, 255, 0.84), rgba(99, 217, 255, 0.08) 72%, transparent 100%);
+}
+
+.analytics-heatmap-blob-medium {
+  background: radial-gradient(circle, rgba(169, 255, 101, 0.84), rgba(255, 214, 94, 0.18) 70%, transparent 100%);
+}
+
+.analytics-heatmap-blob-high {
+  background: radial-gradient(circle, rgba(255, 111, 76, 0.92), rgba(255, 62, 120, 0.22) 68%, transparent 100%);
+}
+
 .analytics-hero-media img,
 .analytics-hero-placeholder {
   width: 100%;
@@ -3258,6 +3286,12 @@ select {
   margin: 4px 0 0;
   color: rgba(250, 251, 255, 0.98);
   font-size: 1.06rem;
+}
+
+.analytics-reflection-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .analytics-stat-chip {
@@ -3456,6 +3490,88 @@ select {
   line-height: 1.45;
 }
 
+.analytics-reflection-prompt {
+  color: rgba(183, 193, 227, 0.76);
+  font-style: italic;
+}
+
+.analytics-reflection-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(4, 6, 12, 0.52);
+  backdrop-filter: blur(10px);
+}
+
+.analytics-reflection-modal {
+  width: min(760px, 100%);
+  max-height: min(82vh, 880px);
+  overflow: auto;
+  padding: 22px;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(12, 15, 27, 0.98), rgba(8, 10, 18, 0.98));
+  box-shadow: 0 28px 64px rgba(2, 4, 10, 0.42);
+}
+
+.analytics-reflection-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.analytics-reflection-modal-header h3 {
+  margin: 6px 0 0;
+  color: rgba(250, 251, 255, 0.98);
+}
+
+.analytics-reflection-modal-list {
+  display: grid;
+  gap: 14px;
+}
+
+.analytics-reflection-detail-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.analytics-reflection-detail-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.analytics-reflection-detail-top div {
+  display: grid;
+  gap: 4px;
+}
+
+.analytics-reflection-detail-top strong {
+  color: rgba(248, 250, 255, 0.98);
+}
+
+.analytics-reflection-detail-top span,
+.analytics-reflection-detail-top time {
+  color: rgba(211, 216, 238, 0.72);
+  font-size: 0.82rem;
+}
+
+.analytics-reflection-detail-card p {
+  margin: 0;
+  color: rgba(239, 242, 252, 0.92);
+  line-height: 1.5;
+}
+
 .analytics-heatmap-legend {
   display: grid;
   gap: 10px;
@@ -3483,6 +3599,23 @@ select {
 
 .analytics-heatmap-high {
   background: #ff7ba6;
+}
+
+.analytics-heatmap-gradient {
+  width: 100%;
+  height: 18px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #63d9ff 0%, #a9ff65 42%, #ffd65e 68%, #ff5c63 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.analytics-heatmap-scale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: rgba(214, 219, 239, 0.74);
+  font-size: 0.82rem;
 }
 
 .auth-modal-submit,
@@ -5765,6 +5898,17 @@ select {
   .analytics-chart-grid,
   .analytics-scene-grid {
     display: grid;
+  }
+
+  .analytics-reflection-actions,
+  .analytics-reflection-modal-header,
+  .analytics-reflection-detail-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .analytics-reflection-modal-backdrop {
+    padding: 12px;
   }
 
   .presentation-overlay {

@@ -1,5 +1,9 @@
-import { useMemo } from 'react';
-import type { ProjectAnalyticsDailyMetric, ProjectAnalyticsEvent } from '../types/analytics';
+import { useCallback, useMemo, useState } from 'react';
+import type {
+  ProjectAnalyticsDailyMetric,
+  ProjectAnalyticsEvent,
+  ProjectAnalyticsHeatmapPoint
+} from '../types/analytics';
 import type { CloudProject } from '../types/cloudProject';
 import { aggregateProjectAnalytics } from '../utils/analyticsAggregation';
 
@@ -86,6 +90,63 @@ function buildSparklinePath(points: ProjectAnalyticsDailyMetric[]) {
     .join(' ');
 }
 
+function escapeCsvValue(value: string | number | boolean | null | undefined) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  const normalized = String(value);
+  if (/[",\n]/.test(normalized)) {
+    return `"${normalized.replace(/"/g, '""')}"`;
+  }
+
+  return normalized;
+}
+
+function downloadAnalyticsCsv(project: CloudProject, events: ProjectAnalyticsEvent[]) {
+  const headers = ['event_type', 'session_id', 'scene_name', 'hotspot_title', 'created_at', 'response_text'];
+  const rows = events.map((event) =>
+    [
+      event.event_type,
+      event.session_id,
+      event.scene_name ?? '',
+      event.hotspot_title ?? '',
+      event.created_at ?? '',
+      event.response_text ?? ''
+    ]
+      .map(escapeCsvValue)
+      .join(',')
+  );
+
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const fileName = (project.title || 'xr-project').trim().replace(/[^a-z0-9-_]+/gi, '-').toLowerCase();
+
+  link.href = url;
+  link.download = `${fileName || 'xr-project'}-analytics.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+function getHeatmapBlobStyle(point: ProjectAnalyticsHeatmapPoint) {
+  const left = ((point.yaw + 180) / 360) * 100;
+  const top = ((90 - point.pitch) / 180) * 100;
+  const size = 72 + point.intensityValue * 110;
+  const opacity = 0.24 + point.intensityValue * 0.58;
+
+  return {
+    left: `${Math.min(100, Math.max(0, left))}%`,
+    top: `${Math.min(100, Math.max(0, top))}%`,
+    width: `${size}px`,
+    height: `${size}px`,
+    opacity
+  };
+}
+
 function ProjectAnalyticsDashboard({
   project,
   events,
@@ -94,6 +155,7 @@ function ProjectAnalyticsDashboard({
   onClose,
   onOpenProject
 }: ProjectAnalyticsDashboardProps) {
+  const [isReflectionModalOpen, setIsReflectionModalOpen] = useState(false);
   const summary = useMemo(
     () => aggregateProjectAnalytics(events, project.project_data),
     [events, project.project_data]
@@ -102,6 +164,28 @@ function ProjectAnalyticsDashboard({
   const sessionsSparkline = useMemo(() => buildSparklinePath(summary.dailySessions), [summary.dailySessions]);
   const timeSparkline = useMemo(() => buildSparklinePath(summary.dailyAverageTime), [summary.dailyAverageTime]);
   const emptyState = !loading && !error && events.length === 0;
+  const activeScene = useMemo(
+    () =>
+      project.project_data.scenes.find((scene) => scene.id === project.project_data.activeSceneId) ??
+      project.project_data.scenes[0] ??
+      null,
+    [project.project_data]
+  );
+  const heatmapPoints = useMemo(() => {
+    if (!activeScene) {
+      return summary.heatmapPoints;
+    }
+
+    const activeScenePoints = summary.heatmapPoints.filter((point) => point.sceneId === activeScene.id);
+    return activeScenePoints.length > 0 ? activeScenePoints : summary.heatmapPoints;
+  }, [activeScene, summary.heatmapPoints]);
+  const handleExportCsv = useCallback(() => {
+    if (events.length === 0) {
+      return;
+    }
+
+    downloadAnalyticsCsv(project, events);
+  }, [events, project]);
 
   return (
     <div
@@ -119,7 +203,12 @@ function ProjectAnalyticsDashboard({
             <p className="analytics-dashboard-range">{rangeLabel}</p>
           </div>
           <div className="analytics-dashboard-toolbar">
-            <button type="button" className="ui-button ui-button-secondary mini-button" disabled>
+            <button
+              type="button"
+              className="ui-button ui-button-secondary mini-button"
+              onClick={handleExportCsv}
+              disabled={events.length === 0}
+            >
               Export CSV
             </button>
             <button type="button" className="ui-button ui-button-secondary mini-button" onClick={onClose}>
@@ -138,9 +227,23 @@ function ProjectAnalyticsDashboard({
                   <span>360</span>
                 </div>
               )}
+              <div className="analytics-heatmap-layer" aria-hidden="true">
+                {heatmapPoints.map((point) => (
+                  <span
+                    key={`${point.hotspotId ?? point.hotspotTitle}-${point.sceneId ?? 'scene'}`}
+                    className={`analytics-heatmap-blob analytics-heatmap-blob-${point.intensity}`}
+                    style={getHeatmapBlobStyle(point)}
+                    title={`${point.hotspotTitle}: ${point.interactionCount} interactions`}
+                  />
+                ))}
+              </div>
               <div className="analytics-hero-overlay" />
               <div className="analytics-hero-copy">
-                <span className={`profile-experience-status profile-experience-status-${project.status === 'published' ? 'published' : 'draft'}`}>
+                <span
+                  className={`profile-experience-status profile-experience-status-${
+                    project.status === 'published' ? 'published' : 'draft'
+                  }`}
+                >
                   {project.status === 'published' ? 'Published' : 'Draft'}
                 </span>
                 <h3>{project.title || 'Untitled XR Project'}</h3>
@@ -237,7 +340,12 @@ function ProjectAnalyticsDashboard({
                   </div>
                 </div>
                 <div className="analytics-chart-card">
-                  <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="analytics-sparkline analytics-sparkline-secondary" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                    className="analytics-sparkline analytics-sparkline-secondary"
+                    aria-hidden="true"
+                  >
                     <path d={timeSparkline} />
                   </svg>
                   <div className="analytics-chart-labels">
@@ -312,6 +420,7 @@ function ProjectAnalyticsDashboard({
                 <p className="analytics-card-label">Learning Pathway</p>
                 <h3>Scene reach</h3>
               </div>
+              <span className="analytics-section-note">Percentages are based on sessions that reached each scene.</span>
             </div>
             {summary.sceneReach.length > 0 ? (
               <div className="analytics-scene-grid">
@@ -332,7 +441,7 @@ function ProjectAnalyticsDashboard({
                       <div className="analytics-scene-progress" aria-hidden="true">
                         <div style={{ width: `${scene.reachRate}%` }} />
                       </div>
-                      <span>{scene.reachRate.toFixed(1)}% reach</span>
+                      <span>{scene.reachRate.toFixed(1)}% reached</span>
                     </div>
                   </article>
                 ))}
@@ -348,16 +457,29 @@ function ProjectAnalyticsDashboard({
                 <p className="analytics-card-label">Reflection Points</p>
                 <h3>Written responses</h3>
               </div>
-              <span className="analytics-stat-chip">{summary.reflectionCount}</span>
+              <div className="analytics-reflection-actions">
+                <span className="analytics-stat-chip">{summary.reflectionCount}</span>
+                <button
+                  type="button"
+                  className="ui-button ui-button-secondary mini-button"
+                  onClick={() => setIsReflectionModalOpen(true)}
+                  disabled={summary.reflectionDetails.length === 0}
+                >
+                  View reflections
+                </button>
+              </div>
             </div>
             {summary.recentReflections.length > 0 ? (
               <ul className="analytics-reflection-list">
-                {summary.recentReflections.map((reflection) => (
+                {summary.recentReflections.slice(0, 3).map((reflection) => (
                   <li key={`${reflection.hotspotId ?? reflection.hotspotTitle}-${reflection.createdAt}`}>
                     <div>
                       <strong>{reflection.hotspotTitle}</strong>
                       <span>{reflection.sceneName}</span>
                     </div>
+                    {reflection.reflectionPrompt ? (
+                      <p className="analytics-reflection-prompt">{reflection.reflectionPrompt}</p>
+                    ) : null}
                     <p>{reflection.responseText}</p>
                     <time>{formatDateTime(reflection.createdAt)}</time>
                   </li>
@@ -372,28 +494,65 @@ function ProjectAnalyticsDashboard({
             <div className="analytics-section-header">
               <div>
                 <p className="analytics-card-label">Heatmap</p>
-                <h3>Spatial insight legend</h3>
+                <h3>Engagement legend</h3>
               </div>
             </div>
-            <div className="analytics-heatmap-legend">
-              <div>
-                <span className="analytics-heatmap-swatch analytics-heatmap-low" />
-                <strong>Low interaction</strong>
-              </div>
-              <div>
-                <span className="analytics-heatmap-swatch analytics-heatmap-medium" />
-                <strong>Moderate interaction</strong>
-              </div>
-              <div>
-                <span className="analytics-heatmap-swatch analytics-heatmap-high" />
-                <strong>High interaction</strong>
-              </div>
+            <div className="analytics-heatmap-gradient" aria-hidden="true" />
+            <div className="analytics-heatmap-scale">
+              <span>Low Engagement</span>
+              <span>High Engagement</span>
             </div>
             <p className="analytics-section-note">
-              True spatial heatmaps are planned for a later phase. This dashboard currently focuses on event-level engagement summaries.
+              Warmer colors indicate areas with higher interaction and focus. Positions are approximated from hotspot yaw and pitch on the flattened scene preview.
             </p>
           </section>
         </div>
+
+        {isReflectionModalOpen ? (
+          <div className="analytics-reflection-modal-backdrop" role="presentation" onClick={() => setIsReflectionModalOpen(false)}>
+            <div
+              className="analytics-reflection-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Reflection responses"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="analytics-reflection-modal-header">
+                <div>
+                  <p className="analytics-card-label">Reflection Details</p>
+                  <h3>Submitted learner reflections</h3>
+                </div>
+                <button
+                  type="button"
+                  className="ui-button ui-button-secondary mini-button"
+                  onClick={() => setIsReflectionModalOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+              <div className="analytics-reflection-modal-list">
+                {summary.reflectionDetails.map((reflection) => (
+                  <article
+                    key={`${reflection.hotspotId ?? reflection.hotspotTitle}-${reflection.createdAt}`}
+                    className="analytics-reflection-detail-card"
+                  >
+                    <div className="analytics-reflection-detail-top">
+                      <div>
+                        <strong>{reflection.hotspotTitle}</strong>
+                        <span>{reflection.sceneName}</span>
+                      </div>
+                      <time>{formatDateTime(reflection.createdAt)}</time>
+                    </div>
+                    {reflection.reflectionPrompt ? (
+                      <p className="analytics-reflection-prompt">{reflection.reflectionPrompt}</p>
+                    ) : null}
+                    <p>{reflection.responseText}</p>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

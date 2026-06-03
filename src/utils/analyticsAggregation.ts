@@ -2,16 +2,39 @@ import type {
   ProjectAnalyticsDailyMetric,
   ProjectAnalyticsDeviceUsage,
   ProjectAnalyticsEvent,
+  ProjectAnalyticsHeatmapPoint,
   ProjectAnalyticsHotspotSummary,
   ProjectAnalyticsReflectionSummary,
   ProjectAnalyticsSceneReach,
   ProjectAnalyticsSummary
 } from '../types/analytics';
-import type { Hotspot, Project, Scene } from '../types/project';
+import type { Hotspot, HotspotPolygonPoint, Project, Scene } from '../types/project';
 
 type SessionEventGroup = {
   sessionId: string;
   events: ProjectAnalyticsEvent[];
+};
+
+type HeatmapAccumulator = {
+  hotspotId: string | null;
+  hotspotTitle: string;
+  hotspotType: string | null;
+  sceneId: string | null;
+  sceneName: string;
+  yaw: number;
+  pitch: number;
+  polygonPoints?: HotspotPolygonPoint[] | null;
+  interactionCount: number;
+  completionCount: number;
+};
+
+type EventMetadataCoordinates = {
+  yaw: number | null;
+  pitch: number | null;
+  polygonPoints?: HotspotPolygonPoint[] | null;
+  sceneId?: string | null;
+  sceneName?: string | null;
+  reflectionPrompt?: string | null;
 };
 
 function getValidTimestamp(value?: string) {
@@ -50,6 +73,76 @@ function toPercentage(value: number, total: number) {
   return Number(((value / total) * 100).toFixed(1));
 }
 
+function parseOptionalNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function parsePolygonPoints(value: unknown): HotspotPolygonPoint[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const points = value
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') {
+        return null;
+      }
+
+      const yaw = parseOptionalNumber((entry as { yaw?: unknown }).yaw);
+      const pitch = parseOptionalNumber((entry as { pitch?: unknown }).pitch);
+
+      if (yaw === null || pitch === null) {
+        return null;
+      }
+
+      return { yaw, pitch };
+    })
+    .filter((entry): entry is HotspotPolygonPoint => Boolean(entry));
+
+  return points.length > 0 ? points : null;
+}
+
+function getEventMetadataCoordinates(event: ProjectAnalyticsEvent): EventMetadataCoordinates {
+  const metadata = event.metadata;
+
+  if (!metadata || typeof metadata !== 'object') {
+    return {
+      yaw: null,
+      pitch: null,
+      polygonPoints: null,
+      sceneId: null,
+      sceneName: null,
+      reflectionPrompt: null
+    };
+  }
+
+  return {
+    yaw: parseOptionalNumber(metadata.yaw),
+    pitch: parseOptionalNumber(metadata.pitch),
+    polygonPoints: parsePolygonPoints(metadata.polygonPoints),
+    sceneId: typeof metadata.sceneId === 'string' ? metadata.sceneId : null,
+    sceneName: typeof metadata.sceneName === 'string' ? metadata.sceneName : null,
+    reflectionPrompt: typeof metadata.reflectionPrompt === 'string' ? metadata.reflectionPrompt : null
+  };
+}
+
+function getHeatmapIntensity(interactionCount: number, maxInteractionCount: number): ProjectAnalyticsHeatmapPoint['intensity'] {
+  if (maxInteractionCount <= 1) {
+    return interactionCount >= 1 ? 'medium' : 'low';
+  }
+
+  const ratio = interactionCount / maxInteractionCount;
+  if (ratio >= 0.7) {
+    return 'high';
+  }
+
+  if (ratio >= 0.35) {
+    return 'medium';
+  }
+
+  return 'low';
+}
+
 export function aggregateProjectAnalytics(
   events: ProjectAnalyticsEvent[],
   projectData?: Project
@@ -62,16 +155,24 @@ export function aggregateProjectAnalytics(
 
   const eventsBySession = new Map<string, ProjectAnalyticsEvent[]>();
   const hotspotSummaries = new Map<string, ProjectAnalyticsHotspotSummary>();
-  const sceneSessionMap = new Map<string, Set<string>>();
+  const sceneViewSessionMap = new Map<string, Set<string>>();
+  const sceneFallbackSessionMap = new Map<string, Set<string>>();
   const deviceCounts = new Map<string, number>();
   const dailySessionMap = new Map<string, Set<string>>();
   const dailyDurationMap = new Map<string, number[]>();
   const reflections: ProjectAnalyticsReflectionSummary[] = [];
+  const heatmapPoints = new Map<string, HeatmapAccumulator>();
 
   const scenesById = new Map(projectData?.scenes.map((scene) => [scene.id, scene]) ?? []);
-  const hotspotsById = new Map(
-    projectData?.scenes.flatMap((scene) => scene.hotspots.map((hotspot) => [hotspot.id, hotspot] as const)) ?? []
-  );
+  const hotspotSceneById = new Map<string, Scene>();
+  const hotspotsById = new Map<string, Hotspot>();
+
+  for (const scene of projectData?.scenes ?? []) {
+    for (const hotspot of scene.hotspots) {
+      hotspotSceneById.set(hotspot.id, scene);
+      hotspotsById.set(hotspot.id, hotspot);
+    }
+  }
 
   for (const event of sortedEvents) {
     if (!event.session_id) {
@@ -86,16 +187,24 @@ export function aggregateProjectAnalytics(
     }
 
     if (event.scene_id) {
-      const sceneSessions = sceneSessionMap.get(event.scene_id) ?? new Set<string>();
-      sceneSessions.add(event.session_id);
-      sceneSessionMap.set(event.scene_id, sceneSessions);
+      const fallbackSceneSessions = sceneFallbackSessionMap.get(event.scene_id) ?? new Set<string>();
+      fallbackSceneSessions.add(event.session_id);
+      sceneFallbackSessionMap.set(event.scene_id, fallbackSceneSessions);
+
+      if (event.event_type === 'scene_view') {
+        const viewedSceneSessions = sceneViewSessionMap.get(event.scene_id) ?? new Set<string>();
+        viewedSceneSessions.add(event.session_id);
+        sceneViewSessionMap.set(event.scene_id, viewedSceneSessions);
+      }
     }
 
     if (event.hotspot_id) {
+      const sourceHotspot = hotspotsById.get(event.hotspot_id);
+      const sourceScene = hotspotSceneById.get(event.hotspot_id) ?? (event.scene_id ? scenesById.get(event.scene_id) : undefined);
       const existing = hotspotSummaries.get(event.hotspot_id) ?? {
         hotspotId: event.hotspot_id,
-        hotspotTitle: event.hotspot_title?.trim() || formatHotspotLabel(hotspotsById.get(event.hotspot_id)),
-        hotspotType: event.hotspot_type ?? hotspotsById.get(event.hotspot_id)?.type ?? null,
+        hotspotTitle: event.hotspot_title?.trim() || formatHotspotLabel(sourceHotspot),
+        hotspotType: event.hotspot_type ?? sourceHotspot?.type ?? null,
         interactions: 0,
         completions: 0,
         opens: 0
@@ -120,15 +229,57 @@ export function aggregateProjectAnalytics(
       }
 
       hotspotSummaries.set(event.hotspot_id, existing);
+
+      const metadataCoordinates = getEventMetadataCoordinates(event);
+      const yaw = metadataCoordinates.yaw ?? sourceHotspot?.yaw ?? null;
+      const pitch = metadataCoordinates.pitch ?? sourceHotspot?.pitch ?? null;
+      const polygonPoints = metadataCoordinates.polygonPoints ?? sourceHotspot?.polygonPoints ?? null;
+
+      if (yaw !== null && pitch !== null && (isOpen || isCompletion)) {
+        const currentPoint = heatmapPoints.get(event.hotspot_id) ?? {
+          hotspotId: event.hotspot_id,
+          hotspotTitle: existing.hotspotTitle,
+          hotspotType: existing.hotspotType,
+          sceneId: metadataCoordinates.sceneId ?? event.scene_id ?? sourceScene?.id ?? null,
+          sceneName: formatSceneLabel(sourceScene, metadataCoordinates.sceneName ?? event.scene_name ?? null),
+          yaw,
+          pitch,
+          polygonPoints,
+          interactionCount: 0,
+          completionCount: 0
+        };
+
+        currentPoint.yaw = yaw;
+        currentPoint.pitch = pitch;
+        currentPoint.polygonPoints = polygonPoints;
+        currentPoint.sceneId = currentPoint.sceneId ?? metadataCoordinates.sceneId ?? event.scene_id ?? sourceScene?.id ?? null;
+        currentPoint.sceneName = formatSceneLabel(sourceScene, metadataCoordinates.sceneName ?? event.scene_name ?? null);
+        currentPoint.hotspotTitle = existing.hotspotTitle;
+        currentPoint.hotspotType = existing.hotspotType;
+        currentPoint.interactionCount += 1;
+        if (isCompletion) {
+          currentPoint.completionCount += 1;
+        }
+
+        heatmapPoints.set(event.hotspot_id, currentPoint);
+      }
     }
 
     if (event.event_type === 'reflection_submit' && event.response_text?.trim()) {
+      const reflectionHotspot = event.hotspot_id ? hotspotsById.get(event.hotspot_id) : null;
+      const reflectionScene = event.scene_id ? scenesById.get(event.scene_id) : event.hotspot_id ? hotspotSceneById.get(event.hotspot_id) : null;
+      const metadataCoordinates = getEventMetadataCoordinates(event);
+
       reflections.push({
         hotspotId: event.hotspot_id ?? null,
         hotspotTitle:
           event.hotspot_title?.trim() ||
-          formatHotspotLabel(event.hotspot_id ? hotspotsById.get(event.hotspot_id) : null),
-        sceneName: formatSceneLabel(event.scene_id ? scenesById.get(event.scene_id) : null, event.scene_name),
+          formatHotspotLabel(reflectionHotspot),
+        sceneName: formatSceneLabel(reflectionScene, event.scene_name),
+        reflectionPrompt:
+          metadataCoordinates.reflectionPrompt ??
+          reflectionHotspot?.reflectionPrompt?.trim() ??
+          null,
         responseText: event.response_text.trim(),
         createdAt: event.created_at ?? ''
       });
@@ -198,10 +349,11 @@ export function aggregateProjectAnalytics(
   });
 
   const topHotspot = hotspotInteractionCounts[0] ?? null;
+  const sceneReachSource = sceneViewSessionMap.size > 0 ? sceneViewSessionMap : sceneFallbackSessionMap;
 
   const sceneReach: ProjectAnalyticsSceneReach[] =
     projectData?.scenes.map((scene, index) => {
-      const reachedSessions = sceneSessionMap.get(scene.id)?.size ?? 0;
+      const reachedSessions = sceneReachSource.get(scene.id)?.size ?? 0;
       return {
         sceneId: scene.id,
         sceneName: formatSceneLabel(scene),
@@ -211,7 +363,7 @@ export function aggregateProjectAnalytics(
         order: index
       };
     }) ??
-    Array.from(sceneSessionMap.entries()).map(([sceneId, reachedSessions], index) => ({
+    Array.from(sceneReachSource.entries()).map(([sceneId, reachedSessions], index) => ({
       sceneId,
       sceneName: formatSceneLabel(null, sortedEvents.find((event) => event.scene_id === sceneId)?.scene_name ?? null),
       sessionsReached: reachedSessions.size,
@@ -248,6 +400,20 @@ export function aggregateProjectAnalytics(
     })
     .sort((left, right) => left.date.localeCompare(right.date));
 
+  const maxHeatmapCount = Array.from(heatmapPoints.values()).reduce(
+    (highest, point) => Math.max(highest, point.interactionCount),
+    0
+  );
+
+  const normalizedHeatmapPoints: ProjectAnalyticsHeatmapPoint[] = Array.from(heatmapPoints.values())
+    .map((point) => ({
+      ...point,
+      intensity: getHeatmapIntensity(point.interactionCount, maxHeatmapCount),
+      intensityValue:
+        maxHeatmapCount > 0 ? Number((point.interactionCount / maxHeatmapCount).toFixed(2)) : 0
+    }))
+    .sort((left, right) => right.interactionCount - left.interactionCount);
+
   return {
     totalSessions,
     totalEvents: sortedEvents.length,
@@ -259,15 +425,22 @@ export function aggregateProjectAnalytics(
     sceneReach,
     deviceUsage,
     reflectionCount: reflections.length,
+    reflectionDetails: reflections
+      .sort((left, right) => {
+        const leftTime = getValidTimestamp(left.createdAt) ?? 0;
+        const rightTime = getValidTimestamp(right.createdAt) ?? 0;
+        return rightTime - leftTime;
+      }),
     recentReflections: reflections
       .sort((left, right) => {
         const leftTime = getValidTimestamp(left.createdAt) ?? 0;
         const rightTime = getValidTimestamp(right.createdAt) ?? 0;
         return rightTime - leftTime;
       })
-      .slice(0, 5),
+      .slice(0, 8),
     dailySessions,
     dailyAverageTime,
-    uniqueHotspotsInteracted: hotspotInteractionCounts.length
+    uniqueHotspotsInteracted: hotspotInteractionCounts.length,
+    heatmapPoints: normalizedHeatmapPoints
   };
 }
