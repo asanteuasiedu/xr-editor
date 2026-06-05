@@ -131,6 +131,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 - Saved cloud projects can now record lightweight engagement analytics events in Supabase for future dashboard work.
 - The analytics SQL migration lives at:
   - [supabase/migrations/create_project_analytics.sql](/Users/homecomputer/xr-editor/supabase/migrations/create_project_analytics.sql)
+  - [supabase/migrations/update_public_analytics_insert_policy.sql](/Users/homecomputer/xr-editor/supabase/migrations/update_public_analytics_insert_policy.sql)
 - MVP analytics currently track these event types:
   - `session_start`
   - `session_end`
@@ -140,10 +141,14 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
   - `question_answer`
   - `reflection_submit`
   - `project_complete`
-- In this phase, analytics only run for:
-  - logged-in users
-  - cloud-saved projects
-  - Preview / Present Project mode sessions
+- In this phase, analytics run for:
+  - cloud-saved project preview / present sessions
+  - creator-owned preview sessions
+  - public Explore views of `Published` experiences
+- Anonymous Explore viewers are tracked by `session_id` with `user_id = null`.
+- Public users can insert analytics events for `Published` projects only.
+- Only project owners can read analytics for their own projects.
+- Draft projects remain private and do not accept public analytics inserts.
 - Tracked events are stored in `public.project_analytics_events` and include scene context, hotspot context, progress snapshots, timestamps, and lightweight device/browser info.
 - Dashboard and reporting UI are intentionally not included yet; this phase only lays the tracking foundation.
 
@@ -160,11 +165,13 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 - Some metrics are intentionally approximate in this phase. For example, average time is inferred from the first and last tracked event in each session.
 - True spatial heatmaps are a future phase. The current dashboard includes a legend and engagement summaries, not precise viewer-position heatmaps.
 - Hotspot interaction events now also record approximate spatial metadata such as `yaw`, `pitch`, and scene identifiers, which lets the dashboard render heatmap-style engagement blobs over the project preview.
+- Published experiences opened through Explore now write analytics events back to the original published project ID, so creator dashboards can reflect public engagement without giving viewers edit access.
 - The dashboard now includes:
   - a heatmap-style preview overlay for the active scene
   - scene reach percentages across the learning pathway
   - a reflection details view for submitted written responses
   - CSV export of raw tracked analytics events
+  - a refresh action to pull in the latest public engagement events
 
 ## What Works Now
 - One in-memory project with multiple scenes

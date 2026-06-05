@@ -13,6 +13,7 @@ type ProjectAnalyticsDashboardProps = {
   loading?: boolean;
   error?: string | null;
   onClose: () => void;
+  onRefresh?: () => void;
   onOpenProject?: (projectId: string) => void;
 };
 
@@ -153,6 +154,7 @@ function ProjectAnalyticsDashboard({
   loading = false,
   error = null,
   onClose,
+  onRefresh,
   onOpenProject
 }: ProjectAnalyticsDashboardProps) {
   const [isReflectionModalOpen, setIsReflectionModalOpen] = useState(false);
@@ -203,6 +205,14 @@ function ProjectAnalyticsDashboard({
             <p className="analytics-dashboard-range">{rangeLabel}</p>
           </div>
           <div className="analytics-dashboard-toolbar">
+            <button
+              type="button"
+              className="ui-button ui-button-secondary mini-button"
+              onClick={onRefresh}
+              disabled={loading || !onRefresh}
+            >
+              {loading ? 'Refreshing...' : 'Refresh'}
+            </button>
             <button
               type="button"
               className="ui-button ui-button-secondary mini-button"

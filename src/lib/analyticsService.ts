@@ -3,7 +3,6 @@ import type { ProjectAnalyticsEvent } from '../types/analytics';
 
 type LoadProjectAnalyticsEventsParams = {
   projectId: string;
-  userId: string;
   dateFrom?: string;
   dateTo?: string;
 };
@@ -93,11 +92,10 @@ export async function trackProjectAnalyticsEvent(event: ProjectAnalyticsEvent): 
 
 export async function loadProjectAnalyticsEvents({
   projectId,
-  userId,
   dateFrom,
   dateTo
 }: LoadProjectAnalyticsEventsParams): Promise<ProjectAnalyticsEvent[]> {
-  if (!projectId.trim() || !userId.trim()) {
+  if (!projectId.trim()) {
     return [];
   }
 
@@ -131,5 +129,14 @@ export async function loadProjectAnalyticsEvents({
     throw error;
   }
 
-  return ((data ?? []) as Record<string, unknown>[]).map(mapAnalyticsEventRow);
+  const events = ((data ?? []) as Record<string, unknown>[]).map(mapAnalyticsEventRow);
+
+  if (isDevelopmentEnvironment()) {
+    console.info('[analytics] loaded events', {
+      projectId,
+      count: events.length
+    });
+  }
+
+  return events;
 }

@@ -73,6 +73,7 @@ type Generate360SceneResult = {
 };
 type CloudSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 type CloudProjectsStatus = 'idle' | 'loading' | 'ready' | 'error';
+type AnalyticsProjectSource = 'owned' | 'explore' | null;
 const PREVIEW_HINT_DISMISSED_KEY = 'xr-editor.preview-hint-dismissed.v1';
 const EDIT_WALKTHROUGH_DISMISSED_KEY = 'xr-editor.edit-walkthrough-dismissed.v1';
 const PREVIEW_INTERACTION_DEBUG = false;
@@ -110,6 +111,10 @@ function getActiveSceneFromProject(project: Project) {
 
 function projectHasValidActiveScene(project: Project) {
   return Boolean(getActiveSceneFromProject(project)?.panoramaUrl.trim());
+}
+
+function isDevelopmentEnvironment() {
+  return typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
 }
 
 function getFriendlyCloudProjectErrorMessage(error: unknown) {
@@ -457,6 +462,9 @@ function App() {
   const [saveState, setSaveState] = useState<SaveState>(initialLoad.restored ? 'restored' : 'saved');
   const [cloudProjectId, setCloudProjectId] = useState<string | null>(null);
   const [activeCloudProjectOwnerId, setActiveCloudProjectOwnerId] = useState<string | null>(null);
+  const [activeAnalyticsProjectId, setActiveAnalyticsProjectId] = useState<string | null>(null);
+  const [activeAnalyticsProjectOwnerId, setActiveAnalyticsProjectOwnerId] = useState<string | null>(null);
+  const [activeAnalyticsProjectSource, setActiveAnalyticsProjectSource] = useState<AnalyticsProjectSource>(null);
   const [cloudSaveStatus, setCloudSaveStatus] = useState<CloudSaveStatus>('idle');
   const [cloudProjects, setCloudProjects] = useState<CloudProject[]>([]);
   const [cloudProjectsStatus, setCloudProjectsStatus] = useState<CloudProjectsStatus>('idle');
@@ -510,6 +518,8 @@ function App() {
   const analyticsSessionIdRef = useRef<string | null>(null);
   const analyticsProjectIdRef = useRef<string | null>(null);
   const analyticsUserIdRef = useRef<string | null>(null);
+  const analyticsProjectOwnerIdRef = useRef<string | null>(null);
+  const analyticsProjectSourceRef = useRef<AnalyticsProjectSource>(null);
   const lastTrackedPreviewSceneKeyRef = useRef<string | null>(null);
   const completedProjectSessionKeyRef = useRef<string | null>(null);
 
@@ -528,28 +538,58 @@ function App() {
 
   const trackPreviewAnalyticsEvent = useCallback(
     (event: Omit<ProjectAnalyticsEvent, 'project_id' | 'user_id' | 'session_id' | 'device_type' | 'browser_name'>) => {
-      if (appMode !== 'preview' || !cloudProjectId || !user?.id) {
+      if (appMode !== 'preview' || !activeAnalyticsProjectId) {
+        if (isDevelopmentEnvironment()) {
+          console.info('[analytics] skipped', {
+            reason: appMode !== 'preview' ? 'not_in_preview_mode' : 'missing_analytics_project_id',
+            cloudProjectId,
+            analyticsProjectId: activeAnalyticsProjectId,
+            mode: appMode
+          });
+        }
         return;
       }
 
       const sessionId =
-        analyticsSessionIdRef.current && analyticsProjectIdRef.current === cloudProjectId
+        analyticsSessionIdRef.current && analyticsProjectIdRef.current === activeAnalyticsProjectId
           ? analyticsSessionIdRef.current
-          : getOrCreateAnalyticsSessionId(cloudProjectId);
+          : getOrCreateAnalyticsSessionId(activeAnalyticsProjectId);
+      const viewerIsOwner = Boolean(user?.id && activeAnalyticsProjectOwnerId === user.id);
+      const analyticsSource = activeAnalyticsProjectSource === 'explore' ? 'explore' : 'owner_preview';
 
       analyticsSessionIdRef.current = sessionId;
-      analyticsProjectIdRef.current = cloudProjectId;
+      analyticsProjectIdRef.current = activeAnalyticsProjectId;
+      analyticsUserIdRef.current = user?.id ?? null;
+      analyticsProjectOwnerIdRef.current = activeAnalyticsProjectOwnerId;
+      analyticsProjectSourceRef.current = activeAnalyticsProjectSource;
+
+      if (isDevelopmentEnvironment()) {
+        console.info('[analytics] tracking event', {
+          projectId: activeAnalyticsProjectId,
+          eventType: event.event_type,
+          sessionId,
+          source: analyticsSource,
+          hasUser: Boolean(user?.id)
+        });
+      }
 
       void trackProjectAnalyticsEvent({
         ...event,
-        project_id: cloudProjectId,
-        user_id: user.id,
+        project_id: activeAnalyticsProjectId,
+        user_id: user?.id ?? null,
         session_id: sessionId,
         device_type: getDeviceType(),
-        browser_name: getBrowserName()
+        browser_name: getBrowserName(),
+        metadata: {
+          ...(event.metadata ?? {}),
+          source: analyticsSource,
+          isPublicView: !viewerIsOwner,
+          ownerId: activeAnalyticsProjectOwnerId,
+          viewerIsOwner
+        }
       });
     },
-    [appMode, cloudProjectId, user?.id]
+    [activeAnalyticsProjectId, activeAnalyticsProjectOwnerId, activeAnalyticsProjectSource, appMode, cloudProjectId, user?.id]
   );
 
   const handleOpenSignIn = useCallback(() => {
@@ -659,6 +699,12 @@ function App() {
     setAnalyticsError(null);
   }, []);
 
+  const loadAnalyticsForProject = useCallback(async (projectId: string) => {
+    return loadProjectAnalyticsEvents({
+      projectId
+    });
+  }, []);
+
   const handleViewProjectAnalytics = useCallback(
     async (cloudProject: CloudProject) => {
       if (!user?.id) {
@@ -671,10 +717,7 @@ function App() {
       setAnalyticsError(null);
 
       try {
-        const events = await loadProjectAnalyticsEvents({
-          projectId: cloudProject.id,
-          userId: user.id
-        });
+        const events = await loadAnalyticsForProject(cloudProject.id);
         setAnalyticsEvents(events);
       } catch (error) {
         setAnalyticsError(getFriendlyAnalyticsErrorMessage(error));
@@ -682,8 +725,26 @@ function App() {
         setAnalyticsLoading(false);
       }
     },
-    [user?.id]
+    [loadAnalyticsForProject, user?.id]
   );
+
+  const handleRefreshProjectAnalytics = useCallback(async () => {
+    if (!user?.id || !analyticsProject) {
+      return;
+    }
+
+    setAnalyticsLoading(true);
+    setAnalyticsError(null);
+
+    try {
+      const events = await loadAnalyticsForProject(analyticsProject.id);
+      setAnalyticsEvents(events);
+    } catch (error) {
+      setAnalyticsError(getFriendlyAnalyticsErrorMessage(error));
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, [analyticsProject, loadAnalyticsForProject, user?.id]);
 
   const upsertCloudProjectInState = useCallback((nextProject: CloudProject) => {
     setCloudProjects((currentProjects) => {
@@ -1018,18 +1079,35 @@ function App() {
       const previousProjectId = analyticsProjectIdRef.current;
       const previousSessionId = analyticsSessionIdRef.current;
       const previousUserId = analyticsUserIdRef.current;
+      const previousOwnerId = analyticsProjectOwnerIdRef.current;
+      const previousSource = analyticsProjectSourceRef.current;
+      const viewerIsOwner = Boolean(previousUserId && previousOwnerId && previousUserId === previousOwnerId);
 
-      if (previousProjectId && previousSessionId && previousUserId) {
+      if (previousProjectId && previousSessionId) {
+        if (isDevelopmentEnvironment()) {
+          console.info('[analytics] tracking event', {
+            projectId: previousProjectId,
+            eventType: 'session_end',
+            sessionId: previousSessionId,
+            source: previousSource === 'explore' ? 'explore' : 'owner_preview',
+            hasUser: Boolean(previousUserId)
+          });
+        }
+
         void trackProjectAnalyticsEvent({
           project_id: previousProjectId,
-          user_id: previousUserId,
+          user_id: previousUserId ?? null,
           session_id: previousSessionId,
           event_type: 'session_end',
           progress_value: Number(progressPercent.toFixed(2)),
           device_type: getDeviceType(),
           browser_name: getBrowserName(),
           metadata: {
-            reason
+            reason,
+            source: previousSource === 'explore' ? 'explore' : 'owner_preview',
+            isPublicView: !viewerIsOwner,
+            ownerId: previousOwnerId,
+            viewerIsOwner
           }
         });
       }
@@ -1041,11 +1119,13 @@ function App() {
       analyticsSessionIdRef.current = null;
       analyticsProjectIdRef.current = null;
       analyticsUserIdRef.current = null;
+      analyticsProjectOwnerIdRef.current = null;
+      analyticsProjectSourceRef.current = null;
       lastTrackedPreviewSceneKeyRef.current = null;
       completedProjectSessionKeyRef.current = null;
     };
 
-    if (appMode !== 'preview' || !cloudProjectId || !user?.id) {
+    if (appMode !== 'preview' || !activeAnalyticsProjectId) {
       endAnalyticsSession(appMode === 'preview' ? 'tracking_unavailable' : 'preview_exit');
       return;
     }
@@ -1053,20 +1133,24 @@ function App() {
     if (
       analyticsProjectIdRef.current &&
       analyticsSessionIdRef.current &&
-      analyticsUserIdRef.current &&
-      analyticsProjectIdRef.current !== cloudProjectId
+      analyticsProjectIdRef.current !== activeAnalyticsProjectId
     ) {
       endAnalyticsSession('project_switch');
     }
 
-    if (analyticsSessionIdRef.current && analyticsProjectIdRef.current === cloudProjectId) {
+    if (analyticsSessionIdRef.current && analyticsProjectIdRef.current === activeAnalyticsProjectId) {
+      analyticsUserIdRef.current = user?.id ?? null;
+      analyticsProjectOwnerIdRef.current = activeAnalyticsProjectOwnerId;
+      analyticsProjectSourceRef.current = activeAnalyticsProjectSource;
       return;
     }
 
-    const sessionId = getOrCreateAnalyticsSessionId(cloudProjectId);
+    const sessionId = getOrCreateAnalyticsSessionId(activeAnalyticsProjectId);
     analyticsSessionIdRef.current = sessionId;
-    analyticsProjectIdRef.current = cloudProjectId;
-    analyticsUserIdRef.current = user.id;
+    analyticsProjectIdRef.current = activeAnalyticsProjectId;
+    analyticsUserIdRef.current = user?.id ?? null;
+    analyticsProjectOwnerIdRef.current = activeAnalyticsProjectOwnerId;
+    analyticsProjectSourceRef.current = activeAnalyticsProjectSource;
     lastTrackedPreviewSceneKeyRef.current = null;
     completedProjectSessionKeyRef.current = null;
 
@@ -1081,10 +1165,12 @@ function App() {
       }
     });
   }, [
+    activeAnalyticsProjectId,
+    activeAnalyticsProjectOwnerId,
+    activeAnalyticsProjectSource,
     activeScene.id,
     activeScene.name,
     appMode,
-    cloudProjectId,
     progressPercent,
     project.scenes.length,
     totalProgressPoints,
@@ -1093,7 +1179,7 @@ function App() {
   ]);
 
   useEffect(() => {
-    if (appMode !== 'preview' || !cloudProjectId || !user?.id || !analyticsSessionIdRef.current) {
+    if (appMode !== 'preview' || !activeAnalyticsProjectId || !analyticsSessionIdRef.current) {
       return;
     }
 
@@ -1116,25 +1202,23 @@ function App() {
     activeScene.hotspots.length,
     activeScene.id,
     activeScene.name,
+    activeAnalyticsProjectId,
     appMode,
-    cloudProjectId,
     progressPercent,
-    trackPreviewAnalyticsEvent,
-    user?.id
+    trackPreviewAnalyticsEvent
   ]);
 
   useEffect(() => {
     if (
       appMode !== 'preview' ||
-      !cloudProjectId ||
-      !user?.id ||
+      !activeAnalyticsProjectId ||
       !analyticsSessionIdRef.current ||
       !isExperienceComplete
     ) {
       return;
     }
 
-    const sessionKey = `${cloudProjectId}:${analyticsSessionIdRef.current}`;
+    const sessionKey = `${activeAnalyticsProjectId}:${analyticsSessionIdRef.current}`;
     if (completedProjectSessionKeyRef.current === sessionKey) {
       return;
     }
@@ -1154,14 +1238,13 @@ function App() {
   }, [
     activeScene.id,
     activeScene.name,
+    activeAnalyticsProjectId,
     answeredQuestionCount,
     appMode,
-    cloudProjectId,
     isExperienceComplete,
     totalCorrectAnswers,
     totalQuestionCount,
-    trackPreviewAnalyticsEvent,
-    user?.id
+    trackPreviewAnalyticsEvent
   ]);
 
   const handleCloseInfoPreview = () => {
@@ -2037,6 +2120,9 @@ function App() {
       options?: {
         cloudProjectId?: string | null;
         activeCloudProjectOwnerId?: string | null;
+        analyticsProjectId?: string | null;
+        analyticsProjectOwnerId?: string | null;
+        analyticsProjectSource?: AnalyticsProjectSource;
         notice?: string | null;
         viewingPublishedProjectId?: string | null;
         viewingPublishedProjectOwnerId?: string | null;
@@ -2045,9 +2131,30 @@ function App() {
         showCreationOnboarding?: boolean;
       }
     ) => {
+      const nextAnalyticsProjectId =
+        options?.analyticsProjectId ??
+        options?.cloudProjectId ??
+        options?.viewingPublishedProjectId ??
+        null;
+      const nextAnalyticsProjectOwnerId =
+        options?.analyticsProjectOwnerId ??
+        options?.activeCloudProjectOwnerId ??
+        options?.viewingPublishedProjectOwnerId ??
+        null;
+      const nextAnalyticsProjectSource =
+        options?.analyticsProjectSource ??
+        (nextAnalyticsProjectId
+          ? options?.viewingPublishedProjectId && !options?.cloudProjectId
+            ? 'explore'
+            : 'owned'
+          : null);
+
       setProject(nextProject);
       setCloudProjectId(options?.cloudProjectId ?? null);
       setActiveCloudProjectOwnerId(options?.activeCloudProjectOwnerId ?? null);
+      setActiveAnalyticsProjectId(nextAnalyticsProjectId);
+      setActiveAnalyticsProjectOwnerId(nextAnalyticsProjectOwnerId);
+      setActiveAnalyticsProjectSource(nextAnalyticsProjectSource);
       setViewingPublishedProjectId(options?.viewingPublishedProjectId ?? null);
       setViewingPublishedProjectOwnerId(options?.viewingPublishedProjectOwnerId ?? null);
       setDiscoveredHotspotIds([]);
@@ -2085,6 +2192,9 @@ function App() {
     setAuthModalMode(null);
     setCloudProjectId(null);
     setActiveCloudProjectOwnerId(null);
+    setActiveAnalyticsProjectId(null);
+    setActiveAnalyticsProjectOwnerId(null);
+    setActiveAnalyticsProjectSource(null);
     setViewingPublishedProjectId(null);
     setViewingPublishedProjectOwnerId(null);
     setCloudProjects([]);
@@ -2139,6 +2249,8 @@ function App() {
     analyticsSessionIdRef.current = null;
     analyticsProjectIdRef.current = null;
     analyticsUserIdRef.current = null;
+    analyticsProjectOwnerIdRef.current = null;
+    analyticsProjectSourceRef.current = null;
     lastTrackedPreviewSceneKeyRef.current = null;
     completedProjectSessionKeyRef.current = null;
   }, []);
@@ -2183,6 +2295,12 @@ function App() {
       setAnalyticsEvents([]);
       setAnalyticsLoading(false);
       setAnalyticsError(null);
+
+      if (!viewingPublishedProjectId) {
+        setActiveAnalyticsProjectId(null);
+        setActiveAnalyticsProjectOwnerId(null);
+        setActiveAnalyticsProjectSource(null);
+      }
     }
   }, [appMode, project, resetAppForLoggedOutStart, user?.id, viewingPublishedProjectId]);
 
@@ -2213,6 +2331,9 @@ function App() {
         applyLoadedProject(savedProject.project_data, {
           cloudProjectId: savedProject.id,
           activeCloudProjectOwnerId: savedProject.user_id,
+          analyticsProjectId: savedProject.id,
+          analyticsProjectOwnerId: savedProject.user_id,
+          analyticsProjectSource: 'owned',
           notice: null,
           appMode: 'edit',
           isContextPanelOpen: true,
@@ -2222,6 +2343,9 @@ function App() {
       } else {
         setCloudProjectId(savedProject.id);
         setActiveCloudProjectOwnerId(savedProject.user_id);
+        setActiveAnalyticsProjectId(savedProject.id);
+        setActiveAnalyticsProjectOwnerId(savedProject.user_id);
+        setActiveAnalyticsProjectSource('owned');
         setViewingPublishedProjectId(null);
         setViewingPublishedProjectOwnerId(null);
         showTemporaryNotice(canUpdateExistingCloudProject ? 'Project saved to your account' : 'Project saved to your account');
@@ -2262,6 +2386,9 @@ function App() {
         applyLoadedProject(cloudProject.project_data, {
           cloudProjectId: cloudProject.id,
           activeCloudProjectOwnerId: cloudProject.user_id,
+          analyticsProjectId: cloudProject.id,
+          analyticsProjectOwnerId: cloudProject.user_id,
+          analyticsProjectSource: 'owned',
           notice: `Loaded "${cloudProject.title || 'Untitled Project'}" from your account.`
         });
         setCloudProjectsStatus('ready');
@@ -2285,6 +2412,9 @@ function App() {
         applyLoadedProject(publishedProject.project_data, {
           cloudProjectId: publishedProject.id,
           activeCloudProjectOwnerId: publishedProject.user_id,
+          analyticsProjectId: publishedProject.id,
+          analyticsProjectOwnerId: publishedProject.user_id,
+          analyticsProjectSource: 'owned',
           notice: `Loaded your published experience "${publishedProject.title || 'Untitled Project'}".`,
           viewingPublishedProjectId: null,
           viewingPublishedProjectOwnerId: null,
@@ -2296,6 +2426,9 @@ function App() {
         applyLoadedProject(publishedProject.project_data, {
           cloudProjectId: null,
           activeCloudProjectOwnerId: null,
+          analyticsProjectId: publishedProject.id,
+          analyticsProjectOwnerId: publishedProject.user_id,
+          analyticsProjectSource: 'explore',
           notice:
             user?.id
               ? `Viewing "${publishedProject.title || 'Untitled Project'}" from Explore. Save a copy to edit your own version.`
@@ -2346,6 +2479,9 @@ function App() {
         if (cloudProjectId === projectId) {
           setCloudProjectId(null);
           setActiveCloudProjectOwnerId(null);
+          setActiveAnalyticsProjectId(null);
+          setActiveAnalyticsProjectOwnerId(null);
+          setActiveAnalyticsProjectSource(null);
           setCloudSaveStatus('idle');
         }
 
@@ -2432,6 +2568,9 @@ function App() {
         applyLoadedProject(savedProject.project_data, {
           cloudProjectId: savedProject.id,
           activeCloudProjectOwnerId: savedProject.user_id,
+          analyticsProjectId: savedProject.id,
+          analyticsProjectOwnerId: savedProject.user_id,
+          analyticsProjectSource: 'owned',
           notice: null
         });
         setCloudProjectId(savedProject.id);
@@ -2475,6 +2614,9 @@ function App() {
         applyLoadedProject(savedProject.project_data, {
           cloudProjectId: savedProject.id,
           activeCloudProjectOwnerId: savedProject.user_id,
+          analyticsProjectId: savedProject.id,
+          analyticsProjectOwnerId: savedProject.user_id,
+          analyticsProjectSource: 'owned',
           notice: null
         });
         setCloudProjectId(savedProject.id);
@@ -3749,6 +3891,9 @@ function App() {
           loading={analyticsLoading}
           error={analyticsError}
           onClose={handleCloseAnalyticsDashboard}
+          onRefresh={() => {
+            void handleRefreshProjectAnalytics();
+          }}
           onOpenProject={(projectId) => {
             handleCloseAnalyticsDashboard();
             void handleOpenCloudProject(projectId);
