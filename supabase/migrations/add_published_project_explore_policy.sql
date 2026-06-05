@@ -5,6 +5,8 @@ on public.projects
 for select
 using (status = 'published');
 
+grant select on public.projects to anon, authenticated;
+
 create or replace view public.public_creator_profiles as
 select
   user_id,

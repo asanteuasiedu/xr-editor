@@ -212,6 +212,11 @@ export async function loadPublishedProjects(
   const limit = Math.max(1, Math.min(params.limit ?? 60, 120));
   const searchTerm = params.search?.trim().toLowerCase() ?? '';
 
+  console.info('[explore] loading published projects', {
+    limit,
+    hasSearch: Boolean(searchTerm)
+  });
+
   if (!supabase) {
     if (isDevelopmentEnvironment()) {
       console.warn('[explore] skipped published project load because Supabase is not configured');
@@ -228,6 +233,9 @@ export async function loadPublishedProjects(
     .limit(limit);
 
   if (error) {
+    console.error('[explore] failed to load published projects', {
+      message: error.message
+    });
     throw error;
   }
 
@@ -270,10 +278,11 @@ export async function loadPublishedProjects(
   }));
 
   if (!searchTerm) {
+    console.info('[explore] published projects loaded', { count: projectsWithProfiles.length });
     return projectsWithProfiles;
   }
 
-  return projectsWithProfiles.filter((project) => {
+  const filteredProjects = projectsWithProfiles.filter((project) => {
     const title = project.title.toLowerCase();
     const description = project.description?.toLowerCase() ?? '';
     const creatorName = project.creator_profile?.display_name?.toLowerCase() ?? '';
@@ -286,6 +295,13 @@ export async function loadPublishedProjects(
       organization.includes(searchTerm)
     );
   });
+
+  console.info('[explore] published projects loaded', {
+    count: filteredProjects.length,
+    filteredFrom: projectsWithProfiles.length
+  });
+
+  return filteredProjects;
 }
 
 export async function loadCloudProject({ userId, projectId }: LoadCloudProjectParams): Promise<CloudProject> {

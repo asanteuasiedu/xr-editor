@@ -111,12 +111,13 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 
 ## Explore
 - The top header now includes **Explore**, available to both guests and signed-in users.
-- Explore shows all `Published` XR projects in a shared community grid with:
+- Explore shows all `Published` XR projects from every account in a shared community grid with:
   - preview thumbnail
   - title
   - published badge
   - creator display info
   - updated date
+- Draft projects remain private and do not appear in Explore.
 - Opening an Explore project loads it into the editor as a public/community experience, not as an owned linked cloud project.
 - Because of that:
   - `cloudProjectId` remains unset for explored projects
