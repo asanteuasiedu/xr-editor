@@ -119,6 +119,11 @@ function PanoramaViewer({
   const [showPreviewEntryRipple, setShowPreviewEntryRipple] = useState(false);
   const [projectedPolygons, setProjectedPolygons] = useState<ProjectedPolygon[]>([]);
   const [projectedDrawingPoints, setProjectedDrawingPoints] = useState<ScreenPoint[]>([]);
+  const isEmptySceneState = !hasSceneMedia && !errorMessage;
+  const fallbackTitle = isEmptySceneState ? 'Select or generate a scene' : errorMessage ?? 'This scene could not be loaded.';
+  const fallbackDescription = isEmptySceneState
+    ? 'Start by describing a learning environment or choosing a location from the catalog.'
+    : 'Try selecting a different panorama or generating a new scene to continue.';
 
   useEffect(() => {
     onActivateHotspotRef.current = onActivateHotspot;
@@ -454,7 +459,7 @@ function PanoramaViewer({
     viewer.on('error', () => {
       clearAutoRotateResume();
       setIsPanoramaLoading(false);
-      setErrorMessage('Unable to load scene media.');
+      setErrorMessage('This scene could not be loaded.');
     });
 
     const handleContextMenu = (event: MouseEvent) => {
@@ -1119,7 +1124,8 @@ function PanoramaViewer({
               <div className="viewer-empty-ripple-rings" />
               <div className="viewer-empty-ripple-sheen" />
             </div>
-            <p className="viewer-empty-message">{errorMessage ?? 'Select or upload a scene'}</p>
+            <p className="viewer-empty-message">{fallbackTitle}</p>
+            <p className="viewer-empty-subtext">{fallbackDescription}</p>
           </div>
         ) : null}
         {!isPreviewMode && editorPopoverContent ? (

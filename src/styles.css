@@ -2075,6 +2075,16 @@ select {
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.58);
 }
 
+.viewer-empty-subtext {
+  position: relative;
+  z-index: 1;
+  max-width: 28rem;
+  margin: 0;
+  color: rgba(36, 50, 77, 0.76);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
 .error-note {
   margin: 0 0 12px;
   color: var(--danger);
@@ -4534,6 +4544,17 @@ select {
 
 .preview-hint-card p {
   margin: 0;
+}
+
+.public-view-helper-card {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.public-view-helper-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .mobile-ar-preview-button {

@@ -456,6 +456,7 @@ function App() {
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>(initialLoad.restored ? 'restored' : 'saved');
   const [cloudProjectId, setCloudProjectId] = useState<string | null>(null);
+  const [activeCloudProjectOwnerId, setActiveCloudProjectOwnerId] = useState<string | null>(null);
   const [cloudSaveStatus, setCloudSaveStatus] = useState<CloudSaveStatus>('idle');
   const [cloudProjects, setCloudProjects] = useState<CloudProject[]>([]);
   const [cloudProjectsStatus, setCloudProjectsStatus] = useState<CloudProjectsStatus>('idle');
@@ -503,6 +504,8 @@ function App() {
   const noticeTimeoutRef = useRef<number | null>(null);
   const previewHotspotPulseTimeoutRef = useRef<number | null>(null);
   const previousAppModeRef = useRef<AppMode>('edit');
+  const previousUserIdRef = useRef<string | null>(user?.id ?? null);
+  const skipNextLocalDraftSaveRef = useRef(false);
   const analyticsSessionIdRef = useRef<string | null>(null);
   const analyticsProjectIdRef = useRef<string | null>(null);
   const analyticsUserIdRef = useRef<string | null>(null);
@@ -705,6 +708,18 @@ function App() {
       return;
     }
 
+    if (skipNextLocalDraftSaveRef.current) {
+      skipNextLocalDraftSaveRef.current = false;
+      return;
+    }
+
+    const isViewingExternalPublishedProject =
+      Boolean(viewingPublishedProjectId) && (!user?.id || viewingPublishedProjectOwnerId !== user.id);
+
+    if (isViewingExternalPublishedProject) {
+      return;
+    }
+
     setSaveState('unsaved');
     const timeoutId = window.setTimeout(() => {
       const saved = saveLocalDraft(project);
@@ -712,7 +727,7 @@ function App() {
     }, 500);
 
     return () => window.clearTimeout(timeoutId);
-  }, [project]);
+  }, [project, user?.id, viewingPublishedProjectId, viewingPublishedProjectOwnerId]);
 
   useEffect(() => {
     return () => {
@@ -721,22 +736,6 @@ function App() {
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (!user) {
-      setIsProfileModalOpen(false);
-      setIsMyProjectsModalOpen(false);
-      setCloudProjectId(null);
-      setCloudProjects([]);
-      setCloudProjectsStatus('idle');
-      setCloudProjectsError(null);
-      setCloudSaveStatus('idle');
-      setAnalyticsProject(null);
-      setAnalyticsEvents([]);
-      setAnalyticsLoading(false);
-      setAnalyticsError(null);
-    }
-  }, [user]);
 
   useEffect(() => {
     if (cloudSaveStatus === 'saving') {
@@ -750,11 +749,31 @@ function App() {
     () => project.scenes.find((scene) => scene.id === project.activeSceneId) ?? project.scenes[0],
     [project]
   );
-  const isViewingPublicProject = Boolean(viewingPublishedProjectId && !cloudProjectId);
-  const isViewingOwnedPublishedProject = Boolean(
-    isViewingPublicProject && user?.id && viewingPublishedProjectOwnerId === user.id
+  const currentUserId = user?.id ?? null;
+  const isAuthenticated = Boolean(user);
+  const isOwnedCloudProject = Boolean(currentUserId && cloudProjectId && activeCloudProjectOwnerId === currentUserId);
+  const isViewingPublishedProject = Boolean(viewingPublishedProjectId);
+  const isViewingOtherUsersPublishedProject = Boolean(
+    viewingPublishedProjectId &&
+      viewingPublishedProjectOwnerId &&
+      (!currentUserId || viewingPublishedProjectOwnerId !== currentUserId)
   );
-  const isCreationOnboardingActive = appMode === 'edit' && showCreationOnboarding;
+  const isViewingPublicProject = isViewingPublishedProject && !isOwnedCloudProject;
+  const isViewingOwnedPublishedProject = Boolean(
+    isViewingPublishedProject && currentUserId && viewingPublishedProjectOwnerId === currentUserId
+  );
+  const canEditCurrentProject =
+    Boolean(currentUserId) &&
+    (!isViewingPublishedProject || viewingPublishedProjectOwnerId === currentUserId || isOwnedCloudProject);
+  const isCreationOnboardingActive = appMode === 'edit' && (showCreationOnboarding || !isAuthenticated);
+  const publicProjectHelperMessage = !isViewingPublishedProject
+    ? null
+    : isAuthenticated
+      ? isViewingOtherUsersPublishedProject
+        ? 'Viewing a published experience. Save a copy to edit your own version.'
+        : 'Viewing your published experience.'
+      : 'Viewing a published experience. Sign in to save a copy and edit this experience.';
+  const showSaveCopyAction = Boolean(user && isViewingOtherUsersPublishedProject);
   const activeWalkthroughStep = walkthroughStepIndex === null ? null : EDIT_WALKTHROUGH_STEPS[walkthroughStepIndex];
 
   useEffect(() => {
@@ -766,6 +785,31 @@ function App() {
     setIsContextPanelOpen(true);
     setSelectedHotspotId(null);
   }, [activeWalkthroughStep, appMode]);
+
+  useEffect(() => {
+    if (canEditCurrentProject) {
+      return;
+    }
+
+    if (appMode === 'edit' && !isCreationOnboardingActive) {
+      setAppMode('preview');
+      setIsContextPanelOpen(false);
+      setSelectedHotspotId(null);
+      setPlacementMode({ type: 'idle' });
+      setIsScenePickerOpen(false);
+      setImagePreview(null);
+      setInfoPreview(null);
+      setQuestionPreviewHotspotId(null);
+      setReflectionPreviewHotspotId(null);
+      return;
+    }
+
+    if (appMode === 'arPreview') {
+      setAppMode('preview');
+      setCameraError(null);
+      setArPreviewSelectedHotspotId(null);
+    }
+  }, [appMode, canEditCurrentProject, isCreationOnboardingActive]);
 
   useEffect(() => {
     if (
@@ -1366,6 +1410,10 @@ function App() {
   };
 
   const handleStartPlacingHotspot = () => {
+    if (!canEditCurrentProject) {
+      return;
+    }
+
     setImportError(null);
     setNoticeMessage(null);
     setImagePreview(null);
@@ -1378,6 +1426,10 @@ function App() {
   };
 
   const handleStartDrawingPolygonHotspot = () => {
+    if (!canEditCurrentProject) {
+      return;
+    }
+
     setImportError(null);
     setNoticeMessage(null);
     setImagePreview(null);
@@ -1469,6 +1521,10 @@ function App() {
   }, [openHotspotDetails, placementMode, showTemporaryNotice, updateHotspots]);
 
   const handleStartMovingSelectedHotspot = () => {
+    if (!canEditCurrentProject) {
+      return;
+    }
+
     if (!selectedHotspotId || !selectedHotspot || getHotspotShape(selectedHotspot) === 'polygon') {
       return;
     }
@@ -1769,6 +1825,10 @@ function App() {
 
   const handlePanoramaClick = useCallback(
     ({ yaw, pitch }: { yaw: number; pitch: number }) => {
+      if (!canEditCurrentProject) {
+        return;
+      }
+
       if (placementMode.type === 'idle') {
         return;
       }
@@ -1811,7 +1871,15 @@ function App() {
       setPlacementMode({ type: 'idle' });
       showTemporaryNotice('Insight Zone moved');
     },
-    [activeScene.hotspots, handleCreateHotspotAtPosition, handleUpdateHotspot, openHotspotDetails, placementMode, showTemporaryNotice]
+    [
+      activeScene.hotspots,
+      canEditCurrentProject,
+      handleCreateHotspotAtPosition,
+      handleUpdateHotspot,
+      openHotspotDetails,
+      placementMode,
+      showTemporaryNotice
+    ]
   );
 
   const handleCancelPlacement = () => {
@@ -1964,13 +2032,18 @@ function App() {
       nextProject: Project,
       options?: {
         cloudProjectId?: string | null;
+        activeCloudProjectOwnerId?: string | null;
         notice?: string | null;
         viewingPublishedProjectId?: string | null;
         viewingPublishedProjectOwnerId?: string | null;
+        appMode?: AppMode;
+        isContextPanelOpen?: boolean;
+        showCreationOnboarding?: boolean;
       }
     ) => {
       setProject(nextProject);
       setCloudProjectId(options?.cloudProjectId ?? null);
+      setActiveCloudProjectOwnerId(options?.activeCloudProjectOwnerId ?? null);
       setViewingPublishedProjectId(options?.viewingPublishedProjectId ?? null);
       setViewingPublishedProjectOwnerId(options?.viewingPublishedProjectOwnerId ?? null);
       setDiscoveredHotspotIds([]);
@@ -1989,49 +2062,165 @@ function App() {
       setSaveState('unsaved');
       setWalkthroughStepIndex(null);
       setPendingWalkthroughAfterOnboarding(false);
-      setAppMode('edit');
+      setAppMode(options?.appMode ?? 'edit');
       setActiveEditSection('project');
-      setIsContextPanelOpen(true);
-      setShowCreationOnboarding(!projectHasValidActiveScene(nextProject));
+      setIsContextPanelOpen(options?.isContextPanelOpen ?? true);
+      setShowCreationOnboarding(options?.showCreationOnboarding ?? !projectHasValidActiveScene(nextProject));
       setCloudSaveStatus('idle');
     },
     []
   );
 
+  const resetAppForLoggedOutStart = useCallback(() => {
+    const blankProject = createDefaultProject();
+
+    skipNextLocalDraftSaveRef.current = true;
+
+    setProject(blankProject);
+    setAuthModalMode(null);
+    setCloudProjectId(null);
+    setActiveCloudProjectOwnerId(null);
+    setViewingPublishedProjectId(null);
+    setViewingPublishedProjectOwnerId(null);
+    setCloudProjects([]);
+    setCloudProjectsStatus('idle');
+    setCloudProjectsError(null);
+    setCloudSaveStatus('idle');
+    setPublishedProjects([]);
+    setPublishedProjectsLoading(false);
+    setPublishedProjectsError(null);
+    setAnalyticsProject(null);
+    setAnalyticsEvents([]);
+    setAnalyticsLoading(false);
+    setAnalyticsError(null);
+    setImagePreview(null);
+    setInfoPreview(null);
+    setQuestionPreviewHotspotId(null);
+    setReflectionPreviewHotspotId(null);
+    setImagePreviewBroken(false);
+    setDiscoveredHotspotIds([]);
+    setQuestionResponses({});
+    setReflectionResponses({});
+    setImportError(null);
+    setNoticeMessage(null);
+    setSaveState('saved');
+    setSelectedHotspotId(null);
+    setPlacementMode({ type: 'idle' });
+    setWalkthroughStepIndex(null);
+    setPendingWalkthroughAfterOnboarding(false);
+    setIsScenePickerOpen(false);
+    setShowCreationOnboarding(true);
+    setPreviewEntryId(0);
+    setCompletionDismissed(false);
+    setShowCompletionMessage(false);
+    setCompletionPendingAfterOverlayClose(false);
+    setActiveEditSection('project');
+    setIsContextPanelOpen(false);
+    setAreViewerOverlaysHidden(false);
+    setCameraStatus('idle');
+    setCameraError(null);
+    setArPreviewSelectedHotspotId(null);
+    setActivePreviewHotspotId(null);
+    setPreviewRevealOrigin(null);
+    setAppMode('edit');
+    setIsProfileModalOpen(false);
+    setIsMyProjectsModalOpen(false);
+    setIsExploreOpen(false);
+
+    if (analyticsProjectIdRef.current) {
+      resetAnalyticsSessionId(analyticsProjectIdRef.current);
+    }
+    analyticsSessionIdRef.current = null;
+    analyticsProjectIdRef.current = null;
+    analyticsUserIdRef.current = null;
+    lastTrackedPreviewSceneKeyRef.current = null;
+    completedProjectSessionKeyRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    const currentUserId = user?.id ?? null;
+    const previousUserId = previousUserIdRef.current;
+    const didLogout = Boolean(previousUserId && !currentUserId);
+
+    previousUserIdRef.current = currentUserId;
+
+    if (didLogout) {
+      resetAppForLoggedOutStart();
+      return;
+    }
+
+    if (!currentUserId) {
+      setIsProfileModalOpen(false);
+      setIsMyProjectsModalOpen(false);
+      setCloudProjectId(null);
+      setActiveCloudProjectOwnerId(null);
+      setCloudProjects([]);
+      setCloudProjectsStatus('idle');
+      setCloudProjectsError(null);
+      setCloudSaveStatus('idle');
+      setAnalyticsProject(null);
+      setAnalyticsEvents([]);
+      setAnalyticsLoading(false);
+      setAnalyticsError(null);
+    }
+  }, [resetAppForLoggedOutStart, user?.id]);
+
   const handleSaveProjectToAccount = useCallback(async () => {
     if (!user?.id) {
       setImportError('Log in to save projects to your account.');
+      setAuthModalMode('signIn');
       return;
     }
 
     setCloudSaveStatus('saving');
     setImportError(null);
-    const isSavingCopyFromPublishedExplore = Boolean(viewingPublishedProjectId && !cloudProjectId);
+    const isSavingCopyFromPublishedExplore = isViewingOtherUsersPublishedProject;
+    const canUpdateExistingCloudProject = Boolean(
+      cloudProjectId && activeCloudProjectOwnerId && activeCloudProjectOwnerId === user.id
+    );
 
     try {
       const savedProject = await saveProjectToCloud({
         userId: user.id,
         project,
-        existingProjectId: cloudProjectId
+        existingProjectId: canUpdateExistingCloudProject ? cloudProjectId : undefined
       });
 
-      setCloudProjectId(savedProject.id);
-      setViewingPublishedProjectId(null);
-      setViewingPublishedProjectOwnerId(null);
       upsertCloudProjectInState(savedProject);
+
+      if (isSavingCopyFromPublishedExplore) {
+        applyLoadedProject(savedProject.project_data, {
+          cloudProjectId: savedProject.id,
+          activeCloudProjectOwnerId: savedProject.user_id,
+          notice: null,
+          appMode: 'edit',
+          isContextPanelOpen: true,
+          showCreationOnboarding: !projectHasValidActiveScene(savedProject.project_data)
+        });
+        showTemporaryNotice('Saved a copy to your account');
+      } else {
+        setCloudProjectId(savedProject.id);
+        setActiveCloudProjectOwnerId(savedProject.user_id);
+        setViewingPublishedProjectId(null);
+        setViewingPublishedProjectOwnerId(null);
+        showTemporaryNotice(canUpdateExistingCloudProject ? 'Project saved to your account' : 'Project saved to your account');
+      }
+
       setCloudSaveStatus('saved');
-      showTemporaryNotice(isSavingCopyFromPublishedExplore ? 'Saved a copy to your account' : 'Project saved to your account');
     } catch (error) {
       setCloudSaveStatus('error');
       setImportError(getFriendlyCloudProjectErrorMessage(error));
     }
   }, [
+    activeCloudProjectOwnerId,
+    applyLoadedProject,
     cloudProjectId,
+    isViewingOtherUsersPublishedProject,
     project,
     showTemporaryNotice,
     upsertCloudProjectInState,
     user?.id,
-    viewingPublishedProjectId
+    user
   ]);
 
   const handleOpenCloudProject = useCallback(
@@ -2051,6 +2240,7 @@ function App() {
         upsertCloudProjectInState(cloudProject);
         applyLoadedProject(cloudProject.project_data, {
           cloudProjectId: cloudProject.id,
+          activeCloudProjectOwnerId: cloudProject.user_id,
           notice: `Loaded "${cloudProject.title || 'Untitled Project'}" from your account.`
         });
         setCloudProjectsStatus('ready');
@@ -2066,16 +2256,37 @@ function App() {
 
   const handleOpenPublishedProject = useCallback(
     (publishedProject: CloudProjectWithProfile) => {
+      const isOwner = Boolean(user?.id && user.id === publishedProject.user_id);
+
       handleCloseAnalyticsDashboard();
-      applyLoadedProject(publishedProject.project_data, {
-        cloudProjectId: null,
-        notice:
-          user?.id && user.id === publishedProject.user_id
-            ? `Viewing the published Explore version of "${publishedProject.title || 'Untitled Project'}". Save to Account will create a separate copy.`
-            : `Viewing "${publishedProject.title || 'Untitled Project'}" from Explore. Save to Account will create your own copy.`,
-        viewingPublishedProjectId: publishedProject.id,
-        viewingPublishedProjectOwnerId: publishedProject.user_id
-      });
+
+      if (isOwner) {
+        applyLoadedProject(publishedProject.project_data, {
+          cloudProjectId: publishedProject.id,
+          activeCloudProjectOwnerId: publishedProject.user_id,
+          notice: `Loaded your published experience "${publishedProject.title || 'Untitled Project'}".`,
+          viewingPublishedProjectId: null,
+          viewingPublishedProjectOwnerId: null,
+          appMode: 'edit',
+          isContextPanelOpen: true,
+          showCreationOnboarding: !projectHasValidActiveScene(publishedProject.project_data)
+        });
+      } else {
+        applyLoadedProject(publishedProject.project_data, {
+          cloudProjectId: null,
+          activeCloudProjectOwnerId: null,
+          notice:
+            user?.id
+              ? `Viewing "${publishedProject.title || 'Untitled Project'}" from Explore. Save a copy to edit your own version.`
+              : `Viewing "${publishedProject.title || 'Untitled Project'}" from Explore. Sign in to save a copy and edit.`,
+          viewingPublishedProjectId: publishedProject.id,
+          viewingPublishedProjectOwnerId: publishedProject.user_id,
+          appMode: 'preview',
+          isContextPanelOpen: false,
+          showCreationOnboarding: false
+        });
+      }
+
       setIsExploreOpen(false);
       setIsMyProjectsModalOpen(false);
     },
@@ -2113,6 +2324,7 @@ function App() {
 
         if (cloudProjectId === projectId) {
           setCloudProjectId(null);
+          setActiveCloudProjectOwnerId(null);
           setCloudSaveStatus('idle');
         }
 
@@ -2198,9 +2410,11 @@ function App() {
         setIsMyProjectsModalOpen(false);
         applyLoadedProject(savedProject.project_data, {
           cloudProjectId: savedProject.id,
+          activeCloudProjectOwnerId: savedProject.user_id,
           notice: null
         });
         setCloudProjectId(savedProject.id);
+        setActiveCloudProjectOwnerId(savedProject.user_id);
         showTemporaryNotice('New draft project created from upload');
       } catch (error) {
         console.error('[cloud-projects] could not create project from upload', error);
@@ -2239,9 +2453,11 @@ function App() {
         setIsMyProjectsModalOpen(false);
         applyLoadedProject(savedProject.project_data, {
           cloudProjectId: savedProject.id,
+          activeCloudProjectOwnerId: savedProject.user_id,
           notice: null
         });
         setCloudProjectId(savedProject.id);
+        setActiveCloudProjectOwnerId(savedProject.user_id);
         showTemporaryNotice('New AI-generated draft project created');
       } catch (error) {
         console.error('[cloud-projects] could not create project from generation', error);
@@ -2276,7 +2492,11 @@ function App() {
     }
 
     clearLocalDraft();
-    applyLoadedProject(createDefaultProject(), { cloudProjectId: null, notice: null });
+    applyLoadedProject(createDefaultProject(), {
+      cloudProjectId: null,
+      activeCloudProjectOwnerId: null,
+      notice: null
+    });
     setEditWalkthroughDismissed(false);
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(EDIT_WALKTHROUGH_DISMISSED_KEY);
@@ -2284,6 +2504,11 @@ function App() {
   };
 
   const handleToggleAppMode = () => {
+    if (!canEditCurrentProject) {
+      setAppMode('preview');
+      return;
+    }
+
     const nextMode: AppMode = appMode === 'edit' ? 'preview' : 'edit';
     setAppMode(nextMode);
     setImportError(null);
@@ -2316,6 +2541,10 @@ function App() {
   };
 
   const handleEnterCameraPreview = useCallback(() => {
+    if (!canEditCurrentProject) {
+      return;
+    }
+
     setAppMode('arPreview');
     setImportError(null);
     setNoticeMessage(null);
@@ -2329,7 +2558,7 @@ function App() {
     setCameraError(null);
     setArPreviewSelectedHotspotId(null);
     setCameraPreviewRequestId((current) => current + 1);
-  }, []);
+  }, [canEditCurrentProject]);
 
   const handleExitCameraPreview = useCallback(() => {
     setAppMode('edit');
@@ -2338,6 +2567,12 @@ function App() {
   }, []);
 
   const handleUploadSceneMedia = async (file: File) => {
+    if (!user) {
+      setImportError('Sign in to upload a scene.');
+      setAuthModalMode('signIn');
+      return;
+    }
+
     const result = await imageFileToDataUrl(file);
     if (!result.ok) {
       setImportError(result.error);
@@ -2353,6 +2588,10 @@ function App() {
     prompt: string,
     options?: Generate360SceneRequestOptions
   ) => {
+    if (!user) {
+      throw new Error('Sign in to generate a scene.');
+    }
+
     const targetSceneId = project.activeSceneId;
     console.info('[generate-360-scene] applying generated scene to active scene', {
       targetSceneId,
@@ -2419,6 +2658,12 @@ function App() {
   };
 
   const handleCreateSceneFromImageFile = async (file: File) => {
+    if (!user) {
+      setImportError('Sign in to create a scene from an image.');
+      setAuthModalMode('signIn');
+      return;
+    }
+
     const result = await imageFileToDataUrl(file);
     if (!result.ok) {
       setImportError(result.error);
@@ -2519,6 +2764,11 @@ function App() {
   };
 
   const handleOpenScenePicker = () => {
+    if (!user) {
+      setAuthModalMode('signIn');
+      return;
+    }
+
     setIsScenePickerOpen(true);
     setImportError(null);
     setNoticeMessage(null);
@@ -2529,6 +2779,11 @@ function App() {
   };
 
   const handleApplySceneLibraryItem = (panoramaUrl: string, label: string) => {
+    if (!user) {
+      setAuthModalMode('signIn');
+      return;
+    }
+
     handleUpdateActiveSceneMedia(panoramaUrl);
     setIsScenePickerOpen(false);
     setImportError(null);
@@ -2554,7 +2809,7 @@ function App() {
         ? 'Click in the panorama to move the selected insight zone.'
         : null;
 
-  const viewerInteractionMode = appMode === 'preview' ? 'idle' : placementMode.type;
+  const viewerInteractionMode = appMode === 'preview' || !canEditCurrentProject ? 'idle' : placementMode.type;
   const presentationRevealStyle = previewRevealOrigin
     ? ({
         '--reveal-origin-x': `${previewRevealOrigin.x}px`,
@@ -2650,6 +2905,16 @@ function App() {
             >
               Explore
             </button>
+            {showSaveCopyAction ? (
+              <button
+                type="button"
+                className="ui-button ui-button-primary app-auth-button"
+                onClick={handleSaveProjectToAccount}
+                disabled={cloudSaveStatus === 'saving'}
+              >
+                {cloudSaveStatus === 'saving' ? 'Saving Copy...' : 'Save a Copy'}
+              </button>
+            ) : null}
             <AuthControls
               variant="header"
               onOpenSignIn={handleOpenSignIn}
@@ -2658,9 +2923,9 @@ function App() {
             />
             <div className="header-mode-group">
               <span className="mode-indicator-pill">
-                {appMode === 'edit' ? 'Edit Mode' : appMode === 'arPreview' ? 'AR Preview' : 'Preview Mode'}
+                {appMode === 'edit' ? 'Edit Mode' : appMode === 'arPreview' ? 'AR Preview' : 'Present Mode'}
               </span>
-              {appMode === 'edit' ? (
+              {canEditCurrentProject && appMode === 'edit' ? (
                 <button
                   type="button"
                   className="ui-button ui-button-primary mode-toggle-button"
@@ -2668,7 +2933,8 @@ function App() {
                 >
                   Present Project
                 </button>
-              ) : (
+              ) : null}
+              {canEditCurrentProject && appMode !== 'edit' ? (
                 <button
                   type="button"
                   className="ui-button ui-button-secondary mode-toggle-button"
@@ -2676,12 +2942,12 @@ function App() {
                 >
                   Edit Mode
                 </button>
-              )}
+              ) : null}
             </div>
           </div>
         }
         sidebar={
-          appMode === 'edit' && !isCreationOnboardingActive ? (
+          canEditCurrentProject && appMode === 'edit' && !isCreationOnboardingActive ? (
             <nav className="edit-nav-rail" aria-label="Editor sections">
               {[
                 ['project', 'Project'],
@@ -2711,7 +2977,7 @@ function App() {
           ) : null
         }
         contextPanel={
-          appMode === 'edit' && !isCreationOnboardingActive && isContextPanelOpen ? (
+          canEditCurrentProject && appMode === 'edit' && !isCreationOnboardingActive && isContextPanelOpen ? (
             <div className="context-panel-stack">
             <div className="context-panel-toolbar">
               <div className="context-panel-toolbar-actions">
@@ -2822,7 +3088,7 @@ function App() {
                 previewEntryId={0}
                 overlayContent={null}
                 editorPopoverContent={
-                  selectedHotspot ? (
+                  canEditCurrentProject && selectedHotspot ? (
                     <div className="hotspot-popover-note">
                       <p className="hotspot-popover-kicker">Selected Zone</p>
                       <strong>{selectedHotspot.title || 'Untitled Insight Zone'}</strong>
@@ -2834,11 +3100,11 @@ function App() {
                 drawingPolygonPoints={placementMode.type === 'drawingPolygon' ? placementMode.points : []}
                 onActivateHotspot={handleActivateHotspot}
                 onPanoramaClick={handlePanoramaClick}
-                onQuickPlaceHotspot={handleCreateHotspotAtPosition}
+                onQuickPlaceHotspot={canEditCurrentProject ? handleCreateHotspotAtPosition : undefined}
                 onToggleOverlays={handleToggleViewerOverlays}
                 onViewChange={setCurrentView}
               />
-              {!isCreationOnboardingActive ? (
+              {canEditCurrentProject && !isCreationOnboardingActive ? (
                 <button
                   type="button"
                   className="floating-ar-utility"
@@ -2927,6 +3193,7 @@ function App() {
               ) : null}
               {isCreationOnboardingActive ? (
                 <CreationOnboarding
+                  isAuthenticated={isAuthenticated}
                   onGenerate={handleOnboardingGenerateScene}
                   onOpenCatalog={handleOpenScenePicker}
                   onOpenExplore={handleOpenExplore}
@@ -3064,6 +3331,32 @@ function App() {
                             'Use this scene to guide discussion, observation, and reflection.'}
                         </p>
                       </div>
+                      {publicProjectHelperMessage ? (
+                        <div className="preview-hint-card public-view-helper-card">
+                          <p>{publicProjectHelperMessage}</p>
+                          <div className="public-view-helper-actions">
+                            {showSaveCopyAction ? (
+                              <button
+                                type="button"
+                                className="ui-button ui-button-primary mini-button"
+                                onClick={handleSaveProjectToAccount}
+                                disabled={cloudSaveStatus === 'saving'}
+                              >
+                                {cloudSaveStatus === 'saving' ? 'Saving Copy...' : 'Save a Copy'}
+                              </button>
+                            ) : null}
+                            {!isAuthenticated ? (
+                              <button
+                                type="button"
+                                className="ui-button ui-button-secondary mini-button"
+                                onClick={handleOpenSignIn}
+                              >
+                                Sign In to Edit
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                     {!previewHintDismissed ? (
                       <div className="preview-hint-card">

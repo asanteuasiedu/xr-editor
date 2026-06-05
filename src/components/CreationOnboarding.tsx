@@ -3,6 +3,7 @@ import { useState } from 'react';
 import AuthControls from './AuthControls';
 
 type CreationOnboardingProps = {
+  isAuthenticated: boolean;
   onGenerate: (prompt: string) => Promise<void>;
   onOpenCatalog: () => void;
   onOpenExplore: () => void;
@@ -14,6 +15,7 @@ type CreationOnboardingProps = {
 type CreationOnboardingStatus = 'idle' | 'loading' | 'error';
 
 function CreationOnboarding({
+  isAuthenticated,
   onGenerate,
   onOpenCatalog,
   onOpenExplore,
@@ -84,56 +86,77 @@ function CreationOnboarding({
 
       <div className="creation-onboarding-center">
         <section className="creation-onboarding-card">
-          <p className="creation-onboarding-card-kicker">Set the scene</p>
-          <h2>Start Creating with Udēēsa</h2>
-          <p className="creation-onboarding-card-copy">
-            Generate a 360 learning environment from a prompt or choose a starting location from the catalog.
-          </p>
+          {isAuthenticated ? (
+            <>
+              <p className="creation-onboarding-card-kicker">Set the scene</p>
+              <h2>Start Creating with Udēēsa</h2>
+              <p className="creation-onboarding-card-copy">
+                Generate a 360 learning environment from a prompt or choose a starting location from the catalog.
+              </p>
 
-          <form className="creation-onboarding-form" onSubmit={handleSubmit}>
-            <label className="creation-onboarding-field" htmlFor="creation-onboarding-prompt">
-              <span className="sr-only">Describe your learning environment</span>
-              <input
-                id="creation-onboarding-prompt"
-                type="text"
-                value={prompt}
-                onChange={(event) => {
-                  setPrompt(event.target.value);
-                  if (status !== 'loading') {
-                    setStatus('idle');
-                    setMessage(null);
-                  }
-                }}
-                placeholder="Describe your learning environment"
-                disabled={isGenerating}
-              />
-            </label>
+              <form className="creation-onboarding-form" onSubmit={handleSubmit}>
+                <label className="creation-onboarding-field" htmlFor="creation-onboarding-prompt">
+                  <span className="sr-only">Describe your learning environment</span>
+                  <input
+                    id="creation-onboarding-prompt"
+                    type="text"
+                    value={prompt}
+                    onChange={(event) => {
+                      setPrompt(event.target.value);
+                      if (status !== 'loading') {
+                        setStatus('idle');
+                        setMessage(null);
+                      }
+                    }}
+                    placeholder="Describe your learning environment"
+                    disabled={isGenerating}
+                  />
+                </label>
 
-            <button
-              type="button"
-              className="ui-button ui-button-secondary creation-onboarding-catalog"
-              onClick={onOpenCatalog}
-              disabled={isGenerating}
-            >
-              Select a location from our catalog
-            </button>
+                <button
+                  type="button"
+                  className="ui-button ui-button-secondary creation-onboarding-catalog"
+                  onClick={onOpenCatalog}
+                  disabled={isGenerating}
+                >
+                  Select a location from our catalog
+                </button>
 
-            <button type="submit" className="ui-button ui-button-primary creation-onboarding-generate" disabled={!trimmedPrompt || isGenerating}>
-              {isGenerating ? 'Generating...' : 'Generate'}
-            </button>
-          </form>
+                <button type="submit" className="ui-button ui-button-primary creation-onboarding-generate" disabled={!trimmedPrompt || isGenerating}>
+                  {isGenerating ? 'Generating...' : 'Generate'}
+                </button>
+              </form>
 
-          {message ? (
-            <p
-              className={`creation-onboarding-status ${
-                status === 'error' ? 'creation-onboarding-status-error' : 'creation-onboarding-status-info'
-              }`}
-              role="status"
-              aria-live="polite"
-            >
-              {message}
-            </p>
-          ) : null}
+              {message ? (
+                <p
+                  className={`creation-onboarding-status ${
+                    status === 'error' ? 'creation-onboarding-status-error' : 'creation-onboarding-status-info'
+                  }`}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {message}
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <p className="creation-onboarding-card-kicker">Explore</p>
+              <h2>Discover published XR experiences</h2>
+              <p className="creation-onboarding-card-copy">
+                Explore published XR experiences or sign in to create your own.
+              </p>
+              <div className="creation-onboarding-form">
+                <button
+                  type="button"
+                  className="ui-button ui-button-primary creation-onboarding-generate"
+                  onClick={onOpenExplore}
+                >
+                  Explore Published Experiences
+                </button>
+              </div>
+            </>
+          )}
         </section>
       </div>
     </div>
