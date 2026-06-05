@@ -478,6 +478,7 @@ function App() {
   const [discoveredHotspotIds, setDiscoveredHotspotIds] = useState<string[]>([]);
   const [questionResponses, setQuestionResponses] = useState<Record<string, QuestionResponse>>({});
   const [reflectionResponses, setReflectionResponses] = useState<Record<string, string>>({});
+  const [showGuestEditPrompt, setShowGuestEditPrompt] = useState(false);
   const [previewHintDismissed, setPreviewHintDismissed] = useState(loadPreviewHintDismissed);
   const [, setEditWalkthroughDismissed] = useState(initialWalkthroughDismissed);
   const [walkthroughStepIndex, setWalkthroughStepIndex] = useState<number | null>(null);
@@ -765,7 +766,7 @@ function App() {
   const canEditCurrentProject =
     Boolean(currentUserId) &&
     (!isViewingPublishedProject || viewingPublishedProjectOwnerId === currentUserId || isOwnedCloudProject);
-  const isCreationOnboardingActive = appMode === 'edit' && (showCreationOnboarding || !isAuthenticated);
+  const isCreationOnboardingActive = appMode === 'edit' && showCreationOnboarding;
   const publicProjectHelperMessage = !isViewingPublishedProject
     ? null
     : isAuthenticated
@@ -774,6 +775,9 @@ function App() {
         : 'Viewing your published experience.'
       : 'Viewing a published experience. Sign in to save a copy and edit this experience.';
   const showSaveCopyAction = Boolean(user && isViewingOtherUsersPublishedProject);
+  const isGuestPreviewingUnownedScene = Boolean(
+    !isAuthenticated && !isViewingPublishedProject && projectHasValidActiveScene(project)
+  );
   const activeWalkthroughStep = walkthroughStepIndex === null ? null : EDIT_WALKTHROUGH_STEPS[walkthroughStepIndex];
 
   useEffect(() => {
@@ -2054,6 +2058,7 @@ function App() {
       setQuestionPreviewHotspotId(null);
       setReflectionPreviewHotspotId(null);
       setImagePreviewBroken(false);
+      setShowGuestEditPrompt(false);
       setIsScenePickerOpen(false);
       setSelectedHotspotId(null);
       setPlacementMode({ type: 'idle' });
@@ -2098,6 +2103,7 @@ function App() {
     setQuestionPreviewHotspotId(null);
     setReflectionPreviewHotspotId(null);
     setImagePreviewBroken(false);
+    setShowGuestEditPrompt(false);
     setDiscoveredHotspotIds([]);
     setQuestionResponses({});
     setReflectionResponses({});
@@ -2141,11 +2147,26 @@ function App() {
     const currentUserId = user?.id ?? null;
     const previousUserId = previousUserIdRef.current;
     const didLogout = Boolean(previousUserId && !currentUserId);
+    const didLogin = Boolean(!previousUserId && currentUserId);
 
     previousUserIdRef.current = currentUserId;
 
     if (didLogout) {
       resetAppForLoggedOutStart();
+      return;
+    }
+
+    if (
+      didLogin &&
+      !viewingPublishedProjectId &&
+      projectHasValidActiveScene(project) &&
+      appMode === 'preview'
+    ) {
+      setShowGuestEditPrompt(false);
+      setAppMode('edit');
+      setActiveEditSection('project');
+      setIsContextPanelOpen(true);
+      setPendingWalkthroughAfterOnboarding(true);
       return;
     }
 
@@ -2163,7 +2184,7 @@ function App() {
       setAnalyticsLoading(false);
       setAnalyticsError(null);
     }
-  }, [resetAppForLoggedOutStart, user?.id]);
+  }, [appMode, project, resetAppForLoggedOutStart, user?.id, viewingPublishedProjectId]);
 
   const handleSaveProjectToAccount = useCallback(async () => {
     if (!user?.id) {
@@ -2588,10 +2609,6 @@ function App() {
     prompt: string,
     options?: Generate360SceneRequestOptions
   ) => {
-    if (!user) {
-      throw new Error('Sign in to generate a scene.');
-    }
-
     const targetSceneId = project.activeSceneId;
     console.info('[generate-360-scene] applying generated scene to active scene', {
       targetSceneId,
@@ -2680,9 +2697,22 @@ function App() {
 
   const completeCreationOnboarding = useCallback(() => {
     setShowCreationOnboarding(false);
-    setPendingWalkthroughAfterOnboarding(true);
     setIsScenePickerOpen(false);
-  }, []);
+    if (user) {
+      setPendingWalkthroughAfterOnboarding(true);
+      setShowGuestEditPrompt(false);
+      setAppMode('edit');
+      return;
+    }
+
+    setPendingWalkthroughAfterOnboarding(false);
+    setShowGuestEditPrompt(true);
+    setAppMode('preview');
+    setPreviewEntryId((current) => current + 1);
+    setIsContextPanelOpen(false);
+    setSelectedHotspotId(null);
+    setPlacementMode({ type: 'idle' });
+  }, [user]);
 
   const handleOnboardingGenerateScene = async (prompt: string) => {
     await handleGenerateSceneFromPrompt(prompt);
@@ -2764,11 +2794,6 @@ function App() {
   };
 
   const handleOpenScenePicker = () => {
-    if (!user) {
-      setAuthModalMode('signIn');
-      return;
-    }
-
     setIsScenePickerOpen(true);
     setImportError(null);
     setNoticeMessage(null);
@@ -2779,11 +2804,6 @@ function App() {
   };
 
   const handleApplySceneLibraryItem = (panoramaUrl: string, label: string) => {
-    if (!user) {
-      setAuthModalMode('signIn');
-      return;
-    }
-
     handleUpdateActiveSceneMedia(panoramaUrl);
     setIsScenePickerOpen(false);
     setImportError(null);
@@ -3331,6 +3351,34 @@ function App() {
                             'Use this scene to guide discussion, observation, and reflection.'}
                         </p>
                       </div>
+                      {isGuestPreviewingUnownedScene && showGuestEditPrompt ? (
+                        <div className="preview-hint-card public-view-helper-card">
+                          <p>Sign in to edit and save this experience.</p>
+                          <div className="public-view-helper-actions">
+                            <button
+                              type="button"
+                              className="ui-button ui-button-primary mini-button"
+                              onClick={handleOpenSignIn}
+                            >
+                              Login
+                            </button>
+                            <button
+                              type="button"
+                              className="ui-button ui-button-secondary mini-button"
+                              onClick={handleOpenSignUp}
+                            >
+                              Sign Up
+                            </button>
+                            <button
+                              type="button"
+                              className="ui-button ui-button-secondary mini-button"
+                              onClick={() => setShowGuestEditPrompt(false)}
+                            >
+                              Continue Viewing
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
                       {publicProjectHelperMessage ? (
                         <div className="preview-hint-card public-view-helper-card">
                           <p>{publicProjectHelperMessage}</p>

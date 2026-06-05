@@ -18,8 +18,9 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 3. Open the local URL shown in terminal (usually `http://localhost:5173`).
 
 ## Authentication
-- Authentication now uses Supabase Auth on the client so users can sign up, log in, and log out while keeping creation and ownership tied to real accounts.
-- Guests can browse Explore and view published experiences, but they cannot create or edit projects until they sign in.
+- Authentication now uses Supabase Auth on the client so users can sign up, log in, and log out while keeping ownership and editing tied to real accounts.
+- Guests can still access the starting page, generate a 360 scene, select a catalog location, and browse Explore.
+- Guests cannot edit, save, or publish until they sign in.
 - Required client environment variables:
   ```env
   VITE_SUPABASE_URL=your-supabase-project-url
@@ -37,7 +38,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 
 ## Individual Profiles
 - Authenticated users now get an `individual` profile record on first sign-in or first profile refresh.
-- Guest mode is still supported in Explore-first form. Guests can browse published experiences and sign in when they want to create their own.
+- Guest mode is still supported. Guests can preview scenes and browse published experiences, then sign in when they want to edit or save.
 - Profile data lives in the Supabase `profiles` table, and the SQL migrations are stored at:
   - [supabase/migrations/create_profiles.sql](/Users/homecomputer/xr-editor/supabase/migrations/create_profiles.sql)
   - [supabase/migrations/add_profile_avatar_bio.sql](/Users/homecomputer/xr-editor/supabase/migrations/add_profile_avatar_bio.sql)
@@ -67,7 +68,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 
 ## Cloud Projects
 - Authenticated users can now save full XR editor projects to their account without changing the existing local-draft workflow.
-- Project creation and editing now require login. Guests can still browse Explore and view published experiences, but they cannot author or save projects until authenticated.
+- Guests can generate or select a scene and preview it, but only authenticated users can author, save, or publish projects.
 - Saved projects now appear in the signed-in profile panel as experience cards with an active-scene panorama preview, title, and `Draft` / `Published` badge.
 - Logged-in users can also create a brand-new saved XR project directly from the profile grid by choosing **Upload** or **Generate**. New projects are saved as `Draft` by default.
 - Cloud project data lives in the Supabase `projects` table, and the SQL migrations are stored at:
@@ -365,7 +366,7 @@ If a scene is deleted, any hotspot links pointing to that scene are cleared auto
 - If local draft JSON is corrupted or invalid, it is ignored and the app falls back safely to the starter project.
 - The sidebar shows local save state: `Saved locally`, `Unsaved changes`, or `Restored local draft`.
 - `Reset Local Draft` remains available from `Project` and clears the local draft after confirmation.
-- Logged-in users can also use **Save to Account** and the signed-in **Profile** experience grid for Supabase-backed cloud storage. Local draft data is still preserved in the browser, but guest-facing access is now Explore-only until sign-in.
+- Logged-in users can also use **Save to Account** and the signed-in **Profile** experience grid for Supabase-backed cloud storage. Local draft data is still preserved in the browser, including guest-created preview scenes that can continue into edit mode after login.
 
 ## Local Uploads (360 Images + Image Hotspots)
 - In **Active Scene Details**, use **Upload Panorama** to choose a 360 image from your computer.
