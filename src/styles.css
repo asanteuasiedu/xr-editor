@@ -3014,14 +3014,81 @@ select {
   color: #d5ffea;
 }
 
+.profile-project-card-actions,
 .profile-experience-card-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0.45rem;
+  flex-wrap: wrap;
 }
 
-.profile-experience-card-actions .ui-button {
-  flex: 1 1 0;
+.profile-icon-action {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(12, 12, 18, 0.54);
+  color: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 10px 24px rgba(8, 10, 18, 0.16);
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
+}
+
+.profile-icon-action:hover {
+  transform: translateY(-1px);
+  border-color: rgba(168, 85, 247, 0.65);
+  background: rgba(88, 28, 135, 0.45);
+  color: #ffffff;
+}
+
+.profile-icon-action:focus-visible {
+  outline: 2px solid rgba(168, 85, 247, 0.9);
+  outline-offset: 3px;
+}
+
+.profile-icon-action:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.profile-icon-action svg {
+  width: 19px;
+  height: 19px;
+  pointer-events: none;
+}
+
+.profile-icon-action.analytics:hover {
+  border-color: rgba(56, 189, 248, 0.75);
+  background: rgba(14, 116, 144, 0.38);
+}
+
+.profile-icon-action.publish:hover,
+.profile-icon-action-primary:hover {
+  border-color: rgba(96, 165, 250, 0.78);
+  background: rgba(37, 99, 235, 0.42);
+}
+
+.profile-icon-action.danger:hover {
+  border-color: rgba(248, 113, 113, 0.75);
+  background: rgba(127, 29, 29, 0.45);
+}
+
+.profile-icon-action-primary {
+  border-color: rgba(168, 85, 247, 0.42);
+  background:
+    linear-gradient(180deg, rgba(121, 56, 214, 0.6), rgba(86, 24, 146, 0.5)),
+    rgba(88, 28, 135, 0.4);
+  color: rgba(255, 255, 255, 0.96);
 }
 
 .profile-experience-card-active .profile-experience-media {
@@ -3062,16 +3129,6 @@ select {
   line-height: 1;
   font-weight: 400;
   text-shadow: 0 10px 28px rgba(109, 88, 255, 0.22);
-}
-
-.profile-new-project-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.profile-new-project-actions .ui-button {
-  flex: 1 1 0;
 }
 
 .profile-new-project-generate {
@@ -6095,12 +6152,9 @@ select {
     flex: 1 1 0;
   }
 
+  .profile-project-card-actions,
   .profile-experience-card-actions {
-    flex-direction: column;
-  }
-
-  .profile-experience-card-actions .ui-button {
-    width: 100%;
+    justify-content: flex-start;
   }
 
   .profile-modal-grid {
@@ -6111,14 +6165,17 @@ select {
     grid-template-columns: 1fr;
   }
 
-  .profile-new-project-actions,
   .profile-new-project-generate-actions {
     flex-direction: column;
   }
 
-  .profile-new-project-actions .ui-button,
   .profile-new-project-generate-actions .ui-button {
     width: 100%;
+  }
+
+  .profile-icon-action {
+    width: 36px;
+    height: 36px;
   }
 
   .analytics-dashboard-backdrop {

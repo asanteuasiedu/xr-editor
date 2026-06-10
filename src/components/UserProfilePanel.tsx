@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { AnalyticsIcon, DraftIcon, PublishIcon, SparklesIcon, TrashIcon, UploadIcon } from './icons';
 import type { CloudProject } from '../types/cloudProject';
 
 type UserProfilePanelProps = {
@@ -256,10 +257,13 @@ function UserProfilePanel({
                     +
                   </div>
                 </div>
-                <div className="profile-new-project-actions">
+                <div className="profile-new-project-actions profile-project-card-actions">
                   <button
                     type="button"
-                    className="ui-button ui-button-secondary mini-button"
+                    className="profile-icon-action"
+                    aria-label={isUploadCreating ? 'Uploading 360 image' : 'Upload 360 image'}
+                    title={isUploadCreating ? 'Uploading 360 image' : 'Upload 360 image'}
+                    aria-busy={isUploadCreating}
                     onClick={(event) => {
                       event.stopPropagation();
                       if (isUploadCreating || isGenerateCreating) {
@@ -270,11 +274,14 @@ function UserProfilePanel({
                     }}
                     disabled={isUploadCreating || isGenerateCreating}
                   >
-                    {isUploadCreating ? 'Uploading...' : 'Upload'}
+                    <UploadIcon aria-hidden="true" />
                   </button>
                   <button
                     type="button"
-                    className="ui-button ui-button-primary mini-button"
+                    className="profile-icon-action profile-icon-action-primary"
+                    aria-label={isGenerateCreating ? 'Generating 360 image' : 'Generate 360 image'}
+                    title={isGenerateCreating ? 'Generating 360 image' : 'Generate 360 image'}
+                    aria-busy={isGenerateCreating}
                     onClick={(event) => {
                       event.stopPropagation();
                       setCreationError(null);
@@ -282,7 +289,7 @@ function UserProfilePanel({
                     }}
                     disabled={isUploadCreating || isGenerateCreating}
                   >
-                    {isGenerateCreating ? 'Generating...' : 'Generate'}
+                    <SparklesIcon aria-hidden="true" />
                   </button>
                 </div>
                 {isGeneratePromptOpen ? (
@@ -385,36 +392,46 @@ function UserProfilePanel({
                         </div>
                       </div>
                     </button>
-                    <div className="profile-experience-card-actions">
+                    <div className="profile-experience-card-actions profile-project-card-actions">
                       <button
                         type="button"
-                        className="ui-button ui-button-secondary mini-button"
+                        className="profile-icon-action analytics"
+                        aria-label="View analytics"
+                        title="View analytics"
                         onClick={(event) => {
                           event.stopPropagation();
                           onViewAnalytics(project);
                         }}
                       >
-                        View Analytics
+                        <AnalyticsIcon aria-hidden="true" />
                       </button>
                       <button
                         type="button"
-                        className="ui-button ui-button-secondary mini-button"
+                        className={`profile-icon-action ${projectStatus === 'draft' ? 'publish' : ''}`}
+                        aria-label={projectStatus === 'draft' ? 'Publish' : 'Move to draft'}
+                        title={projectStatus === 'draft' ? 'Publish' : 'Move to draft'}
                         onClick={(event) => {
                           event.stopPropagation();
                           void onToggleProjectStatus(project.id, nextStatus);
                         }}
                       >
-                        {projectStatus === 'draft' ? 'Publish' : 'Move to Draft'}
+                        {projectStatus === 'draft' ? (
+                          <PublishIcon aria-hidden="true" />
+                        ) : (
+                          <DraftIcon aria-hidden="true" />
+                        )}
                       </button>
                       <button
                         type="button"
-                        className="ui-button ui-button-secondary mini-button"
+                        className="profile-icon-action danger"
+                        aria-label="Delete project"
+                        title="Delete project"
                         onClick={(event) => {
                           event.stopPropagation();
                           void onDeleteProject(project.id);
                         }}
                       >
-                        Delete
+                        <TrashIcon aria-hidden="true" />
                       </button>
                     </div>
                   </article>
