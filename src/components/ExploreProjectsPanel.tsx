@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CloudProjectWithProfile } from '../types/cloudProject';
+import { CloseIcon, RefreshIcon } from './icons';
 
 type ExploreProjectsPanelProps = {
   isOpen: boolean;
@@ -116,12 +117,24 @@ function ExploreProjectsPanel({
               Discover published immersive learning experiences from the Udēēsa community.
             </p>
           </div>
-          <div className="auth-modal-actions-inline">
-            <button type="button" className="ui-button ui-button-secondary mini-button" onClick={onRefresh}>
-              Refresh
+          <div className="auth-modal-actions-inline panel-header-actions">
+            <button
+              type="button"
+              className="profile-icon-action"
+              aria-label="Refresh published experiences"
+              title="Refresh published experiences"
+              onClick={onRefresh}
+            >
+              <RefreshIcon aria-hidden="true" />
             </button>
-            <button type="button" className="ui-button ui-button-secondary mini-button" onClick={onClose}>
-              Close
+            <button
+              type="button"
+              className="profile-icon-action"
+              aria-label="Close Explore"
+              title="Close Explore"
+              onClick={onClose}
+            >
+              <CloseIcon aria-hidden="true" />
             </button>
           </div>
         </div>

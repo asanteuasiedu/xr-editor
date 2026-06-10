@@ -146,8 +146,10 @@ export function PublishIcon(props: IconProps) {
 export function RefreshIcon(props: IconProps) {
   return (
     <BaseIcon {...props}>
-      <path d="M20 11a8 8 0 1 0 2 5.2" />
-      <path d="M20 4v7h-7" />
+      <path d="M21 12a9 9 0 0 1-15.2 6.5" />
+      <path d="M3 12A9 9 0 0 1 18.2 5.5" />
+      <path d="M18 2v4h-4" />
+      <path d="M6 22v-4h4" />
     </BaseIcon>
   );
 }

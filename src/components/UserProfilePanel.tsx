@@ -123,7 +123,7 @@ function UserProfilePanel({
               Reopen saved XR experiences, switch between draft and published status, and keep your creator profile up to date.
             </p>
           </div>
-          <div className="auth-modal-actions-inline profile-panel-header-actions">
+          <div className="auth-modal-actions-inline panel-header-actions">
             <button
               type="button"
               className="profile-icon-action"

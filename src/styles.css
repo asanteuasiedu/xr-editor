@@ -2533,6 +2533,7 @@ select {
   justify-content: flex-end;
 }
 
+.panel-header-actions,
 .profile-panel-header-actions {
   display: inline-flex;
   align-items: center;
