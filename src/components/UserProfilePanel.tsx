@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { AnalyticsIcon, DraftIcon, PublishIcon, SparklesIcon, TrashIcon, UploadIcon } from './icons';
+import { AnalyticsIcon, CloseIcon, DraftIcon, PublishIcon, RefreshIcon, SparklesIcon, TrashIcon, UploadIcon } from './icons';
 import type { CloudProject } from '../types/cloudProject';
 
 type UserProfilePanelProps = {
@@ -123,12 +123,24 @@ function UserProfilePanel({
               Reopen saved XR experiences, switch between draft and published status, and keep your creator profile up to date.
             </p>
           </div>
-          <div className="auth-modal-actions-inline">
-            <button type="button" className="ui-button ui-button-secondary mini-button" onClick={onRefresh}>
-              Refresh
+          <div className="auth-modal-actions-inline profile-panel-header-actions">
+            <button
+              type="button"
+              className="profile-icon-action"
+              aria-label="Refresh projects"
+              title="Refresh projects"
+              onClick={onRefresh}
+            >
+              <RefreshIcon aria-hidden="true" />
             </button>
-            <button type="button" className="ui-button ui-button-secondary mini-button" onClick={onClose}>
-              Close
+            <button
+              type="button"
+              className="profile-icon-action"
+              aria-label="Close profile panel"
+              title="Close profile panel"
+              onClick={onClose}
+            >
+              <CloseIcon aria-hidden="true" />
             </button>
           </div>
         </div>

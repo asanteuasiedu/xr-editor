@@ -142,3 +142,21 @@ export function PublishIcon(props: IconProps) {
     </BaseIcon>
   );
 }
+
+export function RefreshIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M20 11a8 8 0 1 0 2 5.2" />
+      <path d="M20 4v7h-7" />
+    </BaseIcon>
+  );
+}
+
+export function CloseIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M6 6 18 18" />
+      <path d="M18 6 6 18" />
+    </BaseIcon>
+  );
+}

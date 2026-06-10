@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LoginIcon, LogoutIcon, UserCircleIcon, UserPlusIcon } from './icons';
+import { CompassIcon, LoginIcon, LogoutIcon, UserCircleIcon, UserPlusIcon } from './icons';
 
 type AuthControlsProps = {
   variant: 'onboarding' | 'header';
+  onOpenExplore: () => void;
   onOpenSignIn: () => void;
   onOpenSignUp: () => void;
   onOpenProfile: () => void;
@@ -26,7 +27,7 @@ function getUserLabel(email?: string | null) {
   return `${localPart.slice(0, 14)}…@${domain}`;
 }
 
-function AuthControls({ variant, onOpenSignIn, onOpenSignUp, onOpenProfile }: AuthControlsProps) {
+function AuthControls({ variant, onOpenExplore, onOpenSignIn, onOpenSignUp, onOpenProfile }: AuthControlsProps) {
   const { user, profile, profileLoading, loading, signOut } = useAuth();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,12 +48,23 @@ function AuthControls({ variant, onOpenSignIn, onOpenSignUp, onOpenProfile }: Au
 
   if (loading) {
     return (
-      <div
-        className={isOnboarding ? 'creation-onboarding-auth-status' : 'app-auth-status'}
-        role="status"
-        aria-live="polite"
-      >
-        Checking session...
+      <div className={isOnboarding ? 'creation-onboarding-header-actions' : 'app-auth-controls'}>
+        <button
+          type="button"
+          className="topbar-icon-button"
+          aria-label="Explore"
+          title="Explore"
+          onClick={onOpenExplore}
+        >
+          <CompassIcon aria-hidden="true" />
+        </button>
+        <div
+          className={isOnboarding ? 'creation-onboarding-auth-status' : 'app-auth-status'}
+          role="status"
+          aria-live="polite"
+        >
+          Checking session...
+        </div>
       </div>
     );
   }
@@ -60,6 +72,15 @@ function AuthControls({ variant, onOpenSignIn, onOpenSignUp, onOpenProfile }: Au
   if (!user) {
     return (
       <div className={isOnboarding ? 'creation-onboarding-header-actions' : 'app-auth-controls'}>
+        <button
+          type="button"
+          className="topbar-icon-button"
+          aria-label="Explore"
+          title="Explore"
+          onClick={onOpenExplore}
+        >
+          <CompassIcon aria-hidden="true" />
+        </button>
         <button
           type="button"
           className="topbar-icon-button"
@@ -89,6 +110,15 @@ function AuthControls({ variant, onOpenSignIn, onOpenSignUp, onOpenProfile }: Au
         <strong title={user.email ?? userLabel}>{userLabel}</strong>
         {profileLoading ? <span className="auth-user-subtle">Loading profile...</span> : null}
       </div>
+      <button
+        type="button"
+        className="topbar-icon-button"
+        aria-label="Explore"
+        title="Explore"
+        onClick={onOpenExplore}
+      >
+        <CompassIcon aria-hidden="true" />
+      </button>
       <div className="topbar-icon-button-group">
         <button
           type="button"

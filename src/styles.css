@@ -2533,6 +2533,12 @@ select {
   justify-content: flex-end;
 }
 
+.profile-panel-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .auth-modal-heading {
   display: grid;
   gap: 6px;

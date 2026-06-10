@@ -4,7 +4,6 @@ import Layout from './components/Layout';
 import AuthControls from './components/AuthControls';
 import AuthModal, { type AuthModalMode } from './components/AuthModal';
 import ExploreProjectsPanel from './components/ExploreProjectsPanel';
-import { CompassIcon } from './components/icons';
 import ProfileModal from './components/ProfileModal';
 import ProjectAnalyticsDashboard from './components/ProjectAnalyticsDashboard';
 import UserProfilePanel from './components/UserProfilePanel';
@@ -3095,15 +3094,6 @@ function App() {
         logoSrc="/branding/udeesa-logo.png"
         headerControls={
           <div className="header-controls-cluster">
-            <button
-              type="button"
-              className="topbar-icon-button"
-              aria-label="Explore"
-              title="Explore"
-              onClick={handleOpenExplore}
-            >
-              <CompassIcon aria-hidden="true" />
-            </button>
             {showSaveCopyAction ? (
               <button
                 type="button"
@@ -3116,6 +3106,7 @@ function App() {
             ) : null}
             <AuthControls
               variant="header"
+              onOpenExplore={handleOpenExplore}
               onOpenSignIn={handleOpenSignIn}
               onOpenSignUp={handleOpenSignUp}
               onOpenProfile={handleOpenProfile}

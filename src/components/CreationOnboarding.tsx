@@ -1,7 +1,7 @@
 import type { ChangeEvent, FormEvent } from 'react';
 import { useRef, useState } from 'react';
 import AuthControls from './AuthControls';
-import { CatalogIcon, CompassIcon, SparklesIcon, UploadIcon } from './icons';
+import { CatalogIcon, SparklesIcon, UploadIcon } from './icons';
 
 type CreationOnboardingProps = {
   isAuthenticated: boolean;
@@ -96,17 +96,9 @@ function CreationOnboarding({
           </div>
         </div>
 
-        <button
-          type="button"
-          className="topbar-icon-button creation-onboarding-explore-button"
-          aria-label="Explore"
-          title="Explore"
-          onClick={onOpenExplore}
-        >
-          <CompassIcon aria-hidden="true" />
-        </button>
         <AuthControls
           variant="onboarding"
+          onOpenExplore={onOpenExplore}
           onOpenSignIn={onOpenSignIn}
           onOpenSignUp={onOpenSignUp}
           onOpenProfile={onOpenProfile}
