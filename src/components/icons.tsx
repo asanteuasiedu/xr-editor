@@ -27,6 +27,17 @@ export function CompassIcon(props: IconProps) {
   );
 }
 
+export function CatalogIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M4 6.5 8.5 4l7 2.5L20 4v13.5L15.5 20l-7-2.5L4 20V6.5Z" />
+      <path d="M8.5 4v13.5" />
+      <path d="M15.5 6.5V20" />
+      <path d="m12 9.2.9 2.1 2.3.2-1.7 1.5.5 2.2L12 14l-2 1.2.5-2.2-1.7-1.5 2.3-.2.9-2.1Z" />
+    </BaseIcon>
+  );
+}
+
 export function UserCircleIcon(props: IconProps) {
   return (
     <BaseIcon {...props}>

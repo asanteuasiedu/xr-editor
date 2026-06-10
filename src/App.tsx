@@ -2862,6 +2862,40 @@ function App() {
     completeCreationOnboarding();
   };
 
+  const handleOnboardingUploadScene = async (file: File) => {
+    const result = await imageFileToDataUrl(file);
+    if (!result.ok) {
+      throw new Error(result.error || 'Could not load that 360 image right now.');
+    }
+
+    const sceneName = deriveSceneNameFromFile(file, 'Uploaded 360 Scene');
+
+    setImportError(null);
+    setImagePreviewBroken(false);
+    setProject((currentProject) => ({
+      ...currentProject,
+      scenes: currentProject.scenes.map((scene) =>
+        scene.id === currentProject.activeSceneId
+          ? {
+              ...scene,
+              name: sceneName,
+              mediaType: 'image',
+              panoramaUrl: result.dataUrl,
+              aiGenerated: undefined,
+              generationPrompt: undefined,
+              generationAttemptCount: undefined
+            }
+          : scene
+      )
+    }));
+    setActiveEditSection('sceneDetails');
+    setIsContextPanelOpen(true);
+    setSelectedHotspotId(null);
+    setPlacementMode({ type: 'idle' });
+    setNoticeMessage(result.warning ?? `Loaded "${sceneName}" as your starting scene.`);
+    completeCreationOnboarding();
+  };
+
   const handleUploadHotspotImage = async (hotspotId: string, file: File) => {
     const result = await imageFileToDataUrl(file);
     if (!result.ok) {
@@ -3361,6 +3395,7 @@ function App() {
                   isAuthenticated={isAuthenticated}
                   onGenerate={handleOnboardingGenerateScene}
                   onOpenCatalog={handleOpenScenePicker}
+                  onUploadImage={handleOnboardingUploadScene}
                   onOpenExplore={handleOpenExplore}
                   onOpenSignIn={handleOpenSignIn}
                   onOpenSignUp={handleOpenSignUp}
