@@ -149,6 +149,72 @@ select {
   min-width: 92px;
 }
 
+.topbar-icon-button {
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: rgba(12, 12, 18, 0.58);
+  color: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 10px 24px rgba(8, 10, 18, 0.16);
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
+}
+
+.topbar-icon-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(168, 85, 247, 0.65);
+  background: rgba(88, 28, 135, 0.45);
+  color: #ffffff;
+}
+
+.topbar-icon-button:focus-visible {
+  outline: 2px solid rgba(168, 85, 247, 0.9);
+  outline-offset: 3px;
+}
+
+.topbar-icon-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.topbar-icon-button svg {
+  width: 20px;
+  height: 20px;
+  pointer-events: none;
+}
+
+.topbar-icon-button-primary {
+  border-color: rgba(168, 85, 247, 0.42);
+  background:
+    linear-gradient(180deg, rgba(121, 56, 214, 0.6), rgba(86, 24, 146, 0.5)),
+    rgba(88, 28, 135, 0.4);
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.topbar-icon-button-primary:hover {
+  border-color: rgba(196, 141, 255, 0.82);
+  background:
+    linear-gradient(180deg, rgba(147, 82, 238, 0.7), rgba(105, 34, 170, 0.62)),
+    rgba(88, 28, 135, 0.5);
+}
+
+.topbar-icon-button-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .app-auth-user-card,
 .creation-onboarding-auth-user-card {
   display: grid;
@@ -2401,13 +2467,11 @@ select {
   gap: 10px;
 }
 
-.creation-onboarding-explore-button {
-  min-width: 96px;
-}
-
 .creation-onboarding-auth-user {
-  display: grid;
-  justify-items: end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -5380,10 +5444,18 @@ select {
     width: 100%;
   }
 
+  .header-controls-cluster > .topbar-icon-button {
+    align-self: flex-start;
+  }
+
   .app-auth-controls,
   .app-auth-user {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .app-auth-user {
+    align-items: flex-start;
   }
 
   .profile-experience-grid {
@@ -5949,11 +6021,11 @@ select {
   }
 
   .creation-onboarding-header-actions {
-    justify-content: stretch;
+    justify-content: flex-end;
   }
 
   .creation-onboarding-auth-user {
-    justify-items: stretch;
+    justify-content: flex-end;
   }
 
   .creation-onboarding-auth-button {
@@ -5962,7 +6034,13 @@ select {
   }
 
   .creation-onboarding-explore-button {
-    width: 100%;
+    width: 40px;
+    height: 40px;
+  }
+
+  .topbar-icon-button {
+    width: 40px;
+    height: 40px;
   }
 
   .explore-panel-backdrop {

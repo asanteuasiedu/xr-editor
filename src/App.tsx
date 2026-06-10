@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import AuthControls from './components/AuthControls';
 import AuthModal, { type AuthModalMode } from './components/AuthModal';
 import ExploreProjectsPanel from './components/ExploreProjectsPanel';
+import { CompassIcon } from './components/icons';
 import ProfileModal from './components/ProfileModal';
 import ProjectAnalyticsDashboard from './components/ProjectAnalyticsDashboard';
 import UserProfilePanel from './components/UserProfilePanel';
@@ -3062,10 +3063,12 @@ function App() {
           <div className="header-controls-cluster">
             <button
               type="button"
-              className="ui-button ui-button-secondary app-auth-button"
+              className="topbar-icon-button"
+              aria-label="Explore"
+              title="Explore"
               onClick={handleOpenExplore}
             >
-              Explore
+              <CompassIcon aria-hidden="true" />
             </button>
             {showSaveCopyAction ? (
               <button

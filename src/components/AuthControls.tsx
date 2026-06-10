@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { LoginIcon, LogoutIcon, UserCircleIcon, UserPlusIcon } from './icons';
 
 type AuthControlsProps = {
   variant: 'onboarding' | 'header';
@@ -61,17 +62,21 @@ function AuthControls({ variant, onOpenSignIn, onOpenSignUp, onOpenProfile }: Au
       <div className={isOnboarding ? 'creation-onboarding-header-actions' : 'app-auth-controls'}>
         <button
           type="button"
-          className={isOnboarding ? 'ui-button ui-button-secondary creation-onboarding-auth-button' : 'ui-button ui-button-secondary app-auth-button'}
+          className="topbar-icon-button"
+          aria-label="Login"
+          title="Login"
           onClick={onOpenSignIn}
         >
-          Login
+          <LoginIcon aria-hidden="true" />
         </button>
         <button
           type="button"
-          className={isOnboarding ? 'ui-button ui-button-primary creation-onboarding-auth-button' : 'ui-button ui-button-primary app-auth-button'}
+          className="topbar-icon-button topbar-icon-button-primary"
+          aria-label="Sign Up"
+          title="Sign Up"
           onClick={onOpenSignUp}
         >
-          Sign Up
+          <UserPlusIcon aria-hidden="true" />
         </button>
       </div>
     );
@@ -84,35 +89,42 @@ function AuthControls({ variant, onOpenSignIn, onOpenSignUp, onOpenProfile }: Au
         <strong title={user.email ?? userLabel}>{userLabel}</strong>
         {profileLoading ? <span className="auth-user-subtle">Loading profile...</span> : null}
       </div>
-      <button
-        type="button"
-        className={isOnboarding ? 'ui-button ui-button-secondary creation-onboarding-auth-button' : 'ui-button ui-button-secondary app-auth-button'}
-        onClick={onOpenProfile}
-      >
-        Profile
-      </button>
-      <button
-        type="button"
-        className={isOnboarding ? 'ui-button ui-button-secondary creation-onboarding-auth-button' : 'ui-button ui-button-secondary app-auth-button'}
-        onClick={async () => {
-          if (isSigningOut) {
-            return;
-          }
+      <div className="topbar-icon-button-group">
+        <button
+          type="button"
+          className="topbar-icon-button"
+          aria-label="Profile"
+          title="Profile"
+          onClick={onOpenProfile}
+        >
+          <UserCircleIcon aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="topbar-icon-button"
+          aria-label={isSigningOut ? 'Logging out' : 'Logout'}
+          title={isSigningOut ? 'Logging out' : 'Logout'}
+          disabled={isSigningOut}
+          onClick={async () => {
+            if (isSigningOut) {
+              return;
+            }
 
-          setError(null);
-          setIsSigningOut(true);
+            setError(null);
+            setIsSigningOut(true);
 
-          try {
-            await signOut();
-          } catch (signOutError) {
-            setError(signOutError instanceof Error ? signOutError.message : 'Could not log out right now. Try again.');
-          } finally {
-            setIsSigningOut(false);
-          }
-        }}
-      >
-        {isSigningOut ? 'Logging out...' : 'Log Out'}
-      </button>
+            try {
+              await signOut();
+            } catch (signOutError) {
+              setError(signOutError instanceof Error ? signOutError.message : 'Could not log out right now. Try again.');
+            } finally {
+              setIsSigningOut(false);
+            }
+          }}
+        >
+          <LogoutIcon aria-hidden="true" />
+        </button>
+      </div>
       {error ? <p className="auth-inline-error">{error}</p> : null}
     </div>
   );

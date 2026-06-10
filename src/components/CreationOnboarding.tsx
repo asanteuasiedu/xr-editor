@@ -1,6 +1,7 @@
 import type { FormEvent } from 'react';
 import { useState } from 'react';
 import AuthControls from './AuthControls';
+import { CompassIcon } from './icons';
 
 type CreationOnboardingProps = {
   isAuthenticated: boolean;
@@ -71,10 +72,12 @@ function CreationOnboarding({
 
         <button
           type="button"
-          className="ui-button ui-button-secondary creation-onboarding-auth-button creation-onboarding-explore-button"
+          className="topbar-icon-button creation-onboarding-explore-button"
+          aria-label="Explore"
+          title="Explore"
           onClick={onOpenExplore}
         >
-          Explore
+          <CompassIcon aria-hidden="true" />
         </button>
         <AuthControls
           variant="onboarding"
