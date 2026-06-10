@@ -89,6 +89,26 @@ export function UploadIcon(props: IconProps) {
   );
 }
 
+export function CloudSaveIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M7 18.5h10a3.5 3.5 0 0 0 .8-6.9 5.5 5.5 0 0 0-10.5-1.8A3.8 3.8 0 0 0 7 18.5Z" />
+      <path d="M12 10v6" />
+      <path d="m9.5 13.5 2.5 2.5 2.5-2.5" />
+    </BaseIcon>
+  );
+}
+
+export function ProjectsIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M4.5 7.5A2 2 0 0 1 6.5 5.5h4.7l1.8 2h4.5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2z" />
+      <path d="M8.5 12h7" />
+      <path d="M8.5 15h4.5" />
+    </BaseIcon>
+  );
+}
+
 export function SparklesIcon(props: IconProps) {
   return (
     <BaseIcon {...props}>
@@ -139,6 +159,26 @@ export function PublishIcon(props: IconProps) {
       <circle cx="12" cy="12" r="8.5" />
       <path d="M3.8 12h16.4" />
       <path d="M12 3.5c2 2.2 3.1 5.2 3.1 8.5S14 18.3 12 20.5c-2-2.2-3.1-5.2-3.1-8.5S10 5.7 12 3.5Z" />
+    </BaseIcon>
+  );
+}
+
+export function PresentIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M5 5.5h14a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 19 16.5H5A1.5 1.5 0 0 1 3.5 15v-8A1.5 1.5 0 0 1 5 5.5Z" />
+      <path d="m10 10 4 2.5-4 2.5Z" />
+      <path d="M8.5 19.5h7" />
+    </BaseIcon>
+  );
+}
+
+export function EditIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="m9 18.5-3 .9.9-3L15.4 7.9a1.8 1.8 0 0 1 2.5 0l.2.2a1.8 1.8 0 0 1 0 2.5Z" />
+      <path d="m14.5 8.8 2.7 2.7" />
+      <path d="M6.5 19.5h11" />
     </BaseIcon>
   );
 }

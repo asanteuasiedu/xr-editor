@@ -11,6 +11,7 @@ import CreationOnboarding from './components/CreationOnboarding';
 import Sidebar, { type EditSection } from './components/Sidebar';
 import HotspotEditor from './components/HotspotEditor';
 import PanoramaViewer from './components/PanoramaViewer';
+import { EditIcon, PresentIcon } from './components/icons';
 import { useAuth } from './context/AuthContext';
 import { loadProjectAnalyticsEvents, trackProjectAnalyticsEvent } from './lib/analyticsService';
 import {
@@ -3006,6 +3007,14 @@ function App() {
         : null;
 
   const viewerInteractionMode = appMode === 'preview' || !canEditCurrentProject ? 'idle' : placementMode.type;
+  const canShowModeToggle = canEditCurrentProject;
+  const modeToggleLabel = appMode === 'edit' ? 'Present project' : 'Return to edit mode';
+  const modeToggleAction =
+    appMode === 'edit'
+      ? handleEnterPresentationMode
+      : appMode === 'arPreview'
+        ? handleExitCameraPreview
+        : handleToggleAppMode;
   const presentationRevealStyle = previewRevealOrigin
     ? ({
         '--reveal-origin-x': `${previewRevealOrigin.x}px`,
@@ -3115,22 +3124,17 @@ function App() {
               <span className="mode-indicator-pill">
                 {appMode === 'edit' ? 'Edit Mode' : appMode === 'arPreview' ? 'AR Preview' : 'Present Mode'}
               </span>
-              {canEditCurrentProject && appMode === 'edit' ? (
+              {canShowModeToggle ? (
                 <button
                   type="button"
-                  className="ui-button ui-button-primary mode-toggle-button"
-                  onClick={handleEnterPresentationMode}
+                  className={`topbar-icon-button mode-toggle-icon-button ${
+                    appMode === 'edit' ? 'topbar-icon-button-primary' : ''
+                  }`}
+                  aria-label={modeToggleLabel}
+                  title={modeToggleLabel}
+                  onClick={modeToggleAction}
                 >
-                  Present Project
-                </button>
-              ) : null}
-              {canEditCurrentProject && appMode !== 'edit' ? (
-                <button
-                  type="button"
-                  className="ui-button ui-button-secondary mode-toggle-button"
-                  onClick={appMode === 'arPreview' ? handleExitCameraPreview : handleToggleAppMode}
-                >
-                  Edit Mode
+                  {appMode === 'edit' ? <PresentIcon aria-hidden="true" /> : <EditIcon aria-hidden="true" />}
                 </button>
               ) : null}
             </div>

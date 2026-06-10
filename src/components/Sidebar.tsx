@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import type { Hotspot, Project, Scene } from '../types/project';
+import { CloudSaveIcon, ProjectsIcon } from './icons';
 
 type ProjectStats = {
   totalScenes: number;
@@ -302,6 +303,13 @@ function Sidebar({
       : isViewingPublicProject
         ? 'Save Copy to Account'
       : 'Save to Account';
+  const accountSavingHelperCopy = isCloudProjectLinked
+    ? 'This editor project is linked to a cloud project in your account.'
+    : isViewingPublicProject
+      ? isViewingOwnedPublishedProject
+        ? 'You are viewing the published Explore version of your own experience. Saving will create a separate copy in your account.'
+        : 'You are viewing a published community experience. Saving to your account will create your own copy.'
+      : 'Save the current editor state to your account without changing local draft behavior.';
 
   const getHotspotGeometryLabel = (hotspot: Hotspot) =>
     hotspot.shape === 'polygon'
@@ -435,12 +443,54 @@ function Sidebar({
     </div>
   );
 
+  const renderAccountSavingSection = () => (
+    <div className="sidebar-subsection">
+      <p className="sidebar-subsection-title">Account Saving</p>
+      {isUserSignedIn ? (
+        <>
+          <div className="account-saving-actions">
+            <button
+              type="button"
+              className="project-panel-icon-action project-panel-icon-action-primary"
+              aria-label={cloudSaveButtonLabel}
+              title={cloudSaveButtonLabel}
+              onClick={onSaveProjectToCloud}
+              disabled={isSavingProjectToCloud}
+            >
+              <CloudSaveIcon aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="project-panel-icon-action"
+              aria-label="My projects"
+              title="My projects"
+              onClick={onOpenMyProjects}
+            >
+              <ProjectsIcon aria-hidden="true" />
+            </button>
+          </div>
+          <p className="helper-note">{accountSavingHelperCopy}</p>
+        </>
+      ) : (
+        <>
+          <button type="button" className="ui-button ui-button-secondary control-button" disabled>
+            <span className="control-action-label">Log in to save projects to your account</span>
+          </button>
+          <p className="helper-note">
+            Guests can keep working with local drafts and exports. Account saving becomes available after login.
+          </p>
+        </>
+      )}
+    </div>
+  );
+
   const renderProject = () => (
     <section className={sectionCardClass('project')} data-walkthrough-id="project">
       <div className="context-panel-heading">
         {renderHeadingTitle('project', 'Project')}
         <p>Shape the learning context, manage the local draft, and launch project-level actions from one place.</p>
       </div>
+      {renderAccountSavingSection()}
       <p className={`save-state-indicator save-state-${saveStateTone}`}>{saveStateLabel}</p>
       <label className="editor-field compact-field">
         <span>Project Name</span>
@@ -503,54 +553,6 @@ function Sidebar({
             <span className="control-action-label">Reset Local Draft</span>
           </button>
         </div>
-      </div>
-      <div className="sidebar-subsection">
-        <p className="sidebar-subsection-title">Account Saving</p>
-        {isUserSignedIn ? (
-          <>
-            <div className="stacked-actions compact-actions">
-              <button
-                type="button"
-                className="ui-button ui-button-secondary control-button"
-                onClick={onSaveProjectToCloud}
-                disabled={isSavingProjectToCloud}
-              >
-                <span className="control-action-icon" aria-hidden="true">
-                  <ProjectActionIcon />
-                </span>
-                <span className="control-action-label">{cloudSaveButtonLabel}</span>
-              </button>
-              <button
-                type="button"
-                className="ui-button ui-button-secondary control-button"
-                onClick={onOpenMyProjects}
-              >
-                <span className="control-action-icon" aria-hidden="true">
-                  <ControlActionIcon name="scene" />
-                </span>
-                <span className="control-action-label">My Projects</span>
-              </button>
-            </div>
-            <p className="helper-note">
-              {isCloudProjectLinked
-                ? 'This editor project is linked to a cloud project in your account.'
-                : isViewingPublicProject
-                  ? isViewingOwnedPublishedProject
-                    ? 'You are viewing the published Explore version of your own experience. Saving will create a separate copy in your account.'
-                    : 'You are viewing a published community experience. Saving to your account will create your own copy.'
-                  : 'Save the current editor state to your account without changing local draft behavior.'}
-            </p>
-          </>
-        ) : (
-          <>
-            <button type="button" className="ui-button ui-button-secondary control-button" disabled>
-              <span className="control-action-label">Log in to save projects to your account</span>
-            </button>
-            <p className="helper-note">
-              Guests can keep working with local drafts and exports. Account saving becomes available after login.
-            </p>
-          </>
-        )}
       </div>
       <div className="sidebar-subsection project-panel-actions">
         <p className="sidebar-subsection-title">Launch & Share</p>
