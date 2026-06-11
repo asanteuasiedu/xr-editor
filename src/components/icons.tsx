@@ -79,6 +79,50 @@ export function UserPlusIcon(props: IconProps) {
   );
 }
 
+export function ClassroomsIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <circle cx="8.5" cy="9" r="2.4" />
+      <circle cx="15.5" cy="10" r="2.1" />
+      <path d="M4.8 18.2c.9-2 2.4-3 4.2-3 1.6 0 3 .8 4 2.4" />
+      <path d="M12.8 17.8c.7-1.4 1.7-2 3-2 1.1 0 2.1.5 2.8 1.5" />
+    </BaseIcon>
+  );
+}
+
+export function CopyLinkIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M9.5 14.5 14.5 9.5" />
+      <path d="M7.8 16.2a3 3 0 0 1 0-4.2l2.2-2.2a3 3 0 0 1 4.2 0" />
+      <path d="M16.2 7.8a3 3 0 0 1 0 4.2L14 14.2a3 3 0 0 1-4.2 0" />
+      <path d="M6 6v4" />
+      <path d="M4 8h4" />
+    </BaseIcon>
+  );
+}
+
+export function LinkOnIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M10 14 14 10" />
+      <path d="M7.8 16.2a3 3 0 0 1 0-4.2l2.2-2.2a3 3 0 0 1 4.2 0" />
+      <path d="M16.2 7.8a3 3 0 0 1 0 4.2L14 14.2a3 3 0 0 1-4.2 0" />
+    </BaseIcon>
+  );
+}
+
+export function LinkOffIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M9.5 14.5 14.5 9.5" />
+      <path d="M7.8 16.2a3 3 0 0 1 0-4.2l2.2-2.2a3 3 0 0 1 4.2 0" />
+      <path d="M16.2 7.8a3 3 0 0 1 0 4.2L14 14.2a3 3 0 0 1-4.2 0" />
+      <path d="M5 5 19 19" />
+    </BaseIcon>
+  );
+}
+
 export function UploadIcon(props: IconProps) {
   return (
     <BaseIcon {...props}>

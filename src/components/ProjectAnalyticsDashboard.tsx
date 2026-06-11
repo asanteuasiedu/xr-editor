@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   ProjectAnalyticsDailyMetric,
   ProjectAnalyticsEvent,
@@ -6,6 +6,9 @@ import type {
 } from '../types/analytics';
 import type { CloudProject } from '../types/cloudProject';
 import { aggregateProjectAnalytics } from '../utils/analyticsAggregation';
+
+const ALL_CLASSROOM_FILTER_KEY = '__all__';
+const GENERAL_CLASSROOM_FILTER_KEY = '__general__';
 
 type ProjectAnalyticsDashboardProps = {
   project: CloudProject;
@@ -105,11 +108,22 @@ function escapeCsvValue(value: string | number | boolean | null | undefined) {
 }
 
 function downloadAnalyticsCsv(project: CloudProject, events: ProjectAnalyticsEvent[]) {
-  const headers = ['event_type', 'session_id', 'scene_name', 'hotspot_title', 'created_at', 'response_text'];
+  const headers = [
+    'event_type',
+    'session_id',
+    'classroom_name',
+    'share_slug',
+    'scene_name',
+    'hotspot_title',
+    'created_at',
+    'response_text'
+  ];
   const rows = events.map((event) =>
     [
       event.event_type,
       event.session_id,
+      event.classroom_name ?? '',
+      event.share_slug ?? '',
       event.scene_name ?? '',
       event.hotspot_title ?? '',
       event.created_at ?? '',
@@ -158,14 +172,51 @@ function ProjectAnalyticsDashboard({
   onOpenProject
 }: ProjectAnalyticsDashboardProps) {
   const [isReflectionModalOpen, setIsReflectionModalOpen] = useState(false);
-  const summary = useMemo(
+  const [selectedClassroomFilter, setSelectedClassroomFilter] = useState<string>(ALL_CLASSROOM_FILTER_KEY);
+  const allSummary = useMemo(
     () => aggregateProjectAnalytics(events, project.project_data),
     [events, project.project_data]
   );
-  const rangeLabel = useMemo(() => formatRangeLabel(events), [events]);
+  const classroomFilterOptions = useMemo(() => {
+    const options = [
+      {
+        value: ALL_CLASSROOM_FILTER_KEY,
+        label: 'All groups'
+      }
+    ];
+
+    for (const classroomSummary of allSummary.classroomSummaries) {
+      options.push({
+        value: classroomSummary.classroomId ?? GENERAL_CLASSROOM_FILTER_KEY,
+        label: classroomSummary.classroomName
+      });
+    }
+
+    return options;
+  }, [allSummary.classroomSummaries]);
+  const filteredEvents = useMemo(() => {
+    if (selectedClassroomFilter === ALL_CLASSROOM_FILTER_KEY) {
+      return events;
+    }
+
+    if (selectedClassroomFilter === GENERAL_CLASSROOM_FILTER_KEY) {
+      return events.filter((event) => !event.classroom_id);
+    }
+
+    return events.filter((event) => event.classroom_id === selectedClassroomFilter);
+  }, [events, selectedClassroomFilter]);
+  const summary = useMemo(
+    () => aggregateProjectAnalytics(filteredEvents, project.project_data),
+    [filteredEvents, project.project_data]
+  );
+  const rangeLabel = useMemo(() => formatRangeLabel(filteredEvents), [filteredEvents]);
   const sessionsSparkline = useMemo(() => buildSparklinePath(summary.dailySessions), [summary.dailySessions]);
   const timeSparkline = useMemo(() => buildSparklinePath(summary.dailyAverageTime), [summary.dailyAverageTime]);
-  const emptyState = !loading && !error && events.length === 0;
+  const emptyState = !loading && !error && filteredEvents.length === 0;
+  const hasNamedClassroomData = useMemo(
+    () => allSummary.classroomSummaries.some((classroomSummary) => Boolean(classroomSummary.classroomId)),
+    [allSummary.classroomSummaries]
+  );
   const activeScene = useMemo(
     () =>
       project.project_data.scenes.find((scene) => scene.id === project.project_data.activeSceneId) ??
@@ -182,12 +233,24 @@ function ProjectAnalyticsDashboard({
     return activeScenePoints.length > 0 ? activeScenePoints : summary.heatmapPoints;
   }, [activeScene, summary.heatmapPoints]);
   const handleExportCsv = useCallback(() => {
-    if (events.length === 0) {
+    if (filteredEvents.length === 0) {
       return;
     }
 
-    downloadAnalyticsCsv(project, events);
-  }, [events, project]);
+    downloadAnalyticsCsv(project, filteredEvents);
+  }, [filteredEvents, project]);
+
+  useEffect(() => {
+    setSelectedClassroomFilter(ALL_CLASSROOM_FILTER_KEY);
+  }, [project.id]);
+
+  useEffect(() => {
+    if (classroomFilterOptions.some((option) => option.value === selectedClassroomFilter)) {
+      return;
+    }
+
+    setSelectedClassroomFilter(ALL_CLASSROOM_FILTER_KEY);
+  }, [classroomFilterOptions, selectedClassroomFilter]);
 
   return (
     <div
@@ -205,6 +268,19 @@ function ProjectAnalyticsDashboard({
             <p className="analytics-dashboard-range">{rangeLabel}</p>
           </div>
           <div className="analytics-dashboard-toolbar">
+            <label className="analytics-filter-field">
+              <span>Group View</span>
+              <select
+                value={selectedClassroomFilter}
+                onChange={(event) => setSelectedClassroomFilter(event.target.value)}
+              >
+                {classroomFilterOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               type="button"
               className="ui-button ui-button-secondary mini-button"
@@ -325,6 +401,81 @@ function ProjectAnalyticsDashboard({
               <p>Preview or share this experience to begin collecting analytics.</p>
             </section>
           ) : null}
+
+          <section className="analytics-section-card analytics-section-wide">
+            <div className="analytics-section-header">
+              <div>
+                <p className="analytics-card-label">Classroom Comparison</p>
+                <h3>Group performance</h3>
+              </div>
+              <span className="analytics-section-note">
+                Compare sessions and completions across classroom links and general traffic.
+              </span>
+            </div>
+            {allSummary.classroomSummaries.length > 0 ? (
+              <>
+                {!hasNamedClassroomData ? (
+                  <p className="analytics-empty-inline">
+                    No classroom links have recorded activity yet. Showing General / Explore traffic until classroom groups start using their links.
+                  </p>
+                ) : null}
+                <div className="analytics-classroom-table-wrap">
+                  <table className="analytics-classroom-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Classroom / Group</th>
+                        <th scope="col">Sessions</th>
+                        <th scope="col">Completion Rate</th>
+                        <th scope="col">Avg Time</th>
+                        <th scope="col">Interactions</th>
+                        <th scope="col">Reflections</th>
+                        <th scope="col">Top Insight Zone</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allSummary.classroomSummaries.map((classroomSummary) => (
+                        <tr key={classroomSummary.classroomId ?? GENERAL_CLASSROOM_FILTER_KEY}>
+                          <td>{classroomSummary.classroomName}</td>
+                          <td>{classroomSummary.sessions}</td>
+                          <td>{classroomSummary.completionRate.toFixed(1)}%</td>
+                          <td>{formatMinutes(classroomSummary.averageTimeMinutes)}</td>
+                          <td>{classroomSummary.hotspotInteractions}</td>
+                          <td>{classroomSummary.reflectionCount}</td>
+                          <td>{classroomSummary.topHotspot ?? 'No top insight zone yet'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="analytics-classroom-bars" aria-hidden="true">
+                  {allSummary.classroomSummaries.map((classroomSummary) => (
+                    <div key={`${classroomSummary.classroomId ?? GENERAL_CLASSROOM_FILTER_KEY}-bar`}>
+                      <div className="analytics-classroom-bar-copy">
+                        <strong>{classroomSummary.classroomName}</strong>
+                        <span>{classroomSummary.sessions} sessions</span>
+                      </div>
+                      <div className="analytics-classroom-bar-track">
+                        <div
+                          className="analytics-classroom-bar-fill"
+                          style={{
+                            width: `${
+                              allSummary.totalSessions > 0
+                                ? Math.max(8, (classroomSummary.sessions / allSummary.totalSessions) * 100)
+                                : 0
+                            }%`
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="analytics-empty-inline">
+                No classroom links have recorded activity yet. Create classroom links from your saved project card to compare group engagement.
+              </p>
+            )}
+          </section>
 
           <section className="analytics-section-card analytics-section-wide">
             <div className="analytics-section-header">

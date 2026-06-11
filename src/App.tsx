@@ -7,6 +7,7 @@ import ExploreProjectsPanel from './components/ExploreProjectsPanel';
 import ProfileModal from './components/ProfileModal';
 import ProjectAnalyticsDashboard from './components/ProjectAnalyticsDashboard';
 import UserProfilePanel from './components/UserProfilePanel';
+import ClassroomManagerPanel from './components/ClassroomManagerPanel';
 import CreationOnboarding from './components/CreationOnboarding';
 import Sidebar, { type EditSection } from './components/Sidebar';
 import HotspotEditor from './components/HotspotEditor';
@@ -14,6 +15,13 @@ import PanoramaViewer from './components/PanoramaViewer';
 import { EditIcon, PresentIcon } from './components/icons';
 import { useAuth } from './context/AuthContext';
 import { loadProjectAnalyticsEvents, trackProjectAnalyticsEvent } from './lib/analyticsService';
+import {
+  createProjectClassroom,
+  deleteProjectClassroom,
+  loadClassroomProjectBySlug,
+  loadProjectClassrooms,
+  updateProjectClassroom
+} from './lib/classroomService';
 import {
   deleteCloudProject,
   loadCloudProject,
@@ -24,6 +32,7 @@ import {
 } from './lib/projectService';
 import { isSupabaseConfigured } from './lib/supabaseClient';
 import type { ProjectAnalyticsEvent } from './types/analytics';
+import type { ProjectClassroom } from './types/classroom';
 import type { CloudProject, CloudProjectWithProfile } from './types/cloudProject';
 import type { Hotspot, HotspotPolygonPoint, Project } from './types/project';
 import {
@@ -35,6 +44,7 @@ import {
 import { exportProjectToJson, importProjectFromFile } from './utils/exportImport';
 import { imageFileToDataUrl } from './utils/fileAssets';
 import { getBrowserName, getDeviceType, getOrCreateAnalyticsSessionId, resetAnalyticsSessionId } from './utils/analyticsSession';
+import { getClassroomSlugFromPath } from './utils/classroomLinks';
 import { clearLocalDraft, loadLocalDraft, saveLocalDraft } from './utils/localDraft';
 import { SCENE_LIBRARY_ITEMS, STARTER_SCENE_PANORAMA_URL } from './utils/sceneLibrary';
 import { createProjectFromTemplate } from './utils/templates';
@@ -74,7 +84,7 @@ type Generate360SceneResult = {
 };
 type CloudSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 type CloudProjectsStatus = 'idle' | 'loading' | 'ready' | 'error';
-type AnalyticsProjectSource = 'owned' | 'explore' | null;
+type AnalyticsProjectSource = 'owned' | 'explore' | 'classroom' | null;
 const PREVIEW_HINT_DISMISSED_KEY = 'xr-editor.preview-hint-dismissed.v1';
 const EDIT_WALKTHROUGH_DISMISSED_KEY = 'xr-editor.edit-walkthrough-dismissed.v1';
 const PREVIEW_INTERACTION_DEBUG = false;
@@ -181,6 +191,43 @@ function getFriendlyAnalyticsErrorMessage(error: unknown) {
   return error.message;
 }
 
+function getFriendlyClassroomErrorMessage(error: unknown) {
+  if (!(error instanceof Error)) {
+    return 'Classroom links could not be loaded right now.';
+  }
+
+  const normalized = error.message.trim().toLowerCase();
+
+  if (
+    normalized.includes('relation "project_classrooms" does not exist') ||
+    normalized.includes('relation \"project_classrooms\" does not exist') ||
+    normalized.includes('could not find the table')
+  ) {
+    return 'Classroom links are not ready yet. Apply the Supabase classroom SQL and try again.';
+  }
+
+  if (
+    normalized.includes('function public.get_classroom_project_by_slug') ||
+    normalized.includes('get_classroom_project_by_slug')
+  ) {
+    return 'Classroom project loading is not ready yet. Apply the Supabase classroom SQL and try again.';
+  }
+
+  if (
+    normalized.includes('row-level security') ||
+    normalized.includes('permission denied') ||
+    normalized.includes('violates row-level security policy')
+  ) {
+    return 'Classroom permissions are not configured correctly in Supabase yet.';
+  }
+
+  if (normalized.includes('authentication is not configured')) {
+    return 'Classroom links are unavailable until Supabase is configured.';
+  }
+
+  return error.message;
+}
+
 function getFriendlyExploreErrorMessage(error: unknown) {
   if (!(error instanceof Error)) {
     return 'Published experiences could not be loaded right now.';
@@ -224,6 +271,10 @@ function loadEditWalkthroughDismissed() {
   }
 
   return window.localStorage.getItem(EDIT_WALKTHROUGH_DISMISSED_KEY) === '1';
+}
+
+function getInitialClassroomSlug() {
+  return getClassroomSlugFromPath();
 }
 
 function RailIcon({ section }: { section: EditSection }) {
@@ -441,18 +492,25 @@ function getScreenSpaceMarkerPosition(hotspot: Hotspot, index: number) {
 
 function App() {
   const { user } = useAuth();
+  const initialClassroomSlug = useMemo(() => getInitialClassroomSlug(), []);
+  const isBootstrappingClassroomRoute = Boolean(initialClassroomSlug);
   const initialLoad = useMemo(() => loadLocalDraft(), []);
   const initialWalkthroughDismissed = useMemo(() => loadEditWalkthroughDismissed(), []);
   const initialProject = useMemo(
-    () => (initialLoad.restored ? initialLoad.project : createDefaultProject()),
-    [initialLoad]
+    () =>
+      isBootstrappingClassroomRoute
+        ? createDefaultProject()
+        : initialLoad.restored
+          ? initialLoad.project
+          : createDefaultProject(),
+    [initialLoad, isBootstrappingClassroomRoute]
   );
   const [project, setProject] = useState<Project>(
     initialProject
   );
   const [selectedHotspotId, setSelectedHotspotId] = useState<string | null>(null);
   const [, setCurrentView] = useState({ yaw: 0, pitch: 0 });
-  const [appMode, setAppMode] = useState<AppMode>('edit');
+  const [appMode, setAppMode] = useState<AppMode>(isBootstrappingClassroomRoute ? 'preview' : 'edit');
   const [authModalMode, setAuthModalMode] = useState<AuthModalMode | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isMyProjectsModalOpen, setIsMyProjectsModalOpen] = useState(false);
@@ -460,7 +518,9 @@ function App() {
   const [placementMode, setPlacementMode] = useState<PlacementMode>({ type: 'idle' });
   const [importError, setImportError] = useState<string | null>(null);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
-  const [saveState, setSaveState] = useState<SaveState>(initialLoad.restored ? 'restored' : 'saved');
+  const [saveState, setSaveState] = useState<SaveState>(
+    isBootstrappingClassroomRoute ? 'saved' : initialLoad.restored ? 'restored' : 'saved'
+  );
   const [cloudProjectId, setCloudProjectId] = useState<string | null>(null);
   const [activeCloudProjectOwnerId, setActiveCloudProjectOwnerId] = useState<string | null>(null);
   const [activeAnalyticsProjectId, setActiveAnalyticsProjectId] = useState<string | null>(null);
@@ -475,10 +535,15 @@ function App() {
   const [publishedProjectsError, setPublishedProjectsError] = useState<string | null>(null);
   const [viewingPublishedProjectId, setViewingPublishedProjectId] = useState<string | null>(null);
   const [viewingPublishedProjectOwnerId, setViewingPublishedProjectOwnerId] = useState<string | null>(null);
+  const [activeClassroom, setActiveClassroom] = useState<ProjectClassroom | null>(null);
   const [analyticsProject, setAnalyticsProject] = useState<CloudProject | null>(null);
   const [analyticsEvents, setAnalyticsEvents] = useState<ProjectAnalyticsEvent[]>([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const [classroomManagerProject, setClassroomManagerProject] = useState<CloudProject | null>(null);
+  const [projectClassrooms, setProjectClassrooms] = useState<ProjectClassroom[]>([]);
+  const [projectClassroomsLoading, setProjectClassroomsLoading] = useState(false);
+  const [projectClassroomsError, setProjectClassroomsError] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<{ src: string; title: string; caption?: string } | null>(null);
   const [infoPreview, setInfoPreview] = useState<{ title: string; body: string } | null>(null);
   const [questionPreviewHotspotId, setQuestionPreviewHotspotId] = useState<string | null>(null);
@@ -492,14 +557,16 @@ function App() {
   const [, setEditWalkthroughDismissed] = useState(initialWalkthroughDismissed);
   const [walkthroughStepIndex, setWalkthroughStepIndex] = useState<number | null>(null);
   const [isScenePickerOpen, setIsScenePickerOpen] = useState(false);
-  const [showCreationOnboarding, setShowCreationOnboarding] = useState(() => !projectHasValidActiveScene(initialProject));
+  const [showCreationOnboarding, setShowCreationOnboarding] = useState(() =>
+    isBootstrappingClassroomRoute ? false : !projectHasValidActiveScene(initialProject)
+  );
   const [pendingWalkthroughAfterOnboarding, setPendingWalkthroughAfterOnboarding] = useState(false);
   const [previewEntryId, setPreviewEntryId] = useState(0);
   const [completionDismissed, setCompletionDismissed] = useState(false);
   const [showCompletionMessage, setShowCompletionMessage] = useState(false);
   const [completionPendingAfterOverlayClose, setCompletionPendingAfterOverlayClose] = useState(false);
   const [activeEditSection, setActiveEditSection] = useState<EditSection>('project');
-  const [isContextPanelOpen, setIsContextPanelOpen] = useState(true);
+  const [isContextPanelOpen, setIsContextPanelOpen] = useState(!isBootstrappingClassroomRoute);
   const [areViewerOverlaysHidden, setAreViewerOverlaysHidden] = useState(false);
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'requesting' | 'ready' | 'error'>('idle');
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -521,8 +588,13 @@ function App() {
   const analyticsUserIdRef = useRef<string | null>(null);
   const analyticsProjectOwnerIdRef = useRef<string | null>(null);
   const analyticsProjectSourceRef = useRef<AnalyticsProjectSource>(null);
+  const analyticsClassroomIdRef = useRef<string | null>(null);
+  const analyticsClassroomNameRef = useRef<string | null>(null);
+  const analyticsShareSlugRef = useRef<string | null>(null);
   const lastTrackedPreviewSceneKeyRef = useRef<string | null>(null);
   const completedProjectSessionKeyRef = useRef<string | null>(null);
+  const initialClassroomSlugRef = useRef(initialClassroomSlug);
+  const hasResolvedInitialClassroomRouteRef = useRef(false);
 
   const showTemporaryNotice = useCallback((message: string, durationMs = 2200) => {
     setNoticeMessage(message);
@@ -556,13 +628,24 @@ function App() {
           ? analyticsSessionIdRef.current
           : getOrCreateAnalyticsSessionId(activeAnalyticsProjectId);
       const viewerIsOwner = Boolean(user?.id && activeAnalyticsProjectOwnerId === user.id);
-      const analyticsSource = activeAnalyticsProjectSource === 'explore' ? 'explore' : 'owner_preview';
+      const analyticsSource =
+        activeAnalyticsProjectSource === 'classroom'
+          ? 'classroom'
+          : activeAnalyticsProjectSource === 'explore'
+            ? 'explore'
+            : 'owner_preview';
+      const activeClassroomId = activeClassroom?.id ?? null;
+      const activeClassroomName = activeClassroom?.name ?? null;
+      const activeShareSlug = activeClassroom?.share_slug ?? null;
 
       analyticsSessionIdRef.current = sessionId;
       analyticsProjectIdRef.current = activeAnalyticsProjectId;
       analyticsUserIdRef.current = user?.id ?? null;
       analyticsProjectOwnerIdRef.current = activeAnalyticsProjectOwnerId;
       analyticsProjectSourceRef.current = activeAnalyticsProjectSource;
+      analyticsClassroomIdRef.current = activeClassroomId;
+      analyticsClassroomNameRef.current = activeClassroomName;
+      analyticsShareSlugRef.current = activeShareSlug;
 
       if (isDevelopmentEnvironment()) {
         console.info('[analytics] tracking event', {
@@ -570,6 +653,7 @@ function App() {
           eventType: event.event_type,
           sessionId,
           source: analyticsSource,
+          classroomId: activeClassroomId,
           hasUser: Boolean(user?.id)
         });
       }
@@ -578,6 +662,9 @@ function App() {
         ...event,
         project_id: activeAnalyticsProjectId,
         user_id: user?.id ?? null,
+        classroom_id: activeClassroomId,
+        classroom_name: activeClassroomName,
+        share_slug: activeShareSlug,
         session_id: sessionId,
         device_type: getDeviceType(),
         browser_name: getBrowserName(),
@@ -586,11 +673,22 @@ function App() {
           source: analyticsSource,
           isPublicView: !viewerIsOwner,
           ownerId: activeAnalyticsProjectOwnerId,
-          viewerIsOwner
+          viewerIsOwner,
+          classroomId: activeClassroomId,
+          classroomName: activeClassroomName,
+          shareSlug: activeShareSlug
         }
       });
     },
-    [activeAnalyticsProjectId, activeAnalyticsProjectOwnerId, activeAnalyticsProjectSource, appMode, cloudProjectId, user?.id]
+    [
+      activeAnalyticsProjectId,
+      activeAnalyticsProjectOwnerId,
+      activeAnalyticsProjectSource,
+      activeClassroom,
+      appMode,
+      cloudProjectId,
+      user?.id
+    ]
   );
 
   const handleOpenSignIn = useCallback(() => {
@@ -747,6 +845,112 @@ function App() {
     }
   }, [analyticsProject, loadAnalyticsForProject, user?.id]);
 
+  const handleCloseClassroomManager = useCallback(() => {
+    setClassroomManagerProject(null);
+    setProjectClassrooms([]);
+    setProjectClassroomsLoading(false);
+    setProjectClassroomsError(null);
+  }, []);
+
+  const refreshClassroomsForProject = useCallback(async (projectId: string) => {
+    const classrooms = await loadProjectClassrooms(projectId);
+    setProjectClassrooms(classrooms);
+    setProjectClassroomsError(null);
+  }, []);
+
+  const handleManageProjectClassrooms = useCallback(
+    async (cloudProject: CloudProject) => {
+      if (!user?.id) {
+        setImportError('Log in to manage classroom links.');
+        setAuthModalMode('signIn');
+        return;
+      }
+
+      setClassroomManagerProject(cloudProject);
+      setProjectClassrooms([]);
+      setProjectClassroomsLoading(true);
+      setProjectClassroomsError(null);
+
+      try {
+        await refreshClassroomsForProject(cloudProject.id);
+      } catch (error) {
+        setProjectClassroomsError(getFriendlyClassroomErrorMessage(error));
+      } finally {
+        setProjectClassroomsLoading(false);
+      }
+    },
+    [refreshClassroomsForProject, user?.id]
+  );
+
+  const handleRefreshManagedClassrooms = useCallback(async () => {
+    if (!classroomManagerProject) {
+      return;
+    }
+
+    setProjectClassroomsLoading(true);
+    setProjectClassroomsError(null);
+
+    try {
+      await refreshClassroomsForProject(classroomManagerProject.id);
+    } catch (error) {
+      setProjectClassroomsError(getFriendlyClassroomErrorMessage(error));
+    } finally {
+      setProjectClassroomsLoading(false);
+    }
+  }, [classroomManagerProject, refreshClassroomsForProject]);
+
+  const handleCreateManagedClassroom = useCallback(
+    async (name: string, description?: string) => {
+      if (!user?.id || !classroomManagerProject) {
+        throw new Error('Log in to manage classroom links.');
+      }
+
+      const createdClassroom = await createProjectClassroom({
+        projectId: classroomManagerProject.id,
+        ownerUserId: user.id,
+        name,
+        description
+      });
+
+      setProjectClassrooms((currentClassrooms) => [createdClassroom, ...currentClassrooms]);
+      setProjectClassroomsError(null);
+    },
+    [classroomManagerProject, user?.id]
+  );
+
+  const handleToggleManagedClassroom = useCallback(async (classroomId: string, isActive: boolean) => {
+    const updatedClassroom = await updateProjectClassroom({
+      classroomId,
+      isActive
+    });
+
+    setProjectClassrooms((currentClassrooms) =>
+      currentClassrooms.map((classroom) => (classroom.id === updatedClassroom.id ? updatedClassroom : classroom))
+    );
+    setProjectClassroomsError(null);
+  }, []);
+
+  const handleDeleteManagedClassroom = useCallback(
+    async (classroomId: string) => {
+      const targetClassroom = projectClassrooms.find((classroom) => classroom.id === classroomId);
+      const classroomLabel = targetClassroom?.name || 'this classroom link';
+      const shouldDelete = window.confirm(
+        `Delete "${classroomLabel}"?\n\nLearners will no longer be able to open this classroom link.`
+      );
+
+      if (!shouldDelete) {
+        return;
+      }
+
+      await deleteProjectClassroom(classroomId);
+      setProjectClassrooms((currentClassrooms) =>
+        currentClassrooms.filter((classroom) => classroom.id !== classroomId)
+      );
+      setProjectClassroomsError(null);
+    },
+    [projectClassrooms]
+  );
+
   const upsertCloudProjectInState = useCallback((nextProject: CloudProject) => {
     setCloudProjects((currentProjects) => {
       const mergedProjects = [nextProject, ...currentProjects.filter((entry) => entry.id !== nextProject.id)];
@@ -779,7 +983,7 @@ function App() {
     const isViewingExternalPublishedProject =
       Boolean(viewingPublishedProjectId) && (!user?.id || viewingPublishedProjectOwnerId !== user.id);
 
-    if (isViewingExternalPublishedProject) {
+    if (isViewingExternalPublishedProject || activeClassroom) {
       return;
     }
 
@@ -790,7 +994,7 @@ function App() {
     }, 500);
 
     return () => window.clearTimeout(timeoutId);
-  }, [project, user?.id, viewingPublishedProjectId, viewingPublishedProjectOwnerId]);
+  }, [activeClassroom, project, user?.id, viewingPublishedProjectId, viewingPublishedProjectOwnerId]);
 
   useEffect(() => {
     return () => {
@@ -816,6 +1020,7 @@ function App() {
   const isAuthenticated = Boolean(user);
   const isOwnedCloudProject = Boolean(currentUserId && cloudProjectId && activeCloudProjectOwnerId === currentUserId);
   const isViewingPublishedProject = Boolean(viewingPublishedProjectId);
+  const isViewingClassroomProject = Boolean(activeClassroom);
   const isViewingOtherUsersPublishedProject = Boolean(
     viewingPublishedProjectId &&
       viewingPublishedProjectOwnerId &&
@@ -827,6 +1032,7 @@ function App() {
   );
   const canEditCurrentProject =
     Boolean(currentUserId) &&
+    !isViewingClassroomProject &&
     (!isViewingPublishedProject || viewingPublishedProjectOwnerId === currentUserId || isOwnedCloudProject);
   const isCreationOnboardingActive = appMode === 'edit' && showCreationOnboarding;
   const publicProjectHelperMessage = !isViewingPublishedProject
@@ -838,7 +1044,7 @@ function App() {
       : 'Viewing a published experience. Sign in to save a copy and edit this experience.';
   const showSaveCopyAction = Boolean(user && isViewingOtherUsersPublishedProject);
   const isGuestPreviewingUnownedScene = Boolean(
-    !isAuthenticated && !isViewingPublishedProject && projectHasValidActiveScene(project)
+    !isAuthenticated && !isViewingPublishedProject && !isViewingClassroomProject && projectHasValidActiveScene(project)
   );
   const activeWalkthroughStep = walkthroughStepIndex === null ? null : EDIT_WALKTHROUGH_STEPS[walkthroughStepIndex];
 
@@ -1082,7 +1288,16 @@ function App() {
       const previousUserId = analyticsUserIdRef.current;
       const previousOwnerId = analyticsProjectOwnerIdRef.current;
       const previousSource = analyticsProjectSourceRef.current;
+      const previousClassroomId = analyticsClassroomIdRef.current;
+      const previousClassroomName = analyticsClassroomNameRef.current;
+      const previousShareSlug = analyticsShareSlugRef.current;
       const viewerIsOwner = Boolean(previousUserId && previousOwnerId && previousUserId === previousOwnerId);
+      const normalizedSource =
+        previousSource === 'classroom'
+          ? 'classroom'
+          : previousSource === 'explore'
+            ? 'explore'
+            : 'owner_preview';
 
       if (previousProjectId && previousSessionId) {
         if (isDevelopmentEnvironment()) {
@@ -1090,7 +1305,8 @@ function App() {
             projectId: previousProjectId,
             eventType: 'session_end',
             sessionId: previousSessionId,
-            source: previousSource === 'explore' ? 'explore' : 'owner_preview',
+            source: normalizedSource,
+            classroomId: previousClassroomId,
             hasUser: Boolean(previousUserId)
           });
         }
@@ -1098,6 +1314,9 @@ function App() {
         void trackProjectAnalyticsEvent({
           project_id: previousProjectId,
           user_id: previousUserId ?? null,
+          classroom_id: previousClassroomId,
+          classroom_name: previousClassroomName,
+          share_slug: previousShareSlug,
           session_id: previousSessionId,
           event_type: 'session_end',
           progress_value: Number(progressPercent.toFixed(2)),
@@ -1105,10 +1324,13 @@ function App() {
           browser_name: getBrowserName(),
           metadata: {
             reason,
-            source: previousSource === 'explore' ? 'explore' : 'owner_preview',
+            source: normalizedSource,
             isPublicView: !viewerIsOwner,
             ownerId: previousOwnerId,
-            viewerIsOwner
+            viewerIsOwner,
+            classroomId: previousClassroomId,
+            classroomName: previousClassroomName,
+            shareSlug: previousShareSlug
           }
         });
       }
@@ -1122,6 +1344,9 @@ function App() {
       analyticsUserIdRef.current = null;
       analyticsProjectOwnerIdRef.current = null;
       analyticsProjectSourceRef.current = null;
+      analyticsClassroomIdRef.current = null;
+      analyticsClassroomNameRef.current = null;
+      analyticsShareSlugRef.current = null;
       lastTrackedPreviewSceneKeyRef.current = null;
       completedProjectSessionKeyRef.current = null;
     };
@@ -1143,6 +1368,9 @@ function App() {
       analyticsUserIdRef.current = user?.id ?? null;
       analyticsProjectOwnerIdRef.current = activeAnalyticsProjectOwnerId;
       analyticsProjectSourceRef.current = activeAnalyticsProjectSource;
+      analyticsClassroomIdRef.current = activeClassroom?.id ?? null;
+      analyticsClassroomNameRef.current = activeClassroom?.name ?? null;
+      analyticsShareSlugRef.current = activeClassroom?.share_slug ?? null;
       return;
     }
 
@@ -1152,6 +1380,9 @@ function App() {
     analyticsUserIdRef.current = user?.id ?? null;
     analyticsProjectOwnerIdRef.current = activeAnalyticsProjectOwnerId;
     analyticsProjectSourceRef.current = activeAnalyticsProjectSource;
+    analyticsClassroomIdRef.current = activeClassroom?.id ?? null;
+    analyticsClassroomNameRef.current = activeClassroom?.name ?? null;
+    analyticsShareSlugRef.current = activeClassroom?.share_slug ?? null;
     lastTrackedPreviewSceneKeyRef.current = null;
     completedProjectSessionKeyRef.current = null;
 
@@ -1161,11 +1392,16 @@ function App() {
       scene_name: activeScene.name || 'Untitled Scene',
       progress_value: Number(progressPercent.toFixed(2)),
       metadata: {
+        source: activeAnalyticsProjectSource,
+        classroomId: activeClassroom?.id ?? null,
+        classroomName: activeClassroom?.name ?? null,
+        shareSlug: activeClassroom?.share_slug ?? null,
         totalScenes: project.scenes.length,
         totalHotspots: totalProgressPoints
       }
     });
   }, [
+    activeClassroom,
     activeAnalyticsProjectId,
     activeAnalyticsProjectOwnerId,
     activeAnalyticsProjectSource,
@@ -2124,6 +2360,7 @@ function App() {
         analyticsProjectId?: string | null;
         analyticsProjectOwnerId?: string | null;
         analyticsProjectSource?: AnalyticsProjectSource;
+        activeClassroom?: ProjectClassroom | null;
         notice?: string | null;
         viewingPublishedProjectId?: string | null;
         viewingPublishedProjectOwnerId?: string | null;
@@ -2145,9 +2382,11 @@ function App() {
       const nextAnalyticsProjectSource =
         options?.analyticsProjectSource ??
         (nextAnalyticsProjectId
-          ? options?.viewingPublishedProjectId && !options?.cloudProjectId
-            ? 'explore'
-            : 'owned'
+          ? options?.activeClassroom
+            ? 'classroom'
+            : options?.viewingPublishedProjectId && !options?.cloudProjectId
+              ? 'explore'
+              : 'owned'
           : null);
 
       setProject(nextProject);
@@ -2156,6 +2395,7 @@ function App() {
       setActiveAnalyticsProjectId(nextAnalyticsProjectId);
       setActiveAnalyticsProjectOwnerId(nextAnalyticsProjectOwnerId);
       setActiveAnalyticsProjectSource(nextAnalyticsProjectSource);
+      setActiveClassroom(options?.activeClassroom ?? null);
       setViewingPublishedProjectId(options?.viewingPublishedProjectId ?? null);
       setViewingPublishedProjectOwnerId(options?.viewingPublishedProjectOwnerId ?? null);
       setDiscoveredHotspotIds([]);
@@ -2198,6 +2438,7 @@ function App() {
     setActiveAnalyticsProjectSource(null);
     setViewingPublishedProjectId(null);
     setViewingPublishedProjectOwnerId(null);
+    setActiveClassroom(null);
     setCloudProjects([]);
     setCloudProjectsStatus('idle');
     setCloudProjectsError(null);
@@ -2209,6 +2450,10 @@ function App() {
     setAnalyticsEvents([]);
     setAnalyticsLoading(false);
     setAnalyticsError(null);
+    setClassroomManagerProject(null);
+    setProjectClassrooms([]);
+    setProjectClassroomsLoading(false);
+    setProjectClassroomsError(null);
     setImagePreview(null);
     setInfoPreview(null);
     setQuestionPreviewHotspotId(null);
@@ -2252,6 +2497,9 @@ function App() {
     analyticsUserIdRef.current = null;
     analyticsProjectOwnerIdRef.current = null;
     analyticsProjectSourceRef.current = null;
+    analyticsClassroomIdRef.current = null;
+    analyticsClassroomNameRef.current = null;
+    analyticsShareSlugRef.current = null;
     lastTrackedPreviewSceneKeyRef.current = null;
     completedProjectSessionKeyRef.current = null;
   }, []);
@@ -2271,6 +2519,7 @@ function App() {
 
     if (
       didLogin &&
+      !activeClassroom &&
       !viewingPublishedProjectId &&
       projectHasValidActiveScene(project) &&
       appMode === 'preview'
@@ -2297,13 +2546,13 @@ function App() {
       setAnalyticsLoading(false);
       setAnalyticsError(null);
 
-      if (!viewingPublishedProjectId) {
+      if (!viewingPublishedProjectId && !activeClassroom) {
         setActiveAnalyticsProjectId(null);
         setActiveAnalyticsProjectOwnerId(null);
         setActiveAnalyticsProjectSource(null);
       }
     }
-  }, [appMode, project, resetAppForLoggedOutStart, user?.id, viewingPublishedProjectId]);
+  }, [activeClassroom, appMode, project, resetAppForLoggedOutStart, user?.id, viewingPublishedProjectId]);
 
   const handleSaveProjectToAccount = useCallback(async () => {
     if (!user?.id) {
@@ -2448,6 +2697,85 @@ function App() {
     [applyLoadedProject, handleCloseAnalyticsDashboard, user?.id]
   );
 
+  useEffect(() => {
+    const classroomSlug = initialClassroomSlugRef.current;
+    if (!classroomSlug || hasResolvedInitialClassroomRouteRef.current) {
+      return;
+    }
+
+    hasResolvedInitialClassroomRouteRef.current = true;
+    let cancelled = false;
+
+    const loadInitialClassroomRoute = async () => {
+      try {
+        const classroomResult = await loadClassroomProjectBySlug(classroomSlug);
+
+        if (cancelled) {
+          return;
+        }
+
+        if (!classroomResult) {
+          applyLoadedProject(createDefaultProject(), {
+            cloudProjectId: null,
+            activeCloudProjectOwnerId: null,
+            analyticsProjectId: null,
+            analyticsProjectOwnerId: null,
+            analyticsProjectSource: null,
+            activeClassroom: null,
+            notice: null,
+            appMode: 'preview',
+            isContextPanelOpen: false,
+            showCreationOnboarding: false
+          });
+          setImportError('This classroom link is unavailable.');
+          return;
+        }
+
+        applyLoadedProject(classroomResult.project.project_data, {
+          cloudProjectId: null,
+          activeCloudProjectOwnerId: null,
+          analyticsProjectId: classroomResult.project.id,
+          analyticsProjectOwnerId: classroomResult.classroom.owner_user_id,
+          analyticsProjectSource: 'classroom',
+          activeClassroom: classroomResult.classroom,
+          notice: `Viewing classroom "${classroomResult.classroom.name}".`,
+          viewingPublishedProjectId: null,
+          viewingPublishedProjectOwnerId: null,
+          appMode: 'preview',
+          isContextPanelOpen: false,
+          showCreationOnboarding: false
+        });
+        setIsExploreOpen(false);
+        setIsMyProjectsModalOpen(false);
+        setClassroomManagerProject(null);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        applyLoadedProject(createDefaultProject(), {
+          cloudProjectId: null,
+          activeCloudProjectOwnerId: null,
+          analyticsProjectId: null,
+          analyticsProjectOwnerId: null,
+          analyticsProjectSource: null,
+          activeClassroom: null,
+          notice: null,
+          appMode: 'preview',
+          isContextPanelOpen: false,
+          showCreationOnboarding: false
+        });
+        setImportError(getFriendlyClassroomErrorMessage(error));
+      }
+    };
+
+    void loadInitialClassroomRoute();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [applyLoadedProject]);
+
   const handleDeleteCloudProject = useCallback(
     async (projectId: string) => {
       if (!user?.id) {
@@ -2477,6 +2805,10 @@ function App() {
           handleCloseAnalyticsDashboard();
         }
 
+        if (classroomManagerProject?.id === projectId) {
+          handleCloseClassroomManager();
+        }
+
         if (cloudProjectId === projectId) {
           setCloudProjectId(null);
           setActiveCloudProjectOwnerId(null);
@@ -2497,8 +2829,10 @@ function App() {
     },
     [
       analyticsProject?.id,
+      classroomManagerProject?.id,
       cloudProjectId,
       cloudProjects,
+      handleCloseClassroomManager,
       handleCloseAnalyticsDashboard,
       isExploreOpen,
       refreshPublishedProjects,
@@ -3908,6 +4242,9 @@ function App() {
         onViewAnalytics={(cloudProject) => {
           void handleViewProjectAnalytics(cloudProject);
         }}
+        onManageClassrooms={(cloudProject) => {
+          void handleManageProjectClassrooms(cloudProject);
+        }}
         onDeleteProject={(projectId) => {
           void handleDeleteCloudProject(projectId);
         }}
@@ -3916,6 +4253,17 @@ function App() {
         }}
         onCreateProjectFromUpload={handleCreateProjectFromUpload}
         onCreateProjectFromPrompt={handleCreateProjectFromPrompt}
+      />
+      <ClassroomManagerPanel
+        project={classroomManagerProject}
+        classrooms={projectClassrooms}
+        loading={projectClassroomsLoading}
+        error={projectClassroomsError}
+        onClose={handleCloseClassroomManager}
+        onCreateClassroom={handleCreateManagedClassroom}
+        onRefresh={handleRefreshManagedClassrooms}
+        onToggleActive={handleToggleManagedClassroom}
+        onDeleteClassroom={handleDeleteManagedClassroom}
       />
       {analyticsProject ? (
         <ProjectAnalyticsDashboard

@@ -85,7 +85,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
   - `created_at`
   - `updated_at`
 - `thumbnail_url` is currently derived from the active scene panorama when a project is saved. If that panorama is a data URL, the preview will also be stored inline for now. Moving preview assets into storage can happen later if payload size becomes a concern.
-- `Published` is metadata only in this phase. It helps creators organize their saved experiences but does not yet create public share pages or URLs.
+- `Published` controls whether a project appears in the public Explore feed. Creators can also share a specific project privately through classroom links, even if it is not globally published.
 - Row Level Security is enabled. The SQL adds policies so authenticated users can only:
   - select their own projects
   - insert their own projects
@@ -172,6 +172,31 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
   - a reflection details view for submitted written responses
   - CSV export of raw tracked analytics events
   - a refresh action to pull in the latest public engagement events
+
+## Classroom Links
+- Each saved project card in the signed-in profile panel now includes a **Classrooms** action for project owners.
+- Classroom links live in the Supabase `project_classrooms` table, and the SQL migrations are stored at:
+  - [supabase/migrations/create_project_classrooms.sql](/Users/homecomputer/xr-editor/supabase/migrations/create_project_classrooms.sql)
+  - [supabase/migrations/add_classroom_context_to_analytics.sql](/Users/homecomputer/xr-editor/supabase/migrations/add_classroom_context_to_analytics.sql)
+- Creators can create named classroom or group links per project, copy the generated URL, deactivate links, and delete links from the classroom manager panel.
+- Classroom share URLs use the `/classroom/:shareSlug` path and resolve through a Supabase RPC that returns only the active classroom record and its linked project.
+- [vercel.json](/Users/homecomputer/xr-editor/vercel.json) now rewrites `/classroom/:shareSlug` to the app shell so direct classroom-link opens work on Vercel without exposing the rest of the app as public edit routes.
+- Learners can open classroom links while logged out or logged in. Classroom experiences always open in **Present Mode**, never in authoring mode.
+- Analytics events created through classroom links are tagged with:
+  - `classroom_id`
+  - `classroom_name`
+  - `share_slug`
+  - classroom source metadata in the analytics payload
+- The project analytics dashboard now includes a **Classroom Comparison** section so creators can compare sessions, completion rate, average time, hotspot interactions, reflections, and top insight zone across groups.
+- General public Explore traffic is still grouped separately as `General / Explore`.
+- Classroom analytics remain owner-only for viewing. Public and guest learners can contribute events through active classroom links, but they cannot read analytics or manage classroom links.
+- To apply the classroom SQL in Supabase:
+  1. Open the Supabase dashboard.
+  2. Open **SQL Editor**.
+  3. Paste the contents of `supabase/migrations/create_project_classrooms.sql` and run it.
+  4. Paste the contents of `supabase/migrations/add_classroom_context_to_analytics.sql` and run it.
+  5. Confirm the `project_classrooms` table exists, the RPC `get_classroom_project_by_slug` exists, and RLS is enabled.
+  6. Open a saved project from the signed-in profile panel, create one or more classroom links, and use those URLs to compare learner engagement by group.
 
 ## What Works Now
 - One in-memory project with multiple scenes

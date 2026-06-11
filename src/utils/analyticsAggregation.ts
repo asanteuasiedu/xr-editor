@@ -1,4 +1,5 @@
 import type {
+  ProjectAnalyticsClassroomSummary,
   ProjectAnalyticsDailyMetric,
   ProjectAnalyticsDeviceUsage,
   ProjectAnalyticsEvent,
@@ -36,6 +37,14 @@ type EventMetadataCoordinates = {
   sceneName?: string | null;
   reflectionPrompt?: string | null;
 };
+
+type ClassroomEventBucket = {
+  classroomId: string | null;
+  classroomName: string;
+  events: ProjectAnalyticsEvent[];
+};
+
+const GENERAL_CLASSROOM_BUCKET_LABEL = 'General / Explore';
 
 function getValidTimestamp(value?: string) {
   if (!value) {
@@ -143,9 +152,10 @@ function getHeatmapIntensity(interactionCount: number, maxInteractionCount: numb
   return 'low';
 }
 
-export function aggregateProjectAnalytics(
+function aggregateProjectAnalyticsInternal(
   events: ProjectAnalyticsEvent[],
-  projectData?: Project
+  projectData: Project | undefined,
+  includeClassroomSummaries: boolean
 ): ProjectAnalyticsSummary {
   const sortedEvents = [...events].sort((left, right) => {
     const leftTime = getValidTimestamp(left.created_at) ?? 0;
@@ -162,6 +172,7 @@ export function aggregateProjectAnalytics(
   const dailyDurationMap = new Map<string, number[]>();
   const reflections: ProjectAnalyticsReflectionSummary[] = [];
   const heatmapPoints = new Map<string, HeatmapAccumulator>();
+  const classroomEventBuckets = new Map<string, ClassroomEventBucket>();
 
   const scenesById = new Map(projectData?.scenes.map((scene) => [scene.id, scene]) ?? []);
   const hotspotSceneById = new Map<string, Scene>();
@@ -177,6 +188,20 @@ export function aggregateProjectAnalytics(
   for (const event of sortedEvents) {
     if (!event.session_id) {
       continue;
+    }
+
+    const classroomBucketKey = event.classroom_id?.trim() || '__general__';
+    const classroomBucketName = event.classroom_name?.trim() || GENERAL_CLASSROOM_BUCKET_LABEL;
+    const existingClassroomBucket = classroomEventBuckets.get(classroomBucketKey);
+
+    if (existingClassroomBucket) {
+      existingClassroomBucket.events.push(event);
+    } else {
+      classroomEventBuckets.set(classroomBucketKey, {
+        classroomId: event.classroom_id?.trim() || null,
+        classroomName: classroomBucketName,
+        events: [event]
+      });
     }
 
     const sessionEvents = eventsBySession.get(event.session_id);
@@ -414,6 +439,34 @@ export function aggregateProjectAnalytics(
     }))
     .sort((left, right) => right.interactionCount - left.interactionCount);
 
+  const classroomSummaries: ProjectAnalyticsClassroomSummary[] = includeClassroomSummaries
+    ? Array.from(classroomEventBuckets.values())
+        .map((bucket) => {
+          const classroomSummary = aggregateProjectAnalyticsInternal(bucket.events, projectData, false);
+
+          return {
+            classroomId: bucket.classroomId,
+            classroomName: bucket.classroomName,
+            sessions: classroomSummary.totalSessions,
+            completionRate: classroomSummary.completionRate,
+            averageTimeMinutes: classroomSummary.averageTimeMinutes,
+            hotspotInteractions: classroomSummary.hotspotInteractionCounts.reduce(
+              (total, hotspot) => total + hotspot.interactions,
+              0
+            ),
+            reflectionCount: classroomSummary.reflectionCount,
+            topHotspot: classroomSummary.topHotspot?.hotspotTitle ?? null
+          };
+        })
+        .sort((left, right) => {
+          if (right.sessions !== left.sessions) {
+            return right.sessions - left.sessions;
+          }
+
+          return left.classroomName.localeCompare(right.classroomName);
+        })
+    : [];
+
   return {
     totalSessions,
     totalEvents: sortedEvents.length,
@@ -440,7 +493,15 @@ export function aggregateProjectAnalytics(
       .slice(0, 8),
     dailySessions,
     dailyAverageTime,
+    classroomSummaries,
     uniqueHotspotsInteracted: hotspotInteractionCounts.length,
     heatmapPoints: normalizedHeatmapPoints
   };
+}
+
+export function aggregateProjectAnalytics(
+  events: ProjectAnalyticsEvent[],
+  projectData?: Project
+): ProjectAnalyticsSummary {
+  return aggregateProjectAnalyticsInternal(events, projectData, true);
 }

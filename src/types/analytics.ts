@@ -12,6 +12,9 @@ export type ProjectAnalyticsEvent = {
   id?: string;
   project_id: string;
   user_id?: string | null;
+  classroom_id?: string | null;
+  classroom_name?: string | null;
+  share_slug?: string | null;
   session_id: string;
   event_type: AnalyticsEventType;
   scene_id?: string | null;
@@ -57,6 +60,17 @@ export type ProjectAnalyticsDailyMetric = {
   value: number | null;
 };
 
+export type ProjectAnalyticsClassroomSummary = {
+  classroomId: string | null;
+  classroomName: string;
+  sessions: number;
+  completionRate: number;
+  averageTimeMinutes: number | null;
+  hotspotInteractions: number;
+  reflectionCount: number;
+  topHotspot?: string | null;
+};
+
 export type ProjectAnalyticsReflectionSummary = {
   hotspotId: string | null;
   hotspotTitle: string;
@@ -96,6 +110,7 @@ export type ProjectAnalyticsSummary = {
   reflectionDetails: ProjectAnalyticsReflectionSummary[];
   dailySessions: ProjectAnalyticsDailyMetric[];
   dailyAverageTime: ProjectAnalyticsDailyMetric[];
+  classroomSummaries: ProjectAnalyticsClassroomSummary[];
   uniqueHotspotsInteracted: number;
   heatmapPoints: ProjectAnalyticsHeatmapPoint[];
 };

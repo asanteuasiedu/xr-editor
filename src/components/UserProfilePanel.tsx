@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { AnalyticsIcon, CloseIcon, DraftIcon, PublishIcon, RefreshIcon, SparklesIcon, TrashIcon, UploadIcon } from './icons';
+import {
+  AnalyticsIcon,
+  ClassroomsIcon,
+  CloseIcon,
+  DraftIcon,
+  PublishIcon,
+  RefreshIcon,
+  SparklesIcon,
+  TrashIcon,
+  UploadIcon
+} from './icons';
 import type { CloudProject } from '../types/cloudProject';
 
 type UserProfilePanelProps = {
@@ -14,6 +24,7 @@ type UserProfilePanelProps = {
   onEditProfile: () => void;
   onOpenProject: (projectId: string) => void;
   onViewAnalytics: (project: CloudProject) => void;
+  onManageClassrooms: (project: CloudProject) => void;
   onDeleteProject: (projectId: string) => void;
   onToggleProjectStatus: (projectId: string, status: 'draft' | 'published') => void;
   onCreateProjectFromUpload: (file: File) => Promise<void>;
@@ -72,6 +83,7 @@ function UserProfilePanel({
   onEditProfile,
   onOpenProject,
   onViewAnalytics,
+  onManageClassrooms,
   onDeleteProject,
   onToggleProjectStatus,
   onCreateProjectFromUpload,
@@ -405,6 +417,18 @@ function UserProfilePanel({
                       </div>
                     </button>
                     <div className="profile-experience-card-actions profile-project-card-actions">
+                      <button
+                        type="button"
+                        className="profile-icon-action"
+                        aria-label="Manage classrooms"
+                        title="Manage classrooms"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onManageClassrooms(project);
+                        }}
+                      >
+                        <ClassroomsIcon aria-hidden="true" />
+                      </button>
                       <button
                         type="button"
                         className="profile-icon-action analytics"
