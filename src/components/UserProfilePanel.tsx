@@ -5,6 +5,8 @@ import {
   ClassroomsIcon,
   CloseIcon,
   DraftIcon,
+  EditProfileIcon,
+  LogoutIcon,
   PublishIcon,
   RefreshIcon,
   SparklesIcon,
@@ -184,12 +186,21 @@ function UserProfilePanel({
               <span>{projects.length} saved experience{projects.length === 1 ? '' : 's'}</span>
             </div>
             <div className="profile-hero-actions">
-              <button type="button" className="ui-button ui-button-primary mini-button" onClick={onEditProfile}>
-                Edit Profile
+              <button
+                type="button"
+                className="profile-icon-action profile-icon-action-primary"
+                aria-label="Edit profile"
+                title="Edit profile"
+                onClick={onEditProfile}
+              >
+                <EditProfileIcon aria-hidden="true" />
               </button>
               <button
                 type="button"
-                className="ui-button ui-button-secondary mini-button"
+                className="profile-icon-action danger"
+                aria-label={isSigningOut ? 'Logging out' : 'Log out'}
+                title={isSigningOut ? 'Logging out' : 'Log out'}
+                disabled={isSigningOut}
                 onClick={async () => {
                   if (isSigningOut) {
                     return;
@@ -210,7 +221,7 @@ function UserProfilePanel({
                   }
                 }}
               >
-                {isSigningOut ? 'Logging out...' : 'Log Out'}
+                <LogoutIcon aria-hidden="true" />
               </button>
             </div>
             {signOutError ? <p className="auth-inline-error">{signOutError}</p> : null}

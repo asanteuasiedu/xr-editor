@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { CloseIcon } from './icons';
 
 function ProfileModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { user, profile, profileLoading, updateProfile, refreshProfile, isConfigured } = useAuth();
@@ -67,9 +68,17 @@ function ProfileModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
               Update the basics we’ll use for future creator and project ownership features.
             </p>
           </div>
-          <button type="button" className="ui-button ui-button-secondary mini-button" onClick={onClose}>
-            Close
-          </button>
+          <div className="panel-header-actions">
+            <button
+              type="button"
+              className="panel-icon-action"
+              aria-label="Close account panel"
+              title="Close account panel"
+              onClick={onClose}
+            >
+              <CloseIcon aria-hidden="true" />
+            </button>
+          </div>
         </div>
 
         {!isConfigured ? (

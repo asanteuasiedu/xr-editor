@@ -3186,6 +3186,7 @@ select {
   flex-wrap: wrap;
 }
 
+.panel-icon-action,
 .profile-icon-action,
 .project-panel-icon-action {
   width: 38px;
@@ -3209,7 +3210,8 @@ select {
     opacity 160ms ease;
 }
 
-.profile-icon-action:hover,
+.panel-icon-action:hover:not(:disabled),
+.profile-icon-action:hover:not(:disabled),
 .project-panel-icon-action:hover:not(:disabled) {
   transform: translateY(-1px);
   border-color: rgba(168, 85, 247, 0.65);
@@ -3217,18 +3219,21 @@ select {
   color: #ffffff;
 }
 
+.panel-icon-action:focus-visible,
 .profile-icon-action:focus-visible,
 .project-panel-icon-action:focus-visible {
   outline: 2px solid rgba(168, 85, 247, 0.9);
   outline-offset: 3px;
 }
 
+.panel-icon-action:disabled,
 .profile-icon-action:disabled,
 .project-panel-icon-action:disabled {
-  cursor: wait;
-  opacity: 0.72;
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
+.panel-icon-action svg,
 .profile-icon-action svg,
 .project-panel-icon-action svg {
   width: 19px;
@@ -3499,6 +3504,36 @@ select {
     linear-gradient(180deg, rgba(10, 12, 22, 0.96), rgba(7, 9, 17, 0.98));
   box-shadow: 0 36px 100px rgba(2, 4, 10, 0.48);
   padding: 28px;
+}
+
+.analytics-dashboard,
+.analytics-dashboard * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(168, 85, 247, 0.65) rgba(12, 12, 18, 0.55);
+}
+
+.analytics-dashboard::-webkit-scrollbar,
+.analytics-dashboard *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.analytics-dashboard::-webkit-scrollbar-track,
+.analytics-dashboard *::-webkit-scrollbar-track {
+  background: rgba(12, 12, 18, 0.55);
+  border-radius: 999px;
+}
+
+.analytics-dashboard::-webkit-scrollbar-thumb,
+.analytics-dashboard *::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(168, 85, 247, 0.85), rgba(56, 189, 248, 0.55));
+  border-radius: 999px;
+  border: 2px solid rgba(12, 12, 18, 0.85);
+}
+
+.analytics-dashboard::-webkit-scrollbar-thumb:hover,
+.analytics-dashboard *::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(192, 132, 252, 0.95), rgba(34, 211, 238, 0.75));
 }
 
 .analytics-dashboard-header {
@@ -6542,6 +6577,7 @@ select {
     width: 100%;
   }
 
+  .panel-icon-action,
   .profile-icon-action,
   .project-panel-icon-action {
     width: 36px;

@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { CompassIcon, LoginIcon, LogoutIcon, UserCircleIcon, UserPlusIcon } from './icons';
+import { CompassIcon, UserCircleIcon, UserPlusIcon } from './icons';
 
 type AuthControlsProps = {
   variant: 'onboarding' | 'header';
@@ -27,10 +27,8 @@ function getUserLabel(email?: string | null) {
   return `${localPart.slice(0, 14)}…@${domain}`;
 }
 
-function AuthControls({ variant, onOpenExplore, onOpenSignIn, onOpenSignUp, onOpenProfile }: AuthControlsProps) {
-  const { user, profile, profileLoading, loading, signOut } = useAuth();
-  const [isSigningOut, setIsSigningOut] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+function AuthControls({ variant, onOpenExplore, onOpenSignUp, onOpenProfile }: AuthControlsProps) {
+  const { user, profile, profileLoading, loading } = useAuth();
 
   const userLabel = useMemo(() => {
     const displayName =
@@ -83,15 +81,6 @@ function AuthControls({ variant, onOpenExplore, onOpenSignIn, onOpenSignUp, onOp
         </button>
         <button
           type="button"
-          className="topbar-icon-button"
-          aria-label="Login"
-          title="Login"
-          onClick={onOpenSignIn}
-        >
-          <LoginIcon aria-hidden="true" />
-        </button>
-        <button
-          type="button"
           className="topbar-icon-button topbar-icon-button-primary"
           aria-label="Sign Up"
           title="Sign Up"
@@ -119,43 +108,15 @@ function AuthControls({ variant, onOpenExplore, onOpenSignIn, onOpenSignUp, onOp
       >
         <CompassIcon aria-hidden="true" />
       </button>
-      <div className="topbar-icon-button-group">
-        <button
-          type="button"
-          className="topbar-icon-button"
-          aria-label="Profile"
-          title="Profile"
-          onClick={onOpenProfile}
-        >
-          <UserCircleIcon aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className="topbar-icon-button"
-          aria-label={isSigningOut ? 'Logging out' : 'Logout'}
-          title={isSigningOut ? 'Logging out' : 'Logout'}
-          disabled={isSigningOut}
-          onClick={async () => {
-            if (isSigningOut) {
-              return;
-            }
-
-            setError(null);
-            setIsSigningOut(true);
-
-            try {
-              await signOut();
-            } catch (signOutError) {
-              setError(signOutError instanceof Error ? signOutError.message : 'Could not log out right now. Try again.');
-            } finally {
-              setIsSigningOut(false);
-            }
-          }}
-        >
-          <LogoutIcon aria-hidden="true" />
-        </button>
-      </div>
-      {error ? <p className="auth-inline-error">{error}</p> : null}
+      <button
+        type="button"
+        className="topbar-icon-button"
+        aria-label="Profile"
+        title="Profile"
+        onClick={onOpenProfile}
+      >
+        <UserCircleIcon aria-hidden="true" />
+      </button>
     </div>
   );
 }

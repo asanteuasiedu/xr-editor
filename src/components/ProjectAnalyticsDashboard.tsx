@@ -6,6 +6,7 @@ import type {
 } from '../types/analytics';
 import type { CloudProject } from '../types/cloudProject';
 import { aggregateProjectAnalytics } from '../utils/analyticsAggregation';
+import { CloseIcon, ExportCsvIcon, RefreshIcon } from './icons';
 
 const ALL_CLASSROOM_FILTER_KEY = '__all__';
 const GENERAL_CLASSROOM_FILTER_KEY = '__general__';
@@ -283,22 +284,32 @@ function ProjectAnalyticsDashboard({
             </label>
             <button
               type="button"
-              className="ui-button ui-button-secondary mini-button"
+              className="panel-icon-action"
+              aria-label={loading ? 'Refreshing analytics' : 'Refresh analytics'}
+              title={loading ? 'Refreshing analytics' : 'Refresh analytics'}
               onClick={onRefresh}
               disabled={loading || !onRefresh}
             >
-              {loading ? 'Refreshing...' : 'Refresh'}
+              <RefreshIcon aria-hidden="true" />
             </button>
             <button
               type="button"
-              className="ui-button ui-button-secondary mini-button"
+              className="panel-icon-action"
+              aria-label="Export analytics CSV"
+              title="Export analytics CSV"
               onClick={handleExportCsv}
               disabled={events.length === 0}
             >
-              Export CSV
+              <ExportCsvIcon aria-hidden="true" />
             </button>
-            <button type="button" className="ui-button ui-button-secondary mini-button" onClick={onClose}>
-              Close
+            <button
+              type="button"
+              className="panel-icon-action"
+              aria-label="Close analytics"
+              title="Close analytics"
+              onClick={onClose}
+            >
+              <CloseIcon aria-hidden="true" />
             </button>
           </div>
         </header>

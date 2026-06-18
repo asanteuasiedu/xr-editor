@@ -227,6 +227,16 @@ export function EditIcon(props: IconProps) {
   );
 }
 
+export function EditProfileIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <circle cx="10" cy="8.5" r="2.8" />
+      <path d="M5.2 18.2c1.1-1.9 2.8-2.9 4.8-2.9.8 0 1.6.1 2.3.4" />
+      <path d="m14.6 18.2-2.6.8.8-2.6 5-5a1.5 1.5 0 0 1 2.1 0l.1.1a1.5 1.5 0 0 1 0 2.1Z" />
+    </BaseIcon>
+  );
+}
+
 export function RefreshIcon(props: IconProps) {
   return (
     <BaseIcon {...props}>
@@ -243,6 +253,18 @@ export function CloseIcon(props: IconProps) {
     <BaseIcon {...props}>
       <path d="M6 6 18 18" />
       <path d="M18 6 6 18" />
+    </BaseIcon>
+  );
+}
+
+export function ExportCsvIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M8 3.5h6l4 4v13H8a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2Z" />
+      <path d="M14 3.5v4h4" />
+      <path d="M12 10v6" />
+      <path d="m9.5 13.5 2.5 2.5 2.5-2.5" />
+      <path d="M9 18.5h6" />
     </BaseIcon>
   );
 }
