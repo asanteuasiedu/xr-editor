@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { CloseIcon } from './icons';
 
 type AuthModalMode = 'signIn' | 'signUp';
 
@@ -92,8 +93,14 @@ function AuthModal({ mode, isOpen, onClose, onSwitchMode }: AuthModalProps) {
             <h2>{modalTitle}</h2>
             <p className="auth-modal-copy">{helperCopy}</p>
           </div>
-          <button type="button" className="ui-button ui-button-secondary mini-button" onClick={onClose}>
-            Close
+          <button
+            type="button"
+            className="panel-icon-action"
+            aria-label="Close authentication panel"
+            title="Close"
+            onClick={onClose}
+          >
+            <CloseIcon aria-hidden="true" />
           </button>
         </div>
 
