@@ -145,6 +145,18 @@ function getSupabaseErrorMessage(error: unknown) {
   return getSupabaseErrorLike(error)?.message ?? '';
 }
 
+function isMissingClassroomLoaderFunctionError(error: unknown) {
+  const errorLike = getSupabaseErrorLike(error);
+  const normalized = getSupabaseErrorMessage(error).trim().toLowerCase();
+
+  return (
+    errorLike?.code === '42883' ||
+    normalized.includes('could not find the function public.get_classroom_project_by_slug') ||
+    normalized.includes('function public.get_classroom_project_by_slug') ||
+    normalized.includes('schema cache')
+  );
+}
+
 function isMissingProjectClassroomsTableError(error: unknown) {
   const normalized = getSupabaseErrorMessage(error).trim().toLowerCase();
 
@@ -403,17 +415,42 @@ export async function loadClassroomProjectBySlug(
   }
 
   const client = requireSupabaseClient();
-  const { data, error } = await client.rpc('get_classroom_project_by_slug', {
-    lookup_share_slug: trimmedSlug
-  });
+  const loadAttempt = async (parameterName: 'classroom_slug' | 'lookup_share_slug') =>
+    client.rpc('get_classroom_project_by_slug', {
+      [parameterName]: trimmedSlug
+    });
 
-  if (error) {
-    throw error;
+  let response = await loadAttempt('classroom_slug');
+  if (response.error && isMissingClassroomLoaderFunctionError(response.error)) {
+    response = await loadAttempt('lookup_share_slug');
   }
 
-  const row = Array.isArray(data) ? (data[0] as ClassroomProjectRpcRow | undefined) : undefined;
+  const { data, error } = response;
+
+  if (error) {
+    const errorDetails = getSupabaseErrorLike(error);
+    console.error('[classrooms] failed to load classroom project', {
+      message: errorDetails?.message ?? getSupabaseErrorMessage(error) ?? 'Unknown classroom project loading failure.',
+      details: errorDetails?.details ?? null,
+      hint: errorDetails?.hint ?? null,
+      code: errorDetails?.code ?? null,
+      shareSlug: trimmedSlug
+    });
+
+    if (isMissingClassroomLoaderFunctionError(error)) {
+      throw new Error('Classroom loading setup is missing. Please apply the classroom project loader SQL in Supabase.');
+    }
+
+    throw new Error('Unable to load this classroom experience. Please try again.');
+  }
+
+  const row = Array.isArray(data)
+    ? (data[0] as ClassroomProjectRpcRow | undefined)
+    : data
+      ? (data as ClassroomProjectRpcRow)
+      : undefined;
   if (!row) {
-    return null;
+    throw new Error('This classroom link is unavailable.');
   }
 
   return {

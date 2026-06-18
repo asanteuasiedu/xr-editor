@@ -141,6 +141,33 @@ function getErrorMessageLike(error: unknown) {
   return '';
 }
 
+function getErrorCodeLike(error: unknown) {
+  if (error && typeof error === 'object' && 'code' in error) {
+    const possibleCode = (error as { code?: unknown }).code;
+    return typeof possibleCode === 'string' ? possibleCode : '';
+  }
+
+  return '';
+}
+
+function getErrorDetailsLike(error: unknown) {
+  if (error && typeof error === 'object' && 'details' in error) {
+    const possibleDetails = (error as { details?: unknown }).details;
+    return typeof possibleDetails === 'string' ? possibleDetails : '';
+  }
+
+  return '';
+}
+
+function getErrorHintLike(error: unknown) {
+  if (error && typeof error === 'object' && 'hint' in error) {
+    const possibleHint = (error as { hint?: unknown }).hint;
+    return typeof possibleHint === 'string' ? possibleHint : '';
+  }
+
+  return '';
+}
+
 function getFriendlyCloudProjectErrorMessage(error: unknown) {
   if (!(error instanceof Error)) {
     return 'Cloud project actions could not be completed right now.';
@@ -211,6 +238,7 @@ function getFriendlyClassroomErrorMessage(error: unknown) {
   }
 
   const normalized = message.trim().toLowerCase();
+  const errorCode = getErrorCodeLike(error);
 
   if (
     normalized.includes('relation "project_classrooms" does not exist') ||
@@ -221,10 +249,11 @@ function getFriendlyClassroomErrorMessage(error: unknown) {
   }
 
   if (
-    normalized.includes('function public.get_classroom_project_by_slug') ||
-    normalized.includes('get_classroom_project_by_slug')
+    errorCode === '42883' ||
+    normalized.includes('could not find the function public.get_classroom_project_by_slug') ||
+    normalized.includes('schema cache')
   ) {
-    return 'Classroom project loading is not ready yet. Apply the Supabase classroom SQL and try again.';
+    return 'Classroom loading setup is missing. Please apply the classroom project loader SQL in Supabase.';
   }
 
   if (
@@ -237,6 +266,14 @@ function getFriendlyClassroomErrorMessage(error: unknown) {
 
   if (normalized.includes('authentication is not configured')) {
     return 'Classroom links are unavailable until Supabase is configured.';
+  }
+
+  if (normalized.includes('this classroom link is unavailable')) {
+    return 'This classroom link is unavailable.';
+  }
+
+  if (normalized.includes('unable to load this classroom experience')) {
+    return 'Unable to load this classroom experience. Please try again.';
   }
 
   return message;
@@ -2740,6 +2777,7 @@ function App() {
 
     const loadInitialClassroomRoute = async () => {
       try {
+        console.info('[classrooms] loading classroom route', { shareSlug: classroomSlug });
         const classroomResult = await loadClassroomProjectBySlug(classroomSlug);
 
         if (cancelled) {
@@ -2763,6 +2801,12 @@ function App() {
           return;
         }
 
+        console.info('[classrooms] classroom project loaded', {
+          classroomId: classroomResult.classroom.id,
+          projectId: classroomResult.project.id,
+          projectStatus: classroomResult.project.status ?? 'draft'
+        });
+
         applyLoadedProject(classroomResult.project.project_data, {
           cloudProjectId: null,
           activeCloudProjectOwnerId: null,
@@ -2784,6 +2828,14 @@ function App() {
         if (cancelled) {
           return;
         }
+
+        console.error('[classrooms] classroom route failed', {
+          shareSlug: classroomSlug,
+          message: getErrorMessageLike(error) || 'Unknown classroom route failure.',
+          code: getErrorCodeLike(error) || null,
+          details: getErrorDetailsLike(error) || null,
+          hint: getErrorHintLike(error) || null
+        });
 
         applyLoadedProject(createDefaultProject(), {
           cloudProjectId: null,

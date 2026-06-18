@@ -178,6 +178,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 - Classroom links live in the Supabase `project_classrooms` table, and the SQL migrations are stored at:
   - [supabase/migrations/create_project_classrooms.sql](/Users/homecomputer/xr-editor/supabase/migrations/create_project_classrooms.sql)
   - [supabase/migrations/add_classroom_context_to_analytics.sql](/Users/homecomputer/xr-editor/supabase/migrations/add_classroom_context_to_analytics.sql)
+  - [supabase/migrations/fix_classroom_project_loader_rpc.sql](/Users/homecomputer/xr-editor/supabase/migrations/fix_classroom_project_loader_rpc.sql)
 - Creators can create named classroom or group links per project, copy the generated URL, deactivate links, and delete links from the classroom manager panel.
 - Classroom share URLs use the `/classroom/:shareSlug` path and resolve through a Supabase RPC that returns only the active classroom record and its linked project.
 - [vercel.json](/Users/homecomputer/xr-editor/vercel.json) now rewrites `/classroom/:shareSlug` to the app shell so direct classroom-link opens work on Vercel without exposing the rest of the app as public edit routes.
@@ -195,8 +196,9 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
   2. Open **SQL Editor**.
   3. Paste the contents of `supabase/migrations/create_project_classrooms.sql` and run it.
   4. Paste the contents of `supabase/migrations/add_classroom_context_to_analytics.sql` and run it.
-  5. Confirm the `project_classrooms` table exists, the RPC `get_classroom_project_by_slug` exists, and RLS is enabled.
-  6. Open a saved project from the signed-in profile panel, create one or more classroom links, and use those URLs to compare learner engagement by group.
+  5. Paste the contents of `supabase/migrations/fix_classroom_project_loader_rpc.sql` and run it if your database was created before the classroom loader RPC used the `classroom_slug` parameter.
+  6. Confirm the `project_classrooms` table exists, the RPC `get_classroom_project_by_slug` exists, and RLS is enabled.
+  7. Open a saved project from the signed-in profile panel, create one or more classroom links, and use those URLs to compare learner engagement by group.
 - Troubleshooting classroom creation:
   1. Apply `supabase/migrations/create_project_classrooms.sql`.
   2. Confirm `public.project_classrooms` exists.

@@ -71,7 +71,7 @@ using (is_active = true);
 grant select on public.project_classrooms to anon, authenticated;
 grant insert, update, delete on public.project_classrooms to authenticated;
 
-create or replace function public.get_classroom_project_by_slug(lookup_share_slug text)
+create or replace function public.get_classroom_project_by_slug(classroom_slug text)
 returns table (
   classroom_id uuid,
   owner_user_id uuid,
@@ -116,7 +116,7 @@ as $$
     projects.updated_at as project_updated_at
   from public.project_classrooms as classrooms
   join public.projects on projects.id = classrooms.project_id
-  where classrooms.share_slug = lookup_share_slug
+  where classrooms.share_slug = classroom_slug
     and classrooms.is_active = true
   limit 1;
 $$;
