@@ -68,6 +68,8 @@ function ClassroomManagerPanel({
   onToggleActive,
   onDeleteClassroom
 }: ClassroomManagerPanelProps) {
+  const genericCreateError =
+    'Unable to create classroom. Confirm this project is saved to your account and the classroom database migration has been applied.';
   const [classroomName, setClassroomName] = useState('');
   const [classroomDescription, setClassroomDescription] = useState('');
   const [createError, setCreateError] = useState<string | null>(null);
@@ -180,9 +182,11 @@ function ClassroomManagerPanel({
                 setClassroomDescription('');
                 setCreateStatus(`Created "${trimmedName}" classroom link.`);
               } catch (createIssue) {
-                setCreateError(
-                  createIssue instanceof Error ? createIssue.message : 'Could not create that classroom link.'
-                );
+                const message =
+                  createIssue instanceof Error && createIssue.message.trim()
+                    ? createIssue.message
+                    : genericCreateError;
+                setCreateError(message);
               } finally {
                 setIsCreating(false);
               }

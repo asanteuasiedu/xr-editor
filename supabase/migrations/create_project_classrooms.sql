@@ -45,9 +45,21 @@ on public.project_classrooms
 for all
 using (
   owner_user_id = auth.uid()
+  and exists (
+    select 1
+    from public.projects
+    where projects.id = project_classrooms.project_id
+      and projects.user_id = auth.uid()
+  )
 )
 with check (
   owner_user_id = auth.uid()
+  and exists (
+    select 1
+    from public.projects
+    where projects.id = project_classrooms.project_id
+      and projects.user_id = auth.uid()
+  )
 );
 
 drop policy if exists "Anyone can view active classroom links" on public.project_classrooms;

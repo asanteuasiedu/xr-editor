@@ -39,6 +39,17 @@ type ClassroomProjectRpcRow = {
   project_updated_at: string;
 };
 
+type SupabaseErrorLike = {
+  message?: string | null;
+  details?: string | null;
+  hint?: string | null;
+  code?: string | null;
+};
+
+const MAX_CLASSROOM_SLUG_ATTEMPTS = 3;
+const GENERIC_CLASSROOM_CREATE_ERROR =
+  'Unable to create classroom. Confirm this project is saved to your account and the classroom database migration has been applied.';
+
 function requireSupabaseClient() {
   if (!supabase) {
     throw new Error(authConfigurationError);
@@ -112,6 +123,81 @@ function buildShareSlug(projectId: string) {
   return `udeesa-${projectSegment}-${createRandomSlugSegment()}`;
 }
 
+function getSupabaseErrorLike(error: unknown): SupabaseErrorLike | null {
+  if (!error || typeof error !== 'object') {
+    return null;
+  }
+
+  const possibleError = error as Record<string, unknown>;
+  return {
+    message: typeof possibleError.message === 'string' ? possibleError.message : null,
+    details: typeof possibleError.details === 'string' ? possibleError.details : null,
+    hint: typeof possibleError.hint === 'string' ? possibleError.hint : null,
+    code: typeof possibleError.code === 'string' ? possibleError.code : null
+  };
+}
+
+function getSupabaseErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return getSupabaseErrorLike(error)?.message ?? '';
+}
+
+function isMissingProjectClassroomsTableError(error: unknown) {
+  const normalized = getSupabaseErrorMessage(error).trim().toLowerCase();
+
+  return (
+    normalized.includes('relation "public.project_classrooms" does not exist') ||
+    normalized.includes('relation "project_classrooms" does not exist') ||
+    normalized.includes('relation \\"project_classrooms\\" does not exist') ||
+    normalized.includes('could not find the table')
+  );
+}
+
+function isPermissionOrRlsError(error: unknown) {
+  const normalized = getSupabaseErrorMessage(error).trim().toLowerCase();
+
+  return (
+    normalized.includes('row-level security') ||
+    normalized.includes('permission denied') ||
+    normalized.includes('violates row-level security policy')
+  );
+}
+
+function toFriendlyCreateClassroomError(error: unknown) {
+  if (isMissingProjectClassroomsTableError(error)) {
+    return new Error('Classroom database setup is missing. Please apply create_project_classrooms.sql in Supabase.');
+  }
+
+  if (isPermissionOrRlsError(error)) {
+    return new Error(GENERIC_CLASSROOM_CREATE_ERROR);
+  }
+
+  const normalized = getSupabaseErrorMessage(error).trim().toLowerCase();
+  if (normalized.includes('authentication is not configured')) {
+    return new Error(authConfigurationError);
+  }
+
+  return new Error(GENERIC_CLASSROOM_CREATE_ERROR);
+}
+
+export async function verifyClassroomSetup(): Promise<boolean> {
+  const client = requireSupabaseClient();
+  const { error } = await client.from('project_classrooms').select('id').limit(1);
+
+  if (!error) {
+    return true;
+  }
+
+  if (isMissingProjectClassroomsTableError(error)) {
+    return false;
+  }
+
+  throw error;
+}
+
 function isUniqueConstraintError(error: unknown) {
   if (!error || typeof error !== 'object') {
     return false;
@@ -130,22 +216,57 @@ export async function createProjectClassroom(
   input: CreateProjectClassroomInput
 ): Promise<ProjectClassroom> {
   const client = requireSupabaseClient();
+  const trimmedProjectId = input.projectId.trim();
+  const trimmedOwnerUserId = input.ownerUserId.trim();
   const trimmedName = input.name.trim();
+
+  if (!trimmedProjectId) {
+    throw new Error('Save this project to your account before creating classroom links.');
+  }
+
+  if (!trimmedOwnerUserId) {
+    throw new Error('Log in to manage classroom links.');
+  }
 
   if (!trimmedName) {
     throw new Error('Enter a classroom or group name first.');
   }
 
-  for (let attempt = 0; attempt < 5; attempt += 1) {
+  let hasClassroomSetup = false;
+  try {
+    hasClassroomSetup = await verifyClassroomSetup();
+  } catch (error) {
+    const errorDetails = getSupabaseErrorLike(error);
+    console.error('[classrooms] failed to verify classroom setup', {
+      message: errorDetails?.message ?? getSupabaseErrorMessage(error) ?? 'Unknown classroom setup failure.',
+      details: errorDetails?.details ?? null,
+      hint: errorDetails?.hint ?? null,
+      code: errorDetails?.code ?? null,
+      payload: {
+        project_id: trimmedProjectId,
+        owner_user_id: trimmedOwnerUserId,
+        name: trimmedName
+      }
+    });
+    throw toFriendlyCreateClassroomError(error);
+  }
+
+  if (!hasClassroomSetup) {
+    throw new Error('Classroom database setup is missing. Please apply create_project_classrooms.sql in Supabase.');
+  }
+
+  for (let attempt = 0; attempt < MAX_CLASSROOM_SLUG_ATTEMPTS; attempt += 1) {
+    const payload = {
+      project_id: trimmedProjectId,
+      owner_user_id: trimmedOwnerUserId,
+      name: trimmedName,
+      description: normalizeOptionalText(input.description),
+      share_slug: buildShareSlug(trimmedProjectId),
+      is_active: true
+    };
     const { data, error } = await client
       .from('project_classrooms')
-      .insert({
-        project_id: input.projectId,
-        owner_user_id: input.ownerUserId,
-        name: trimmedName,
-        description: normalizeOptionalText(input.description),
-        share_slug: buildShareSlug(input.projectId)
-      })
+      .insert(payload)
       .select('*')
       .single();
 
@@ -153,12 +274,32 @@ export async function createProjectClassroom(
       return mapProjectClassroom(data as ClassroomRow);
     }
 
-    if (!isUniqueConstraintError(error) || attempt === 4) {
-      throw error;
+    const errorDetails = getSupabaseErrorLike(error);
+    const safeMessage =
+      errorDetails?.message ?? getSupabaseErrorMessage(error) ?? 'Unknown classroom creation failure.';
+    console.error('[classrooms] failed to create classroom', {
+      message: safeMessage,
+      details: errorDetails?.details ?? null,
+      hint: errorDetails?.hint ?? null,
+      code: errorDetails?.code ?? null,
+      payload: {
+        project_id: payload.project_id,
+        owner_user_id: payload.owner_user_id,
+        name: payload.name,
+        share_slug: payload.share_slug
+      }
+    });
+
+    if (!isUniqueConstraintError(error)) {
+      throw toFriendlyCreateClassroomError(error);
+    }
+
+    if (attempt === MAX_CLASSROOM_SLUG_ATTEMPTS - 1) {
+      throw new Error('Unable to create a unique classroom link. Please try again.');
     }
   }
 
-  throw new Error('Could not create a unique classroom link.');
+  throw new Error('Unable to create a unique classroom link. Please try again.');
 }
 
 export async function loadProjectClassrooms(projectId: string): Promise<ProjectClassroom[]> {

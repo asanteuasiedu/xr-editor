@@ -197,6 +197,23 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
   4. Paste the contents of `supabase/migrations/add_classroom_context_to_analytics.sql` and run it.
   5. Confirm the `project_classrooms` table exists, the RPC `get_classroom_project_by_slug` exists, and RLS is enabled.
   6. Open a saved project from the signed-in profile panel, create one or more classroom links, and use those URLs to compare learner engagement by group.
+- Troubleshooting classroom creation:
+  1. Apply `supabase/migrations/create_project_classrooms.sql`.
+  2. Confirm `public.project_classrooms` exists.
+  3. Confirm you are logged in with the same Supabase user that owns the project.
+  4. Confirm the project is already saved to your account.
+  5. Confirm the classroom RLS policies and grants have been applied.
+  6. If creation still fails, open the browser console and check the `[classrooms]` error log for the exact Supabase `message`, `details`, `hint`, and `code`.
+- Useful verification SQL:
+  ```sql
+  select id, user_id, title, status
+  from public.projects
+  where user_id = auth.uid();
+
+  select id, project_id, owner_user_id, name, share_slug
+  from public.project_classrooms
+  limit 20;
+  ```
 
 ## What Works Now
 - One in-memory project with multiple scenes

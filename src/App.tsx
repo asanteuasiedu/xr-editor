@@ -128,6 +128,19 @@ function isDevelopmentEnvironment() {
   return typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
 }
 
+function getErrorMessageLike(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (error && typeof error === 'object' && 'message' in error) {
+    const possibleMessage = (error as { message?: unknown }).message;
+    return typeof possibleMessage === 'string' ? possibleMessage : '';
+  }
+
+  return '';
+}
+
 function getFriendlyCloudProjectErrorMessage(error: unknown) {
   if (!(error instanceof Error)) {
     return 'Cloud project actions could not be completed right now.';
@@ -192,11 +205,12 @@ function getFriendlyAnalyticsErrorMessage(error: unknown) {
 }
 
 function getFriendlyClassroomErrorMessage(error: unknown) {
-  if (!(error instanceof Error)) {
+  const message = getErrorMessageLike(error);
+  if (!message) {
     return 'Classroom links could not be loaded right now.';
   }
 
-  const normalized = error.message.trim().toLowerCase();
+  const normalized = message.trim().toLowerCase();
 
   if (
     normalized.includes('relation "project_classrooms" does not exist') ||
@@ -225,7 +239,7 @@ function getFriendlyClassroomErrorMessage(error: unknown) {
     return 'Classroom links are unavailable until Supabase is configured.';
   }
 
-  return error.message;
+  return message;
 }
 
 function getFriendlyExploreErrorMessage(error: unknown) {
@@ -866,6 +880,16 @@ function App() {
         return;
       }
 
+      if (!cloudProject.id.trim()) {
+        setImportError('Save this project to your account before creating classroom links.');
+        return;
+      }
+
+      if (cloudProject.user_id !== user.id) {
+        setImportError('You can only create classroom links for projects you own.');
+        return;
+      }
+
       setClassroomManagerProject(cloudProject);
       setProjectClassrooms([]);
       setProjectClassroomsLoading(true);
@@ -903,6 +927,14 @@ function App() {
     async (name: string, description?: string) => {
       if (!user?.id || !classroomManagerProject) {
         throw new Error('Log in to manage classroom links.');
+      }
+
+      if (!classroomManagerProject.id.trim()) {
+        throw new Error('Save this project to your account before creating classroom links.');
+      }
+
+      if (classroomManagerProject.user_id !== user.id) {
+        throw new Error('You can only create classroom links for projects you own.');
       }
 
       const createdClassroom = await createProjectClassroom({
