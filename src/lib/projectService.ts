@@ -227,14 +227,17 @@ export async function loadPublishedProjects(
   const client = requireSupabaseClient();
   const { data, error } = await client
     .from('projects')
-    .select('*')
+    .select('id,user_id,title,description,thumbnail_url,status,project_data,created_at,updated_at')
     .eq('status', 'published')
     .order('updated_at', { ascending: false })
     .limit(limit);
 
   if (error) {
-    console.error('[explore] failed to load published projects', {
-      message: error.message
+    console.error('[explore] failed to load native published projects', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code
     });
     throw error;
   }
@@ -256,19 +259,31 @@ export async function loadPublishedProjects(
   const creatorProfiles = new Map<string, CloudProjectCreatorProfile>();
 
   if (creatorIds.length > 0) {
-    const { data: creatorData, error: creatorError } = await client
-      .from('public_creator_profiles')
-      .select('user_id, display_name, organization, avatar_url, bio')
-      .in('user_id', creatorIds);
+    try {
+      const { data: creatorData, error: creatorError } = await client
+        .from('public_creator_profiles')
+        .select('user_id, display_name, organization, avatar_url, bio')
+        .in('user_id', creatorIds);
 
-    if (creatorError) {
-      if (isDevelopmentEnvironment()) {
-        console.warn('[explore] could not load creator profile summaries', creatorError);
+      if (creatorError) {
+        console.warn('[explore] could not load creator profile summaries', {
+          message: creatorError.message,
+          details: creatorError.details,
+          hint: creatorError.hint,
+          code: creatorError.code
+        });
+      } else {
+        for (const row of (creatorData ?? []) as PublicCreatorProfileRow[]) {
+          creatorProfiles.set(row.user_id, mapCreatorProfileRow(row));
+        }
       }
-    } else {
-      for (const row of (creatorData ?? []) as PublicCreatorProfileRow[]) {
-        creatorProfiles.set(row.user_id, mapCreatorProfileRow(row));
-      }
+    } catch (creatorProfileError) {
+      console.warn('[explore] could not load creator profile summaries', {
+        message:
+          creatorProfileError instanceof Error
+            ? creatorProfileError.message
+            : 'Unknown creator profile load failure.'
+      });
     }
   }
 
@@ -278,7 +293,10 @@ export async function loadPublishedProjects(
   }));
 
   if (!searchTerm) {
-    console.info('[explore] published projects loaded', { count: projectsWithProfiles.length });
+    console.info('[explore] native published projects loaded', {
+      count: projectsWithProfiles.length,
+      owners: [...new Set(projectsWithProfiles.map((project) => project.user_id))]
+    });
     return projectsWithProfiles;
   }
 
@@ -296,9 +314,10 @@ export async function loadPublishedProjects(
     );
   });
 
-  console.info('[explore] published projects loaded', {
+  console.info('[explore] native published projects loaded', {
     count: filteredProjects.length,
-    filteredFrom: projectsWithProfiles.length
+    filteredFrom: projectsWithProfiles.length,
+    owners: [...new Set(filteredProjects.map((project) => project.user_id))]
   });
 
   return filteredProjects;
@@ -350,6 +369,11 @@ export async function updateCloudProjectStatus({
   if (error) {
     throw error;
   }
+
+  console.info('[project status] updated', {
+    projectId,
+    status
+  });
 
   return mapProjectRow(data as ProjectRow);
 }

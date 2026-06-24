@@ -189,12 +189,6 @@ function ExploreProjectsPanel({
           </p>
         ) : null}
 
-        {error ? (
-          <p className="auth-modal-status auth-modal-status-error" role="status" aria-live="polite">
-            {error}
-          </p>
-        ) : null}
-
         {!loading && !error && totalVisibleExperiences === 0 ? (
           <div className="explore-empty-state">
             <h3>
@@ -277,6 +271,20 @@ function ExploreProjectsPanel({
                 <h3>Published Community Experiences</h3>
               </div>
             </div>
+            {error ? (
+              <div className="explore-empty-state">
+                <h3>Published community experiences could not be loaded right now.</h3>
+                <p>
+                  Featured experiences are still available while the native published-project feed is unavailable.
+                </p>
+              </div>
+            ) : null}
+            {!loading && !error && filteredProjects.length === 0 ? (
+              <div className="explore-empty-state">
+                <h3>No published community experiences yet.</h3>
+                <p>Published Udēēsa projects will appear here once creators share them.</p>
+              </div>
+            ) : null}
             {!loading && filteredProjects.length > 0 ? (
               <div className="profile-experience-grid explore-project-grid" role="list">
                 {filteredProjects.map((project) => {

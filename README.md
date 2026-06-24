@@ -136,6 +136,29 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
 - The Scene Library / Catalog can also surface the same featured external experiences in a separate view-only section. Selecting a native catalog scene still applies it to the active panorama as before.
 - Curated external links are defined locally and are not user-submitted. Do not accept arbitrary external URLs without validation and moderation.
 
+### Explore Troubleshooting
+- If Featured Experiences load but native published Udēēsa projects do not, verify the public Explore policy exists:
+
+```sql
+drop policy if exists "Anyone can view published projects" on public.projects;
+
+create policy "Anyone can view published projects"
+on public.projects
+for select
+using (status = 'published');
+
+grant select on public.projects to anon, authenticated;
+```
+
+- Confirm there are native published rows to load:
+
+```sql
+select id, user_id, title, status, updated_at
+from public.projects
+where status = 'published'
+order by updated_at desc;
+```
+
 ## Project Analytics Foundation
 - Saved cloud projects can now record lightweight engagement analytics events in Supabase for future dashboard work.
 - The analytics SQL migration lives at:
