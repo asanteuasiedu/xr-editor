@@ -39,11 +39,6 @@ function getCreatorLabel(project: CloudProjectWithProfile) {
     return organization;
   }
 
-  const author = project.project_data.authorOrOrganization?.trim();
-  if (author) {
-    return author;
-  }
-
   return 'Udēēsa Creator';
 }
 
@@ -290,11 +285,6 @@ function ExploreProjectsPanel({
                 {filteredProjects.map((project) => {
                   const creatorLabel = getCreatorLabel(project);
                   const creatorAvatarUrl = project.creator_profile?.avatar_url?.trim() || null;
-                  const totalScenes = project.project_data.scenes.length;
-                  const totalHotspots = project.project_data.scenes.reduce(
-                    (count, scene) => count + scene.hotspots.length,
-                    0
-                  );
 
                   return (
                     <article key={project.id} className="profile-experience-card explore-project-card" role="listitem">
@@ -335,8 +325,8 @@ function ExploreProjectsPanel({
                         </div>
                       </div>
                       <div className="explore-project-meta">
-                        <span>{totalScenes} scene{totalScenes === 1 ? '' : 's'}</span>
-                        <span>{totalHotspots} insight zone{totalHotspots === 1 ? '' : 's'}</span>
+                        <span>Native Udēēsa project</span>
+                        <span>{formatUpdatedDate(project.updated_at)}</span>
                       </div>
                       <button
                         type="button"

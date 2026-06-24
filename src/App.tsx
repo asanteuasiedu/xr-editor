@@ -26,6 +26,7 @@ import {
 import {
   deleteCloudProject,
   loadCloudProject,
+  loadPublishedProjectById,
   loadPublishedProjects,
   loadUserProjects,
   saveProjectToCloud,
@@ -2757,48 +2758,65 @@ function App() {
   );
 
   const handleOpenPublishedProject = useCallback(
-    (publishedProject: CloudProjectWithProfile) => {
-      const isOwner = Boolean(user?.id && user.id === publishedProject.user_id);
-
+    async (publishedProject: CloudProjectWithProfile) => {
       handleCloseAnalyticsDashboard();
+      setPublishedProjectsError(null);
+      setPublishedProjectsLoading(true);
 
-      if (isOwner) {
-        applyLoadedProject(publishedProject.project_data, {
-          cloudProjectId: publishedProject.id,
-          activeCloudProjectOwnerId: publishedProject.user_id,
-          analyticsProjectId: publishedProject.id,
-          analyticsProjectOwnerId: publishedProject.user_id,
-          analyticsProjectSource: 'owned',
-          notice: `Loaded your published experience "${publishedProject.title || 'Untitled Project'}".`,
-          viewingPublishedProjectId: null,
-          viewingPublishedProjectOwnerId: null,
-          appMode: 'edit',
-          isContextPanelOpen: true,
-          showCreationOnboarding: !projectHasValidActiveScene(publishedProject.project_data)
+      try {
+        const fullPublishedProject = await loadPublishedProjectById(publishedProject.id);
+        const isOwner = Boolean(user?.id && user.id === fullPublishedProject.user_id);
+
+        if (isOwner) {
+          upsertCloudProjectInState(fullPublishedProject);
+          applyLoadedProject(fullPublishedProject.project_data, {
+            cloudProjectId: fullPublishedProject.id,
+            activeCloudProjectOwnerId: fullPublishedProject.user_id,
+            analyticsProjectId: fullPublishedProject.id,
+            analyticsProjectOwnerId: fullPublishedProject.user_id,
+            analyticsProjectSource: 'owned',
+            notice: `Loaded your published experience "${fullPublishedProject.title || 'Untitled Project'}".`,
+            viewingPublishedProjectId: null,
+            viewingPublishedProjectOwnerId: null,
+            appMode: 'edit',
+            isContextPanelOpen: true,
+            showCreationOnboarding: !projectHasValidActiveScene(fullPublishedProject.project_data)
+          });
+        } else {
+          applyLoadedProject(fullPublishedProject.project_data, {
+            cloudProjectId: null,
+            activeCloudProjectOwnerId: null,
+            analyticsProjectId: fullPublishedProject.id,
+            analyticsProjectOwnerId: fullPublishedProject.user_id,
+            analyticsProjectSource: 'explore',
+            notice:
+              user?.id
+                ? `Viewing "${fullPublishedProject.title || 'Untitled Project'}" from Explore. Save a copy to edit your own version.`
+                : `Viewing "${fullPublishedProject.title || 'Untitled Project'}" from Explore. Sign in to save a copy and edit.`,
+            viewingPublishedProjectId: fullPublishedProject.id,
+            viewingPublishedProjectOwnerId: fullPublishedProject.user_id,
+            appMode: 'preview',
+            isContextPanelOpen: false,
+            showCreationOnboarding: false
+          });
+        }
+
+        setIsExploreOpen(false);
+        setIsMyProjectsModalOpen(false);
+      } catch (error) {
+        console.error('[explore] failed to open published project', {
+          projectId: publishedProject.id,
+          message: getErrorMessageLike(error),
+          details: getErrorDetailsLike(error),
+          hint: getErrorHintLike(error),
+          code: getErrorCodeLike(error)
         });
-      } else {
-        applyLoadedProject(publishedProject.project_data, {
-          cloudProjectId: null,
-          activeCloudProjectOwnerId: null,
-          analyticsProjectId: publishedProject.id,
-          analyticsProjectOwnerId: publishedProject.user_id,
-          analyticsProjectSource: 'explore',
-          notice:
-            user?.id
-              ? `Viewing "${publishedProject.title || 'Untitled Project'}" from Explore. Save a copy to edit your own version.`
-              : `Viewing "${publishedProject.title || 'Untitled Project'}" from Explore. Sign in to save a copy and edit.`,
-          viewingPublishedProjectId: publishedProject.id,
-          viewingPublishedProjectOwnerId: publishedProject.user_id,
-          appMode: 'preview',
-          isContextPanelOpen: false,
-          showCreationOnboarding: false
-        });
+        setPublishedProjectsError(getFriendlyExploreErrorMessage(error));
+      } finally {
+        setPublishedProjectsLoading(false);
       }
-
-      setIsExploreOpen(false);
-      setIsMyProjectsModalOpen(false);
     },
-    [applyLoadedProject, handleCloseAnalyticsDashboard, user?.id]
+    [applyLoadedProject, handleCloseAnalyticsDashboard, upsertCloudProjectInState, user?.id]
   );
 
   useEffect(() => {

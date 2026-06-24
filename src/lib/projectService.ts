@@ -3,6 +3,7 @@ import type { Project } from '../types/project';
 import type {
   CloudProject,
   CloudProjectCreatorProfile,
+  CloudProjectSummary,
   CloudProjectWithProfile
 } from '../types/cloudProject';
 import { validateProjectData } from '../utils/validation';
@@ -36,6 +37,17 @@ type ProjectRow = {
   title: string;
   description: string | null;
   project_data: unknown;
+  status: string | null;
+  thumbnail_url: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type ProjectSummaryRow = {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string | null;
   status: string | null;
   thumbnail_url: string | null;
   created_at: string;
@@ -80,11 +92,17 @@ function mapProjectRow(row: ProjectRow): CloudProject {
   }
 
   return {
+    ...mapProjectSummaryRow(row),
+    project_data: validated.value,
+  };
+}
+
+function mapProjectSummaryRow(row: ProjectSummaryRow): CloudProjectSummary {
+  return {
     id: row.id,
     user_id: row.user_id,
     title: row.title,
     description: row.description,
-    project_data: validated.value,
     status: row.status === 'published' ? 'published' : 'draft',
     thumbnail_url: row.thumbnail_url,
     created_at: row.created_at,
@@ -227,35 +245,23 @@ export async function loadPublishedProjects(
   const client = requireSupabaseClient();
   const { data, error } = await client
     .from('projects')
-    .select('id,user_id,title,description,thumbnail_url,status,project_data,created_at,updated_at')
+    .select('id,user_id,title,description,thumbnail_url,status,created_at,updated_at')
     .eq('status', 'published')
     .order('updated_at', { ascending: false })
     .limit(limit);
 
   if (error) {
-    console.error('[explore] failed to load native published projects', {
+    console.error('[explore] native published project feed failed', {
       message: error.message,
       details: error.details,
       hint: error.hint,
-      code: error.code
+      code: error.code,
+      raw: error
     });
     throw error;
   }
 
-  const baseProjects: CloudProject[] = [];
-  let skippedInvalidProjectCount = 0;
-
-  for (const row of (data ?? []) as ProjectRow[]) {
-    try {
-      baseProjects.push(mapProjectRow(row));
-    } catch (mappingError) {
-      skippedInvalidProjectCount += 1;
-      console.warn('[explore] skipping invalid published project', {
-        projectId: row.id,
-        error: mappingError instanceof Error ? mappingError.message : 'Unknown project validation failure.'
-      });
-    }
-  }
+  const baseProjects = ((data ?? []) as ProjectSummaryRow[]).map(mapProjectSummaryRow);
 
   const creatorIds = Array.from(new Set(baseProjects.map((project) => project.user_id).filter(Boolean)));
   const creatorProfiles = new Map<string, CloudProjectCreatorProfile>();
@@ -297,8 +303,8 @@ export async function loadPublishedProjects(
   if (!searchTerm) {
     console.info('[explore] native published projects loaded', {
       count: projectsWithProfiles.length,
-      owners: [...new Set(projectsWithProfiles.map((project) => project.user_id))],
-      skippedInvalidProjects: skippedInvalidProjectCount
+      projectIds: projectsWithProfiles.map((project) => project.id),
+      owners: [...new Set(projectsWithProfiles.map((project) => project.user_id))]
     });
     return projectsWithProfiles;
   }
@@ -306,14 +312,12 @@ export async function loadPublishedProjects(
   const filteredProjects = projectsWithProfiles.filter((project) => {
     const title = project.title.toLowerCase();
     const description = project.description?.toLowerCase() ?? '';
-    const author = project.project_data.authorOrOrganization?.toLowerCase() ?? '';
     const creatorName = project.creator_profile?.display_name?.toLowerCase() ?? '';
     const organization = project.creator_profile?.organization?.toLowerCase() ?? '';
 
     return (
       title.includes(searchTerm) ||
       description.includes(searchTerm) ||
-      author.includes(searchTerm) ||
       creatorName.includes(searchTerm) ||
       organization.includes(searchTerm)
     );
@@ -322,11 +326,35 @@ export async function loadPublishedProjects(
   console.info('[explore] native published projects loaded', {
     count: filteredProjects.length,
     filteredFrom: projectsWithProfiles.length,
-    owners: [...new Set(filteredProjects.map((project) => project.user_id))],
-    skippedInvalidProjects: skippedInvalidProjectCount
+    projectIds: filteredProjects.map((project) => project.id),
+    owners: [...new Set(filteredProjects.map((project) => project.user_id))]
   });
 
   return filteredProjects;
+}
+
+export async function loadPublishedProjectById(projectId: string): Promise<CloudProject> {
+  const client = requireSupabaseClient();
+  const { data, error } = await client
+    .from('projects')
+    .select('id,user_id,title,description,thumbnail_url,status,project_data,created_at,updated_at')
+    .eq('id', projectId)
+    .eq('status', 'published')
+    .single();
+
+  if (error) {
+    console.error('[explore] failed to load published project detail', {
+      projectId,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+      raw: error
+    });
+    throw error;
+  }
+
+  return mapProjectRow(data as ProjectRow);
 }
 
 export async function loadCloudProject({ userId, projectId }: LoadCloudProjectParams): Promise<CloudProject> {

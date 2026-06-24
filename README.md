@@ -159,6 +159,16 @@ where status = 'published'
 order by updated_at desc;
 ```
 
+- Confirm the live `public.projects` column names match what the frontend selects:
+
+```sql
+select column_name
+from information_schema.columns
+where table_schema = 'public'
+and table_name = 'projects'
+order by ordinal_position;
+```
+
 ## Project Analytics Foundation
 - Saved cloud projects can now record lightweight engagement analytics events in Supabase for future dashboard work.
 - The analytics SQL migration lives at:
