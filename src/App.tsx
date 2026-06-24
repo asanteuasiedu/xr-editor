@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import AuthControls from './components/AuthControls';
 import AuthModal, { type AuthModalMode } from './components/AuthModal';
 import ExploreProjectsPanel from './components/ExploreProjectsPanel';
+import ExternalExperienceViewer from './components/ExternalExperienceViewer';
 import ProfileModal from './components/ProfileModal';
 import ProjectAnalyticsDashboard from './components/ProjectAnalyticsDashboard';
 import UserProfilePanel from './components/UserProfilePanel';
@@ -34,6 +35,7 @@ import { isSupabaseConfigured } from './lib/supabaseClient';
 import type { ProjectAnalyticsEvent } from './types/analytics';
 import type { ProjectClassroom } from './types/classroom';
 import type { CloudProject, CloudProjectWithProfile } from './types/cloudProject';
+import type { ExternalFeaturedExperience } from './types/externalExperience';
 import type { Hotspot, HotspotPolygonPoint, Project } from './types/project';
 import {
   DEFAULT_REFLECTION_TITLE,
@@ -46,6 +48,7 @@ import { imageFileToDataUrl } from './utils/fileAssets';
 import { getBrowserName, getDeviceType, getOrCreateAnalyticsSessionId, resetAnalyticsSessionId } from './utils/analyticsSession';
 import { getClassroomSlugFromPath } from './utils/classroomLinks';
 import { clearLocalDraft, loadLocalDraft, saveLocalDraft } from './utils/localDraft';
+import { featuredExternalExperiences } from './data/featuredExternalExperiences';
 import { SCENE_LIBRARY_ITEMS, STARTER_SCENE_PANORAMA_URL } from './utils/sceneLibrary';
 import { createProjectFromTemplate } from './utils/templates';
 
@@ -566,6 +569,7 @@ function App() {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isMyProjectsModalOpen, setIsMyProjectsModalOpen] = useState(false);
   const [isExploreOpen, setIsExploreOpen] = useState(false);
+  const [activeExternalExperience, setActiveExternalExperience] = useState<ExternalFeaturedExperience | null>(null);
   const [placementMode, setPlacementMode] = useState<PlacementMode>({ type: 'idle' });
   const [importError, setImportError] = useState<string | null>(null);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
@@ -840,6 +844,35 @@ function App() {
 
   const handleCloseExplore = useCallback(() => {
     setIsExploreOpen(false);
+  }, []);
+
+  const handleOpenExternalExperience = useCallback((experience: ExternalFeaturedExperience) => {
+    setActiveExternalExperience(experience);
+    setImportError(null);
+    setNoticeMessage(null);
+
+    // TODO: add a dedicated external experience analytics store if featured external opens
+    // should be measured independently from native project analytics.
+  }, []);
+
+  const handleOpenFeaturedExperienceFromExplore = useCallback(
+    (experience: ExternalFeaturedExperience) => {
+      setIsExploreOpen(false);
+      handleOpenExternalExperience(experience);
+    },
+    [handleOpenExternalExperience]
+  );
+
+  const handleOpenFeaturedExperienceFromCatalog = useCallback(
+    (experience: ExternalFeaturedExperience) => {
+      setIsScenePickerOpen(false);
+      handleOpenExternalExperience(experience);
+    },
+    [handleOpenExternalExperience]
+  );
+
+  const handleCloseExternalExperience = useCallback(() => {
+    setActiveExternalExperience(null);
   }, []);
 
   const handleCloseAnalyticsDashboard = useCallback(() => {
@@ -2540,6 +2573,7 @@ function App() {
     setWalkthroughStepIndex(null);
     setPendingWalkthroughAfterOnboarding(false);
     setIsScenePickerOpen(false);
+    setActiveExternalExperience(null);
     setShowCreationOnboarding(true);
     setPreviewEntryId(0);
     setCompletionDismissed(false);
@@ -2604,6 +2638,7 @@ function App() {
     if (!currentUserId) {
       setIsProfileModalOpen(false);
       setIsMyProjectsModalOpen(false);
+      setActiveExternalExperience(null);
       setCloudProjectId(null);
       setActiveCloudProjectOwnerId(null);
       setCloudProjects([]);
@@ -3783,26 +3818,92 @@ function App() {
                         Close
                       </button>
                     </div>
-                    <div className="scene-library-grid">
-                      {SCENE_LIBRARY_ITEMS.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className="scene-library-button"
-                          onClick={() => handleApplySceneLibraryItem(item.panoramaUrl, item.label)}
-                        >
-                          <img
-                            src={item.panoramaUrl}
-                            alt={item.label}
-                            className="scene-library-preview"
-                          />
-                          <span className="scene-library-title">{item.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : null}
+	                    <div className="scene-library-grid">
+	                      {SCENE_LIBRARY_ITEMS.map((item) => (
+	                        <button
+	                          key={item.id}
+	                          type="button"
+	                          className="scene-library-button"
+	                          onClick={() => handleApplySceneLibraryItem(item.panoramaUrl, item.label)}
+	                        >
+	                          <img
+	                            src={item.panoramaUrl}
+	                            alt={item.label}
+	                            className="scene-library-preview"
+	                          />
+	                          <span className="scene-library-title">{item.label}</span>
+	                        </button>
+	                      ))}
+	                    </div>
+	                    {featuredExternalExperiences.length > 0 ? (
+	                      <section className="featured-experience-section scene-library-featured-section">
+	                        <div className="explore-section-header scene-library-section-header">
+	                          <div>
+	                            <p className="auth-modal-kicker">Featured External Experiences</p>
+	                            <h3>View External Immersive Experiences</h3>
+	                            <p className="scene-picker-copy">
+	                              These curated experiences open in a separate viewer and are not editable inside the
+	                              Udēēsa editor.
+	                            </p>
+	                          </div>
+	                        </div>
+	                        <div className="profile-experience-grid featured-experience-grid scene-library-featured-grid" role="list">
+	                          {featuredExternalExperiences.map((experience) => (
+	                            <article
+	                              key={experience.id}
+	                              className="profile-experience-card external-experience-card"
+	                              role="listitem"
+	                            >
+	                              <button
+	                                type="button"
+	                                className="profile-experience-card-button"
+	                                onClick={() => handleOpenFeaturedExperienceFromCatalog(experience)}
+	                              >
+	                                <div className="profile-experience-media">
+	                                  {experience.thumbnailUrl ? (
+	                                    <img src={experience.thumbnailUrl} alt={experience.title} />
+	                                  ) : (
+	                                    <div className="external-experience-fallback" aria-hidden="true">
+	                                      <span>Featured</span>
+	                                      <strong>{experience.targetAudience || 'Featured Experience'}</strong>
+	                                    </div>
+	                                  )}
+	                                  <div className="profile-experience-media-overlay" />
+	                                  <div className="profile-experience-topline">
+	                                    <span className="profile-experience-status profile-experience-status-published">
+	                                      Featured
+	                                    </span>
+	                                    <span className="profile-experience-status profile-experience-status-draft">
+	                                      {experience.targetAudience || 'Featured Experience'}
+	                                    </span>
+	                                  </div>
+	                                  <div className="profile-experience-card-copy">
+	                                    <strong>{experience.title}</strong>
+	                                    <span>{experience.organization || 'Curated external experience'}</span>
+	                                  </div>
+	                                </div>
+	                              </button>
+	                              <div className="explore-project-creator-copy external-experience-copy">
+	                                <strong>{experience.location || 'View-only experience'}</strong>
+	                                <span>
+	                                  {experience.description || 'Opens an external immersive experience for viewing.'}
+	                                </span>
+	                              </div>
+	                              <button
+	                                type="button"
+	                                className="ui-button ui-button-secondary mini-button"
+	                                onClick={() => handleOpenFeaturedExperienceFromCatalog(experience)}
+	                              >
+	                                Open Experience
+	                              </button>
+	                            </article>
+	                          ))}
+	                        </div>
+	                      </section>
+	                    ) : null}
+	                  </div>
+	                </div>
+	              ) : null}
               {isCreationOnboardingActive ? (
                 <CreationOnboarding
                   isAuthenticated={isAuthenticated}
@@ -4301,6 +4402,7 @@ function App() {
       <ExploreProjectsPanel
         isOpen={isExploreOpen}
         projects={publishedProjects}
+        featuredExperiences={featuredExternalExperiences}
         loading={publishedProjectsLoading}
         error={publishedProjectsError}
         onClose={handleCloseExplore}
@@ -4308,7 +4410,14 @@ function App() {
           void refreshPublishedProjects();
         }}
         onOpenProject={handleOpenPublishedProject}
+        onOpenExternalExperience={handleOpenFeaturedExperienceFromExplore}
       />
+      {activeExternalExperience ? (
+        <ExternalExperienceViewer
+          experience={activeExternalExperience}
+          onClose={handleCloseExternalExperience}
+        />
+      ) : null}
       <UserProfilePanel
         isOpen={isMyProjectsModalOpen}
         projects={cloudProjects}

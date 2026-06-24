@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CloudProjectWithProfile } from '../types/cloudProject';
+import type { ExternalFeaturedExperience } from '../types/externalExperience';
 import { CloseIcon, RefreshIcon } from './icons';
 
 type ExploreProjectsPanelProps = {
   isOpen: boolean;
   projects: CloudProjectWithProfile[];
+  featuredExperiences: ExternalFeaturedExperience[];
   loading: boolean;
   error: string | null;
   onClose: () => void;
   onRefresh: () => void;
   onOpenProject: (project: CloudProjectWithProfile) => void;
+  onOpenExternalExperience: (experience: ExternalFeaturedExperience) => void;
 };
 
 function formatUpdatedDate(value: string) {
@@ -58,14 +61,20 @@ function getInitials(label: string) {
   return words.map((word) => word[0]?.toUpperCase() ?? '').join('');
 }
 
+function getExternalAudienceLabel(experience: ExternalFeaturedExperience) {
+  return experience.targetAudience?.trim() || experience.organization?.trim() || 'Featured Experience';
+}
+
 function ExploreProjectsPanel({
   isOpen,
   projects,
+  featuredExperiences,
   loading,
   error,
   onClose,
   onRefresh,
-  onOpenProject
+  onOpenProject,
+  onOpenExternalExperience
 }: ExploreProjectsPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -95,6 +104,28 @@ function ExploreProjectsPanel({
       );
     });
   }, [projects, searchQuery]);
+
+  const filteredFeaturedExperiences = useMemo(() => {
+    const trimmedQuery = searchQuery.trim().toLowerCase();
+    if (!trimmedQuery) {
+      return featuredExperiences;
+    }
+
+    return featuredExperiences.filter((experience) => {
+      const searchFields = [
+        experience.title,
+        experience.description ?? '',
+        experience.organization ?? '',
+        experience.location ?? '',
+        getExternalAudienceLabel(experience),
+        ...(experience.tags ?? [])
+      ];
+
+      return searchFields.some((field) => field.toLowerCase().includes(trimmedQuery));
+    });
+  }, [featuredExperiences, searchQuery]);
+
+  const totalVisibleExperiences = filteredFeaturedExperiences.length + filteredProjects.length;
 
   if (!isOpen) {
     return null;
@@ -149,7 +180,7 @@ function ExploreProjectsPanel({
               placeholder="Search by title, creator, or organization"
             />
           </label>
-          <span className="profile-experience-count">{filteredProjects.length}</span>
+          <span className="profile-experience-count">{totalVisibleExperiences}</span>
         </div>
 
         {loading ? (
@@ -164,81 +195,154 @@ function ExploreProjectsPanel({
           </p>
         ) : null}
 
-        {!loading && !error && filteredProjects.length === 0 ? (
+        {!loading && !error && totalVisibleExperiences === 0 ? (
           <div className="explore-empty-state">
-            <h3>{projects.length === 0 ? 'No published experiences yet.' : 'No published experiences match that search.'}</h3>
+            <h3>
+              {projects.length === 0 && featuredExperiences.length === 0
+                ? 'No featured or published experiences yet.'
+                : 'No experiences match that search.'}
+            </h3>
             <p>
-              {projects.length === 0
-                ? 'Published projects will appear here once creators share them.'
+              {projects.length === 0 && featuredExperiences.length === 0
+                ? 'Featured experiences and published community projects will appear here as they become available.'
                 : 'Try a different title, creator name, or organization.'}
             </p>
           </div>
         ) : null}
 
-        {!loading && filteredProjects.length > 0 ? (
-          <div className="profile-experience-grid explore-project-grid" role="list">
-            {filteredProjects.map((project) => {
-              const creatorLabel = getCreatorLabel(project);
-              const creatorAvatarUrl = project.creator_profile?.avatar_url?.trim() || null;
-              const totalScenes = project.project_data.scenes.length;
-              const totalHotspots = project.project_data.scenes.reduce(
-                (count, scene) => count + scene.hotspots.length,
-                0
-              );
-
-              return (
-                <article key={project.id} className="profile-experience-card explore-project-card" role="listitem">
+        {filteredFeaturedExperiences.length > 0 ? (
+          <section className="featured-experience-section">
+            <div className="explore-section-header">
+              <div>
+                <p className="auth-modal-kicker">Featured</p>
+                <h3>Featured Experiences</h3>
+              </div>
+            </div>
+            <div className="profile-experience-grid featured-experience-grid" role="list">
+              {filteredFeaturedExperiences.map((experience) => (
+                <article key={experience.id} className="profile-experience-card external-experience-card" role="listitem">
                   <button
                     type="button"
                     className="profile-experience-card-button"
-                    onClick={() => onOpenProject(project)}
+                    onClick={() => onOpenExternalExperience(experience)}
                   >
                     <div className="profile-experience-media">
-                      {project.thumbnail_url ? (
-                        <img src={project.thumbnail_url} alt={project.title || 'Published experience preview'} />
+                      {experience.thumbnailUrl ? (
+                        <img src={experience.thumbnailUrl} alt={experience.title} />
                       ) : (
-                        <div className="profile-experience-placeholder" aria-hidden="true">
-                          <span>360</span>
+                        <div className="external-experience-fallback" aria-hidden="true">
+                          <span>Featured</span>
+                          <strong>{getExternalAudienceLabel(experience)}</strong>
                         </div>
                       )}
                       <div className="profile-experience-media-overlay" />
                       <div className="profile-experience-topline">
-                        <span className="profile-experience-status profile-experience-status-published">Published</span>
+                        <span className="profile-experience-status profile-experience-status-published">Featured</span>
+                        <span className="profile-experience-status profile-experience-status-draft">
+                          {getExternalAudienceLabel(experience)}
+                        </span>
                       </div>
                       <div className="profile-experience-card-copy">
-                        <strong>{project.title || 'Untitled Project'}</strong>
-                        <span>{formatUpdatedDate(project.updated_at)}</span>
+                        <strong>{experience.title}</strong>
+                        <span>{experience.organization || experience.location || 'Curated external experience'}</span>
                       </div>
                     </div>
                   </button>
-                  <div className="explore-project-creator">
-                    {creatorAvatarUrl ? (
-                      <img src={creatorAvatarUrl} alt={`${creatorLabel} avatar`} className="explore-project-avatar" />
-                    ) : (
-                      <div className="explore-project-avatar explore-project-avatar-fallback" aria-hidden="true">
-                        {getInitials(creatorLabel)}
-                      </div>
-                    )}
-                    <div className="explore-project-creator-copy">
-                      <strong>{creatorLabel}</strong>
-                      <span>{project.creator_profile?.organization?.trim() || 'Published community experience'}</span>
-                    </div>
+                  <div className="explore-project-creator-copy external-experience-copy">
+                    <strong>{experience.organization || 'Featured external experience'}</strong>
+                    <span>{experience.description || 'View-only immersive experience hosted outside the Udēēsa editor.'}</span>
                   </div>
                   <div className="explore-project-meta">
-                    <span>{totalScenes} scene{totalScenes === 1 ? '' : 's'}</span>
-                    <span>{totalHotspots} insight zone{totalHotspots === 1 ? '' : 's'}</span>
+                    {experience.location ? <span>{experience.location}</span> : null}
+                    {experience.tags?.slice(0, 2).map((tag) => <span key={tag}>{tag}</span>)}
                   </div>
                   <button
                     type="button"
                     className="ui-button ui-button-secondary mini-button"
-                    onClick={() => onOpenProject(project)}
+                    onClick={() => onOpenExternalExperience(experience)}
                   >
                     Open Experience
                   </button>
                 </article>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {!loading || filteredProjects.length > 0 || error ? (
+          <section className="featured-experience-section">
+            <div className="explore-section-header">
+              <div>
+                <p className="auth-modal-kicker">Community</p>
+                <h3>Published Community Experiences</h3>
+              </div>
+            </div>
+            {!loading && filteredProjects.length > 0 ? (
+              <div className="profile-experience-grid explore-project-grid" role="list">
+                {filteredProjects.map((project) => {
+                  const creatorLabel = getCreatorLabel(project);
+                  const creatorAvatarUrl = project.creator_profile?.avatar_url?.trim() || null;
+                  const totalScenes = project.project_data.scenes.length;
+                  const totalHotspots = project.project_data.scenes.reduce(
+                    (count, scene) => count + scene.hotspots.length,
+                    0
+                  );
+
+                  return (
+                    <article key={project.id} className="profile-experience-card explore-project-card" role="listitem">
+                      <button
+                        type="button"
+                        className="profile-experience-card-button"
+                        onClick={() => onOpenProject(project)}
+                      >
+                        <div className="profile-experience-media">
+                          {project.thumbnail_url ? (
+                            <img src={project.thumbnail_url} alt={project.title || 'Published experience preview'} />
+                          ) : (
+                            <div className="profile-experience-placeholder" aria-hidden="true">
+                              <span>360</span>
+                            </div>
+                          )}
+                          <div className="profile-experience-media-overlay" />
+                          <div className="profile-experience-topline">
+                            <span className="profile-experience-status profile-experience-status-published">Published</span>
+                          </div>
+                          <div className="profile-experience-card-copy">
+                            <strong>{project.title || 'Untitled Project'}</strong>
+                            <span>{formatUpdatedDate(project.updated_at)}</span>
+                          </div>
+                        </div>
+                      </button>
+                      <div className="explore-project-creator">
+                        {creatorAvatarUrl ? (
+                          <img src={creatorAvatarUrl} alt={`${creatorLabel} avatar`} className="explore-project-avatar" />
+                        ) : (
+                          <div className="explore-project-avatar explore-project-avatar-fallback" aria-hidden="true">
+                            {getInitials(creatorLabel)}
+                          </div>
+                        )}
+                        <div className="explore-project-creator-copy">
+                          <strong>{creatorLabel}</strong>
+                          <span>{project.creator_profile?.organization?.trim() || 'Published community experience'}</span>
+                        </div>
+                      </div>
+                      <div className="explore-project-meta">
+                        <span>{totalScenes} scene{totalScenes === 1 ? '' : 's'}</span>
+                        <span>{totalHotspots} insight zone{totalHotspots === 1 ? '' : 's'}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="ui-button ui-button-secondary mini-button"
+                        onClick={() => onOpenProject(project)}
+                      >
+                        Open Experience
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : null}
+          </section>
         ) : null}
       </div>
     </div>
