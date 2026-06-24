@@ -50,7 +50,7 @@ export const featuredExternalExperiences: ExternalFeaturedExperience[] = [
       'A featured web-based experience connected to Global Africa and cultural learning.',
     provider: 'external',
     experienceUrl:
-      'https://www.udeesa.com/the-africa-center-global-africa-gateway',
+      'https://storage.googleapis.com/udeesa_experiences/The%20Africa%20Center%20-%20Global%20Africa%20Gateway/index.htm',
     organization: 'Udēēsa',
     location: 'New York, New York',
     tags: ['Events', 'Global Africa', 'Culture'],
@@ -90,7 +90,7 @@ export const featuredExternalExperiences: ExternalFeaturedExperience[] = [
       'A featured skill-building experience connected to hands-on construction, design, and applied learning.',
     provider: 'external',
     experienceUrl:
-      'https://www.udeesa.com/4h-university-of-nebraska-build-a-hut',
+      'https://storage.googleapis.com/udeesa_experiences/4H%20Applied%20Mathmatics%20Activity/index.htm',
     organization: 'Udēēsa',
     tags: ['STEM', 'Skill Building', 'Workforce Readiness'],
     targetAudience: 'STEM + Skill Building',
