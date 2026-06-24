@@ -243,11 +243,13 @@ export async function loadPublishedProjects(
   }
 
   const baseProjects: CloudProject[] = [];
+  let skippedInvalidProjectCount = 0;
 
   for (const row of (data ?? []) as ProjectRow[]) {
     try {
       baseProjects.push(mapProjectRow(row));
     } catch (mappingError) {
+      skippedInvalidProjectCount += 1;
       console.warn('[explore] skipping invalid published project', {
         projectId: row.id,
         error: mappingError instanceof Error ? mappingError.message : 'Unknown project validation failure.'
@@ -295,7 +297,8 @@ export async function loadPublishedProjects(
   if (!searchTerm) {
     console.info('[explore] native published projects loaded', {
       count: projectsWithProfiles.length,
-      owners: [...new Set(projectsWithProfiles.map((project) => project.user_id))]
+      owners: [...new Set(projectsWithProfiles.map((project) => project.user_id))],
+      skippedInvalidProjects: skippedInvalidProjectCount
     });
     return projectsWithProfiles;
   }
@@ -303,12 +306,14 @@ export async function loadPublishedProjects(
   const filteredProjects = projectsWithProfiles.filter((project) => {
     const title = project.title.toLowerCase();
     const description = project.description?.toLowerCase() ?? '';
+    const author = project.project_data.authorOrOrganization?.toLowerCase() ?? '';
     const creatorName = project.creator_profile?.display_name?.toLowerCase() ?? '';
     const organization = project.creator_profile?.organization?.toLowerCase() ?? '';
 
     return (
       title.includes(searchTerm) ||
       description.includes(searchTerm) ||
+      author.includes(searchTerm) ||
       creatorName.includes(searchTerm) ||
       organization.includes(searchTerm)
     );
@@ -317,7 +322,8 @@ export async function loadPublishedProjects(
   console.info('[explore] native published projects loaded', {
     count: filteredProjects.length,
     filteredFrom: projectsWithProfiles.length,
-    owners: [...new Set(filteredProjects.map((project) => project.user_id))]
+    owners: [...new Set(filteredProjects.map((project) => project.user_id))],
+    skippedInvalidProjects: skippedInvalidProjectCount
   });
 
   return filteredProjects;
