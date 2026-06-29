@@ -6689,17 +6689,48 @@ select {
   }
 
   .creation-onboarding-header {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: nowrap;
+  }
+
+  .creation-onboarding-brand {
+    flex: 1 1 auto;
+    min-width: 0;
     gap: 12px;
   }
 
-  .creation-onboarding-header-actions {
-    justify-content: flex-end;
+  .creation-onboarding-brand > div {
+    min-width: 0;
   }
 
+  .creation-onboarding-brand-kicker,
+  .creation-onboarding-brand-subtitle {
+    white-space: nowrap;
+  }
+
+  .creation-onboarding-header-actions,
   .creation-onboarding-auth-user {
+    flex: 0 0 auto;
+    align-items: center;
     justify-content: flex-end;
+    align-self: center;
+    margin-top: 0;
+    padding-top: 0;
+    transform: none;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+
+  .creation-onboarding-auth-user-card {
+    max-width: min(40vw, 156px);
+    padding: 8px 12px;
+  }
+
+  .creation-onboarding-auth-user-card strong {
+    max-width: 100%;
   }
 
   .creation-onboarding-auth-button {
@@ -6707,9 +6738,11 @@ select {
     min-width: 0;
   }
 
-  .creation-onboarding-explore-button {
-    width: 40px;
-    height: 40px;
+  .creation-onboarding-header-actions .topbar-icon-button,
+  .creation-onboarding-auth-user .topbar-icon-button {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 auto;
   }
 
   .scene-start-actions {
