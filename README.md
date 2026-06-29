@@ -132,6 +132,7 @@ Local-first XR editor prototype built with Vite + React + TypeScript.
   - they do not expose edit, save, publish, or analytics-owner controls
   - they open in a dedicated external viewer with an iframe when the host allows embedding
   - they always include an **Open in New Tab** fallback because some hosts block iframe embedding
+- Featured external experience thumbnails should be stored in `public/featured-thumbnails` and referenced with `/featured-thumbnails/name.jpg`. Use 16:9 images, ideally `1280x720` or larger.
 - Featured cards use **Target Audience / Applicability** labels such as `XLTV1.2`, `Global Studies`, `Events`, `STEM + Skill Building`, and `Museums` rather than provider labels.
 - The Scene Library / Catalog can also surface the same featured external experiences in a separate view-only section. Selecting a native catalog scene still applies it to the active panorama as before.
 - Curated external links are defined locally and are not user-submitted. Do not accept arbitrary external URLs without validation and moderation.

@@ -3515,6 +3515,25 @@ select {
   gap: 12px;
 }
 
+.external-experience-card-media {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 18px;
+  background: rgba(12, 12, 18, 0.72);
+}
+
+.external-experience-card-thumbnail {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  transition: transform 220ms ease;
+}
+
+.external-experience-card:hover .external-experience-card-thumbnail {
+  transform: scale(1.045);
+}
+
 .external-experience-copy {
   gap: 6px;
 }

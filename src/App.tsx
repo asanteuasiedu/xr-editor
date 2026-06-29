@@ -5,6 +5,7 @@ import AuthControls from './components/AuthControls';
 import AuthModal, { type AuthModalMode } from './components/AuthModal';
 import ExploreProjectsPanel from './components/ExploreProjectsPanel';
 import ExternalExperienceViewer from './components/ExternalExperienceViewer';
+import ExternalExperienceCardMedia from './components/ExternalExperienceCardMedia';
 import ProfileModal from './components/ProfileModal';
 import ProjectAnalyticsDashboard from './components/ProjectAnalyticsDashboard';
 import UserProfilePanel from './components/UserProfilePanel';
@@ -3877,15 +3878,11 @@ function App() {
 	                                className="profile-experience-card-button"
 	                                onClick={() => handleOpenFeaturedExperienceFromCatalog(experience)}
 	                              >
-	                                <div className="profile-experience-media">
-	                                  {experience.thumbnailUrl ? (
-	                                    <img src={experience.thumbnailUrl} alt={experience.title} />
-	                                  ) : (
-	                                    <div className="external-experience-fallback" aria-hidden="true">
-	                                      <span>Featured</span>
-	                                      <strong>{experience.targetAudience || 'Featured Experience'}</strong>
-	                                    </div>
-	                                  )}
+	                                <div className="profile-experience-media external-experience-card-media">
+	                                  <ExternalExperienceCardMedia
+	                                    experience={experience}
+	                                    audienceLabel={experience.targetAudience || 'Featured Experience'}
+	                                  />
 	                                  <div className="profile-experience-media-overlay" />
 	                                  <div className="profile-experience-topline">
 	                                    <span className="profile-experience-status profile-experience-status-published">

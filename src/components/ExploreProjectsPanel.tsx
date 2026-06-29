@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { CloudProjectWithProfile } from '../types/cloudProject';
 import type { ExternalFeaturedExperience } from '../types/externalExperience';
 import { CloseIcon, RefreshIcon } from './icons';
+import ExternalExperienceCardMedia from './ExternalExperienceCardMedia';
 
 type ExploreProjectsPanelProps = {
   isOpen: boolean;
@@ -215,15 +216,11 @@ function ExploreProjectsPanel({
                     className="profile-experience-card-button"
                     onClick={() => onOpenExternalExperience(experience)}
                   >
-                    <div className="profile-experience-media">
-                      {experience.thumbnailUrl ? (
-                        <img src={experience.thumbnailUrl} alt={experience.title} />
-                      ) : (
-                        <div className="external-experience-fallback" aria-hidden="true">
-                          <span>Featured</span>
-                          <strong>{getExternalAudienceLabel(experience)}</strong>
-                        </div>
-                      )}
+                    <div className="profile-experience-media external-experience-card-media">
+                      <ExternalExperienceCardMedia
+                        experience={experience}
+                        audienceLabel={getExternalAudienceLabel(experience)}
+                      />
                       <div className="profile-experience-media-overlay" />
                       <div className="profile-experience-topline">
                         <span className="profile-experience-status profile-experience-status-published">Featured</span>
