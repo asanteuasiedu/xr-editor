@@ -135,7 +135,7 @@ function ExploreProjectsPanel({
       aria-label="Explore published XR experiences"
       onClick={onClose}
     >
-      <div className="auth-modal-card explore-panel" onClick={(event) => event.stopPropagation()}>
+      <div className="auth-modal-card explore-panel explore-panel-scroll" onClick={(event) => event.stopPropagation()}>
         <div className="auth-modal-header explore-panel-header">
           <div className="auth-modal-heading">
             <p className="auth-modal-kicker">Explore</p>

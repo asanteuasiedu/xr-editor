@@ -3367,6 +3367,43 @@ select {
   width: min(1180px, 100%);
   max-height: min(92vh, 980px);
   overflow: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.explore-panel-scroll,
+.explore-panel-scroll * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(168, 85, 247, 0.72) rgba(12, 12, 18, 0.55);
+}
+
+.explore-panel-scroll::-webkit-scrollbar,
+.explore-panel-scroll *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.explore-panel-scroll::-webkit-scrollbar-track,
+.explore-panel-scroll *::-webkit-scrollbar-track {
+  background: rgba(12, 12, 18, 0.55);
+  border-radius: 999px;
+}
+
+.explore-panel-scroll::-webkit-scrollbar-thumb,
+.explore-panel-scroll *::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(168, 85, 247, 0.9), rgba(56, 189, 248, 0.6));
+  border-radius: 999px;
+  border: 2px solid rgba(12, 12, 18, 0.86);
+}
+
+.explore-panel-scroll::-webkit-scrollbar-thumb:hover,
+.explore-panel-scroll *::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(192, 132, 252, 0.98), rgba(34, 211, 238, 0.78));
+}
+
+.explore-panel-scroll::-webkit-scrollbar-corner,
+.explore-panel-scroll *::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .explore-panel-header {
