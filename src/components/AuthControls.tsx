@@ -94,9 +94,17 @@ function AuthControls({ variant, onOpenExplore, onOpenSignUp, onOpenProfile }: A
 
   return (
     <div className={isOnboarding ? 'creation-onboarding-auth-user' : 'app-auth-user'}>
-      <div className={isOnboarding ? 'creation-onboarding-auth-user-card' : 'app-auth-user-card'}>
+      <div
+        className={
+          isOnboarding
+            ? 'creation-onboarding-auth-user-card'
+            : 'app-auth-user-card signed-in-display-name-card'
+        }
+      >
         <span className="auth-user-kicker">Signed in</span>
-        <strong title={user.email ?? userLabel}>{userLabel}</strong>
+        <strong className={isOnboarding ? undefined : 'signed-in-display-name'} title={user.email ?? userLabel}>
+          {userLabel}
+        </strong>
         {profileLoading ? <span className="auth-user-subtle">Loading profile...</span> : null}
       </div>
       <button

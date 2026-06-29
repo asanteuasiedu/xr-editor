@@ -3593,7 +3593,7 @@ function App() {
               onOpenProfile={handleOpenProfile}
             />
             <div className="header-mode-group">
-              <span className="mode-indicator-pill">
+              <span className="mode-indicator-pill mode-toggle-label">
                 {appMode === 'edit' ? 'Edit Mode' : appMode === 'arPreview' ? 'AR Preview' : 'Present Mode'}
               </span>
               {canShowModeToggle ? (

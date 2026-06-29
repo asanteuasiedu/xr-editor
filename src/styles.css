@@ -6563,6 +6563,39 @@ select {
     font-size: 0.76rem;
   }
 
+  .header-controls-cluster {
+    width: auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .app-auth-controls,
+  .app-auth-user {
+    width: auto;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+
+  .signed-in-display-name-card,
+  .mode-toggle-label,
+  .header-controls-cluster > .app-auth-button {
+    display: none;
+  }
+
+  .mode-toggle-icon-button {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+  }
+
   .main-stack-preview,
   .main-stack-edit {
     gap: 0;
